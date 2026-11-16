@@ -472,7 +472,21 @@ window.__ModuleLoader__.load({
                 h('button',{type:'button',style:button,'aria-label':'Zoom in canvas',
                   onClick:()=>changeZoom(1.25)},'+'),
                 h('button',{type:'button',style:button,'aria-label':'Fit canvas view',
-                  onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit')
+                  onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit'),
+                h('span',{style:{width:1,height:20,background:'#47484b',margin:'0 3px'}}),
+                h('button',{type:'button',style:{...button,background:gridVisible?'#51483d':button.background},
+                  'aria-label':'Toggle canvas grid','aria-pressed':gridVisible,
+                  onClick:()=>setGridVisible(v=>!v)},'Grille'),
+                h('button',{type:'button',style:{...button,background:snapToGrid?'#51483d':button.background},
+                  'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,
+                  onClick:()=>setSnapToGrid(v=>!v),title:'Magnétisme sur la grille'},'Aimant'),
+                h('select',{style:{...field,width:68,padding:'5px 6px'},'aria-label':'Grid spacing',
+                  value:gridStep,onChange:e=>setGridStep(Number(e.target.value)),
+                  title:'Pas de grille en unités SVG'},
+                  [2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
+                h('button',{type:'button',style:{...button,background:smartGuides?'#51483d':button.background},
+                  'aria-label':'Toggle smart alignment guides','aria-pressed':smartGuides,
+                  onClick:()=>setSmartGuides(v=>!v),title:'Aligner automatiquement les bords et centres'},'Repères')
               )),
 
             doc.format==='css'?h('p',null,'CSS file · use source editor below'):
@@ -495,7 +509,13 @@ window.__ModuleLoader__.load({
                       transformOrigin:'center center',
                       boxShadow:'0 10px 42px #0009'}},
                   h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
-                  h('div',{style:{position:'absolute',inset:0,touchAction:'none'},'aria-label':'Direct manipulation overlay'},
+                  gridVisible&&h('div',{className:'dsh-studio-document-grid','aria-hidden':true,style:{
+                    position:'absolute',inset:0,pointerEvents:'none',zIndex:1,
+                    backgroundImage:'linear-gradient(to right, #927f6670 1px, transparent 1px), linear-gradient(to bottom, #927f6670 1px, transparent 1px)',
+                    backgroundSize:(gridStep/artboard.width*100)+'% '+(gridStep/artboard.height*100)+'%',
+                    opacity:0.48
+                  }}),
+                  h('div',{style:{position:'absolute',inset:0,touchAction:'none',zIndex:2},'aria-label':'Direct manipulation overlay'},
                     handles.flatMap(handle=>{
                       const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0,mode:'move'}
                       let left=handle.x+(delta.mode==='move'?delta.dx:0)
@@ -545,6 +565,20 @@ window.__ModuleLoader__.load({
                           onPointerCancel:event=>finishDrag(event,true)})
                       })
                       return [main,...resizes]
+                    }),
+                    dragDelta?.guideX!==null&&dragDelta?.guideX!==undefined&&h('div',{
+                      className:'dsh-studio-guide-x','aria-hidden':true,style:{
+                        pointerEvents:'none',position:'absolute',zIndex:8,
+                        left:((dragDelta.guideX-artboard.x)/artboard.width*100)+'%',
+                        top:0,bottom:0,borderLeft:'1px solid #a47c56',boxShadow:'0 0 1px #fff'
+                      }
+                    }),
+                    dragDelta?.guideY!==null&&dragDelta?.guideY!==undefined&&h('div',{
+                      className:'dsh-studio-guide-y','aria-hidden':true,style:{
+                        pointerEvents:'none',position:'absolute',zIndex:8,
+                        top:((dragDelta.guideY-artboard.y)/artboard.height*100)+'%',
+                        left:0,right:0,borderTop:'1px solid #a47c56',boxShadow:'0 0 1px #fff'
+                      }
                     }),
                     editingText&&(()=> {
                       const item=handles.find(h=>h.id===editingText)
@@ -617,7 +651,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Canevas SVG: V sélection, H main, Espace+glisser/clic milieu déplacement, Ctrl+molette zoom, molette/pavé tactile panoramique, 0 recentrer. Modifications natives avec Undo/Redo de session. Installation DSH réelle non validée.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables. V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
       )
     }
     return {
