@@ -23,6 +23,10 @@ window.__ModuleLoader__.load({
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
       const [file,setFile] = React.useState('design.svg')
+      const [workspaceFiles,setWorkspaceFiles] = React.useState([])
+      const [filesTruncated,setFilesTruncated] = React.useState(false)
+      const [showFiles,setShowFiles] = React.useState(false)
+      const [fileSearch,setFileSearch] = React.useState('')
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
       const [nodes,setNodes] = React.useState([])
@@ -47,6 +51,7 @@ window.__ModuleLoader__.load({
         try {
           const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
+          setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
@@ -58,7 +63,24 @@ window.__ModuleLoader__.load({
           setActive(remembered?retainSelection:'')
           const retainedAttr=remembered && remembered.attributes[attribute]?attribute:Object.keys(remembered?.attributes||{})[0]||''
           setAttribute(retainedAttr);setValue(remembered && retainedAttr ? remembered.attributes[retainedAttr]: '')
+          return true
+        }catch(e){setError(String(e.message));return false}finally{setBusy(false)}
+      }
+      async function browseFiles() {
+        if(showFiles){setShowFiles(false);return}
+        if(!sessionId){setError('Open a conversation first');return}
+        setBusy(true);setError('')
+        try {
+          const response=await request('/files?sessionId='+encodeURIComponent(sessionId))
+          setWorkspaceFiles(response.files||[])
+          setFilesTruncated(!!response.truncated)
+          setFileSearch('')
+          setShowFiles(true)
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
+      }
+      async function openPickedFile(picked) {
+        const opened=await load(false,picked)
+        if(opened)setShowFiles(false)
       }
       async function save(payload, historyMode='record') {
         if(!doc || busy)return false
@@ -233,7 +255,29 @@ window.__ModuleLoader__.load({
           h('button',{style:button,disabled:busy||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷ Redo')),
         h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'#232529'}},
           h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
-          h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open')),
+          h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open'),
+          h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!sessionId,
+            'aria-label':'Browse workspace design files'},showFiles?'Fermer les fichiers':'Parcourir…')),
+        showFiles&&h('div',{className:'dsh-studio-file-picker',style:{
+          padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
+          maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
+        }},
+          h('div',{style:{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between'}},
+            h('strong',null,'Fichiers du workspace'),
+            h('small',{style:{color:'#aaa9a5'}},workspaceFiles.length+' fichier(s)'+(filesTruncated?' · liste limitée':''))),
+          h('input',{style:field,value:fileSearch,'aria-label':'Filter design files',
+            placeholder:'Rechercher : nom, dossier, extension…',
+            onChange:e=>setFileSearch(e.target.value)}),
+          h('div',{role:'list',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:4}},
+            ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase())).slice(0,100).map(item=>
+              h('button',{key:item.path,style:{...button,textAlign:'left',overflowWrap:'anywhere'},
+                'aria-label':'Open file '+item.path,disabled:busy,
+                title:item.path+' · '+item.size+' bytes',
+                onClick:()=>void openPickedFile(item.path)},
+                h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
+                item.path))),
+          workspaceFiles.length===0&&h('small',{style:{color:'#aaa9a5'}},'Aucun fichier SVG, HTML ou CSS détecté.')
+        ),
         doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
           ['rect','circle','ellipse','text'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
