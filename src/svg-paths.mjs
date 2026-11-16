@@ -21,10 +21,11 @@ function round(value) {
  * Parse a small, explicit SVG path grammar; source offsets are relative to d.
  * Controls carry a line endpoint so the client can draw editing handles.
  */
-export function parseEditablePath(d) {
+export function parseEditablePathDetailed(d) {
   if(typeof d!=='string' || !d.trim() || d.length>8192)fail('unsupported-path','Invalid path length')
   let cursor=0, commands=0, previous=null, subpath=null, closed=false
   const points=[]
+  const commandsList=[]
   function skip() {while(cursor<d.length && /[\s,]/.test(d[cursor]))cursor++}
   function coordinate() {
     skip()
@@ -47,13 +48,20 @@ export function parseEditablePath(d) {
     skip()
     if(cursor===d.length)break
     if(++commands>128)fail('unsupported-path','Too many path commands')
+    const commandStart=cursor
+    const previousPoint=previous
+    const groupStart=points.length
     const command=d[cursor++]
     if(!Object.prototype.hasOwnProperty.call(ARITY,command)) {
       fail('unsupported-path','Only explicit absolute M L Q C Z commands are supported')
     }
     if(!previous && command!=='M')fail('unsupported-path','A path must begin with M')
     if(closed && command!=='M')fail('unsupported-path','Start a new M after Z')
-    if(command==='Z') {if(!subpath || closed)fail('unsupported-path','Invalid closepath');previous=subpath;closed=true;continue}
+    if(command==='Z') {
+      if(!subpath || closed)fail('unsupported-path','Invalid closepath')
+      commandsList.push({commandIndex:commands,type:'Z',start:commandStart,end:cursor,from:previousPoint,to:subpath,controls:[]})
+      previous=subpath;closed=true;continue
+    }
     if(points.length + ARITY[command]/2>256)fail('unsupported-path','Too many points')
     if(command==='M') {
       const anchor=point('anchor',commands)
@@ -74,13 +82,35 @@ export function parseEditablePath(d) {
       previous=end
     }
     skip()
+    commandsList.push({commandIndex:commands,type:command,start:commandStart,end:cursor,
+      from:command==='M'?null:previousPoint,to:previous,controls:points.slice(groupStart,-1)})
     if(cursor!==d.length && !Object.prototype.hasOwnProperty.call(ARITY,d[cursor])) {
       fail('unsupported-path','Implicit repeated points and unrecognized path commands are not supported')
     }
   }
   if(!points.length)fail('unsupported-path','Path has no editable points')
-  return points
+  return {points,commands:commandsList}
 }
+export function parseEditablePath(d) {return parseEditablePathDetailed(d).points}
+
+function interpolate(a,b,t=0.5) {return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t}}
+function segmentCenter(segment) {
+  const {type,from,to,controls}=segment
+  if(!from || !to)fail('unsupported-segment','Selected path command is not a drawable segment')
+  if(type==='L')return interpolate(from,to)
+  if(type==='Q')return interpolate(interpolate(from,controls[0]),interpolate(controls[0],to))
+  if(type==='C') {
+    const a=interpolate(from,controls[0]),b=interpolate(controls[0],controls[1]),c=interpolate(controls[1],to)
+    return interpolate(interpolate(a,b),interpolate(b,c))
+  }
+  fail('unsupported-segment','Only line and Bézier segments support midpoint insertion')
+}
+function highPrecision(value) {
+  if(!Number.isFinite(value)||Math.abs(value)>LIMIT)fail('invalid-target','Nonfinite or out-of-range path coordinate')
+  const rounded=Math.round(value*1e6)/1e6
+  return String(Object.is(rounded,-0)?0:rounded)
+}
+function coordinates(point) {return highPrecision(point.x)+' '+highPrecision(point.y)}
 
 /** Validate that the path is a direct, untransformed SVG leaf. */
 function model(source,id) {
@@ -95,7 +125,7 @@ function model(source,id) {
   if(!geometry.artboard || geometry.warning)fail('unsupported-path','Path editing requires an untransformed SVG with a root viewBox')
   svgElementPatch(source,{id,operation:'delete'}) // Validate well-formed direct SVG leaf.
   const attribute=svgAttributePatch(source,{id,attribute:'d',value:node.attributes.d})
-  return {points:parseEditablePath(node.attributes.d),attribute}
+  return {...parseEditablePathDetailed(node.attributes.d),attribute}
 }
 
 /** Shape-list metadata: unsupported paths remain listed but are not changed. */
@@ -103,8 +133,12 @@ export function listSvgPathModels(source) {
   const nodes=listEditableSvgNodes(source).filter(node=>node.tag==='path')
   return nodes.slice(0,128).map(node=>{
     try {
-      const {points}=model(source,node.id)
+      const {points,commands}=model(source,node.id)
       return {id:node.id,editable:true,d:node.attributes.d,
+        segments:commands.filter(item=>['L','Q','C'].includes(item.type)).map(item=>({
+          commandIndex:item.commandIndex,type:item.type,midpoint:segmentCenter(item),
+          removable:item.type==='L',endIndex:item.to.index
+        })),
         points:points.map(({index,role,x,y,link,linkIndex,linkIndex2,xSpan,ySpan})=>
           ({index,role,x,y,link,linkIndex,linkIndex2,xSpan,ySpan}))}
     }catch(e){
@@ -129,4 +163,50 @@ export function svgPathPointPatches(source,{id,index,x,y}) {
     {start:attribute.start+point.ySpan.start,end:attribute.start+point.ySpan.end,
       before:source.slice(attribute.start+point.ySpan.start,attribute.start+point.ySpan.end),after:round(y)},
   ]
+}
+
+
+/**
+ * Safely add the mathematical midpoint of an existing L/Q/C path segment, or
+ * remove one explicit L segment. For curves, de Casteljau subdivision preserves
+ * the original shape to six-decimal coordinate precision; other path commands
+ * are unaffected and retain their exact source bytes.
+ */
+export function svgPathTopologyPatch(source,{id,operation,commandIndex}) {
+  if(!['insert','remove'].includes(operation) ||
+     !Number.isInteger(commandIndex) || commandIndex<1 || commandIndex>128) {
+    fail('invalid-target','Unsupported path topology operation or segment index')
+  }
+  const {commands,attribute}=model(source,id)
+  const segment=commands.find(item=>item.commandIndex===commandIndex)
+  if(!segment || !['L','Q','C'].includes(segment.type)) {
+    fail('unsupported-segment','Only explicit line or Bézier segments are editable')
+  }
+  const from=attribute.start+segment.start, end=attribute.start+segment.end
+  const before=source.slice(from,end)
+  let after
+  if(operation==='remove') {
+    if(segment.type!=='L')fail('unsupported-segment','Removing a Bézier segment would change the curve unpredictably')
+    after=''
+  } else {
+    const p0=segment.from,p1=segment.controls[0],p2=segment.controls[1],p3=segment.to
+    const midpoint=segmentCenter(segment)
+    if(segment.type==='L') {
+      after='L '+coordinates(midpoint)+' L '+coordinates(p3)+' '
+    } else if(segment.type==='Q') {
+      const a=interpolate(p0,p1),b=interpolate(p1,p3)
+      after='Q '+coordinates(a)+' '+coordinates(midpoint)+
+        ' Q '+coordinates(b)+' '+coordinates(p3)+' '
+    } else {
+      const a=interpolate(p0,p1),b=interpolate(p1,p2),c=interpolate(p2,p3)
+      const d=interpolate(a,b),e=interpolate(b,c)
+      after='C '+coordinates(a)+' '+coordinates(d)+' '+coordinates(midpoint)+
+        ' C '+coordinates(e)+' '+coordinates(c)+' '+coordinates(p3)+' '
+    }
+  }
+  // Do not exceed the same conservative parser limits after editing.
+  const d=attribute.before
+  const next=d.slice(0,segment.start)+after+d.slice(segment.end)
+  parseEditablePath(next)
+  return {start:from,end,before,after}
 }
