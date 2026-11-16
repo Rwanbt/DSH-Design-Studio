@@ -626,3 +626,32 @@ test('unsupported complex path remains selectable but has no active point contro
   assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Move path point 0 of curve'),null)
   assert.equal(h.writes().length,0)
 })
+
+
+test('Add Path action inserts a native editable cubic without AI',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  const add=find(h.render(),node=>node.props?.['aria-label']==='Add path')
+  assert.ok(add,'Toolbar must expose an explicit path creation tool')
+  add.props.onClick()
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes().length,1)
+  assert.equal(h.writes()[0].kind,'svg-add-shape')
+  assert.equal(h.writes()[0].shape,'path')
+})
+test('one-axis grid snap keeps the untouched Bézier coordinate stable',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  find(h.render(),node=>node.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const node=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
+  node.props.onPointerDown({button:0,pointerId:100,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },stopPropagation(){},preventDefault(){}})
+  node.props.onPointerUp({pointerId:100,clientX:20,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,18))
+  assert.equal(h.writes().length,1)
+  assert.equal(h.writes()[0].kind,'svg-path-point')
+  assert.equal(h.writes()[0].x,10)
+  assert.equal(h.writes()[0].y,4)
+})
