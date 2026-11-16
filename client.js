@@ -338,8 +338,7 @@ window.__ModuleLoader__.load({
                             onBlur:e=>{if(e.target.value&&e.target.value!==selected.attributes[key])void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})}})
                       ))
                   ),
-                  h('small',{style:{color:'#989690'}},'Double-click on a text layer in the canvas to edit directly.'))
-                ),
+                  h('small',{style:{color:'#989690'}},'Double-click on a text layer in the canvas to edit directly.')),
                 h('label',null,'Property',h('select',{style:field,value:attribute,onChange:e=>{setAttribute(e.target.value);setValue(selected.attributes[e.target.value]||'')}},Object.keys(selected.attributes).map(k=>h('option',{value:k,key:k},k)))),
                 attribute&&h('label',null,'Value',h('input',{style:field,value,onChange:e=>setValue(e.target.value)})),
                 h('button',{style:button,disabled:busy||!attribute,onClick:()=>save({kind:'svg-attribute',id:active,attribute,value})},'Apply without AI')):
