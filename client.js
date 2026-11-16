@@ -669,6 +669,22 @@ window.__ModuleLoader__.load({
                         })
                       })
                     ),
+                    selectedPath?.editable&&(selectedPath.segments||[]).map(segment=>
+                      h('button',{key:'path-insert-'+segment.commandIndex,type:'button',
+                        'aria-label':'Insert path point on segment '+segment.commandIndex+' of '+selectedPath.id,
+                        title:'Ajouter une ancre au milieu du segment '+segment.commandIndex,
+                        disabled:busy||reloadRequired||canvasTool!=='select'||source!==doc.source,
+                        style:{position:'absolute',
+                          left:((segment.midpoint.x-artboard.x)/artboard.width*100)+'%',
+                          top:((segment.midpoint.y-artboard.y)/artboard.height*100)+'%',
+                          width:17,height:17,transform:'translate(-50%, -50%)',
+                          background:'#2b2c2e',border:'1px solid #c4ab90',borderRadius:'50%',
+                          color:'#f5e9d7',fontSize:13,lineHeight:'13px',textAlign:'center',
+                          padding:0,zIndex:11,cursor:'crosshair',touchAction:'manipulation'},
+                        onPointerDown:event=>event.stopPropagation(),
+                        onClick:()=>void save({kind:'svg-path-topology',id:selectedPath.id,
+                          operation:'insert',commandIndex:segment.commandIndex})
+                      },'+')),
                     selectedPath?.editable&&selectedPath.points.map(point=>{
                       const current=previewPoint(point),control=point.role!=='anchor'
                       return h('button',{key:'path-point-'+point.index,type:'button',
@@ -727,8 +743,32 @@ window.__ModuleLoader__.load({
                 selected.tag==='path'&&h('div',{style:{display:'grid',gap:6,padding:'10px 0'}},
                   h('strong',{style:{color:ACCENT}},'Tracé vectoriel · Nœuds'),
                   selectedPath?.editable?
-                    h('small',{style:{color:'#aaa9a5'}},selectedPath.points.length+
-                      ' points · ancres carrées, poignées Bézier rondes. Déplacer une poignée pour modifier uniquement ses coordonnées SVG.'):
+                    h('div',{style:{display:'grid',gap:8}},
+                      h('small',{style:{color:'#aaa9a5'}},selectedPath.points.length+
+                        ' points · ancres carrées, poignées Bézier rondes. Les boutons + insèrent un point au milieu du segment.'),
+                      h('small',{style:{color:'#989690'}},
+                        'Insertion sur ligne ou courbe : le segment est subdivisé. Suppression limitée aux points terminant une ligne simple.'),
+                      h('div',{style:{display:'flex',flexDirection:'column',gap:5,maxHeight:190,overflow:'auto'}},
+                        (selectedPath.segments||[]).map(segment=>
+                          h('div',{key:segment.commandIndex,style:{display:'flex',gap:5,alignItems:'center'}},
+                            h('small',{style:{flex:1,color:'#aaa9a5'}},
+                              segment.type+' · segment '+segment.commandIndex),
+                            h('button',{type:'button',style:button,
+                              'aria-label':'Insert midpoint segment '+segment.commandIndex,
+                              disabled:busy||reloadRequired||source!==doc.source,
+                              onClick:()=>void save({kind:'svg-path-topology',
+                                id:active,operation:'insert',commandIndex:segment.commandIndex})
+                            },'+ Ajouter'),
+                            segment.removable&&h('button',{type:'button',style:{...button,color:'#e6b3a7'},
+                              'aria-label':'Remove line point segment '+segment.commandIndex,
+                              disabled:busy||reloadRequired||source!==doc.source,
+                              onClick:()=>void save({kind:'svg-path-topology',
+                                id:active,operation:'remove',commandIndex:segment.commandIndex})
+                            },'− Retirer')
+                          )
+                        )
+                      )
+                    ):
                     h('small',{style:{color:'#e7b2a8'}},'Tracé non pris en charge en édition visuelle ('+
                       (selectedPath?.reason||'unsupported-path')+'). Utiliser le code source sans conversion forcée.')
                 ),
