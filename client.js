@@ -5,9 +5,10 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const api = 'design-studio-native'
-    const pane = { background:'var(--dsw-alias-surface-1,#171b27)', color:'var(--dsw-alias-content-primary,#e7eaf1)', border:'1px solid var(--dsw-alias-border,#35394a)', borderRadius:8, padding:12 }
-    const button = { cursor:'pointer', border:'1px solid #626a80', borderRadius:6, padding:'6px 10px', background:'transparent', color:'inherit' }
-    const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #626a80', background:'var(--dsw-alias-surface-2,#232838)', color:'inherit', padding:'6px 8px' }
+    const ACCENT='#bda991'
+    const pane = { background:'var(--dsw-alias-surface-1,#202124)', color:'var(--dsw-alias-content-primary,#e8e7e2)', border:'1px solid var(--dsw-alias-border,#37383b)', borderRadius:8, padding:12 }
+    const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
+    const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
     function safePreview(source, format) {
       const policy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
@@ -25,6 +26,9 @@ window.__ModuleLoader__.load({
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
       const [nodes,setNodes] = React.useState([])
+      const [textNodes,setTextNodes] = React.useState([])
+      const [editingText,setEditingText] = React.useState('')
+      const [textDraft,setTextDraft] = React.useState('')
       const [active,setActive] = React.useState('')
       const [attribute,setAttribute] = React.useState('')
       const [value,setValue] = React.useState('')
@@ -44,6 +48,8 @@ window.__ModuleLoader__.load({
           const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
+          setTextNodes(data.textNodes||[]);setEditingText('')
+          setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
           setGeometry(data.geometry||{artboard:null,handles:[]})
           setDragDelta(null);dragRef.current=null
           if(!force || (doc && doc.file!==targetFile)) {setUndoStack([]);setRedoStack([])}
@@ -117,11 +123,30 @@ window.__ModuleLoader__.load({
       }
       function select(nodeId) {
         setActive(nodeId)
+        setEditingText('')
+        setTextDraft(textNodes.find(item=>item.id===nodeId)?.text||'')
         const node=nodes.find(n=>n.id===nodeId)
         const property=Object.keys(node?.attributes||{})[0]||''
         setAttribute(property);setValue(property ? node.attributes[property]:'')
       }
       const selected=nodes.find(n=>n.id===active)
+      const selectedText=textNodes.find(node=>node.id===active)
+      function startTextEditing(nodeId) {
+        const node=textNodes.find(item=>item.id===nodeId)
+        if(!node || !node.editable) {setError('Complex SVG text cannot be edited visually without risking its source');return}
+        if(busy || source!==doc?.source) {setError('Save or discard current source changes first');return}
+        select(nodeId)
+        setTextDraft(node.text);setEditingText(nodeId)
+      }
+      async function commitText() {
+        const id=editingText||active
+        const node=textNodes.find(item=>item.id===id)
+        if(!node || !node.editable)return false
+        if(textDraft===node.text) {setEditingText('');return true}
+        const ok=await save({kind:'svg-text',id,value:textDraft})
+        if(ok)setEditingText('')
+        return ok
+      }
       const {artboard,handles=[]}=geometry
       function startDrag(event,handle,mode='move') {
         if(event.button!==0 || busy) return
@@ -190,17 +215,17 @@ window.__ModuleLoader__.load({
           h('input',{style:{...field,flex:1},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open')),
         doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:8,flexWrap:'wrap'},'aria-label':'SVG creation tools'},
-          ['rect','circle','ellipse'].map(shape=>h('button',{
+          ['rect','circle','ellipse','text'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
             disabled:busy||source!==doc.source,
             onClick:()=>void save({kind:'svg-add-shape',shape})
-          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':'Ellipse')))),
+          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':'Text')))),
         error&&h('div',{role:'alert',style:{color:'#ff8585'}},error),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{style:{display:'grid',gridTemplateColumns:'minmax(130px,1fr) minmax(240px,3fr) minmax(170px,1.3fr)',gap:12,minHeight:380}},
           h('aside',{style:{...pane,overflow:'auto'}},
             h('strong',null,'Layers'),h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
-              nodes.length?nodes.map(n=>h('button',{key:n.id,style:{...button,textAlign:'left',background:active===n.id?'#314674':'transparent'},onClick:()=>select(n.id)},n.tag+' #'+n.id)):
+              nodes.length?nodes.map(n=>h('button',{key:n.id,style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},onClick:()=>select(n.id)},n.tag+' #'+n.id)):
               h('small',null,'No addressable SVG nodes (unique id attributes required).'))),
           h('div',{style:{...pane,overflow:'auto'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:6}},h('strong',null,'Preview'),h('small',null,doc.format.toUpperCase())),
@@ -230,10 +255,11 @@ window.__ModuleLoader__.load({
                       const main=h('button',{key:handle.id,type:'button',title:'Drag '+handle.id+' to move', 'aria-label':'Drag '+handle.tag+' '+handle.id,
                         style:{position:'absolute',left:((left-artboard.x)/artboard.width*100)+'%',top:((top-artboard.y)/artboard.height*100)+'%',
                           width:(width/artboard.width*100)+'%',height:(height/artboard.height*100)+'%',
-                          minWidth:5,minHeight:5,border:active===handle.id?'2px solid #4d8eff':'1px dashed #a8c7ff',
+                          minWidth:5,minHeight:5,border:active===handle.id?'2px solid #c8ab87':'1px dashed #8b847c',
                           borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
-                          background:active===handle.id?'rgba(77,142,255,.09)':'transparent',boxSizing:'border-box',cursor:busy?'wait':'move',touchAction:'none',padding:0},
+                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
+                        onDoubleClick:handle.text?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
                         onPointerUp:event=>finishDrag(event),
                         onPointerCancel:event=>finishDrag(event,true)
@@ -249,15 +275,35 @@ window.__ModuleLoader__.load({
                           'data-corner':corner,
                           style:{position:'absolute',left:((px-artboard.x)/artboard.width*100)+'%',
                             top:((py-artboard.y)/artboard.height*100)+'%',transform:'translate(-50%,-50%)',
-                            width:14,height:14,padding:0,border:'2px solid #fff',borderRadius:3,
-                            background:'#4d8eff',cursor:west===north?'nwse-resize':'nesw-resize',touchAction:'none',zIndex:3},
+                            width:14,height:14,padding:0,border:'2px solid #262626',borderRadius:3,
+                            background:'#bca88a',cursor:west===north?'nwse-resize':'nesw-resize',touchAction:'none',zIndex:3},
                           onPointerDown:event=>{event.stopPropagation();startDrag(event,handle,'resize')},
                           onPointerMove:moveDrag,
                           onPointerUp:event=>finishDrag(event),
                           onPointerCancel:event=>finishDrag(event,true)})
                       })
                       return [main,...resizes]
-                    })
+                    }),
+                    editingText&&(()=> {
+                      const item=handles.find(h=>h.id===editingText)
+                      if(!item)return null
+                      return h('div',{key:'text-editor',style:{
+                        position:'absolute',left:((item.x-artboard.x)/artboard.width*100)+'%',
+                        top:((item.y-artboard.y)/artboard.height*100)+'%',zIndex:12,
+                        width:'max(220px, 28%)',background:'#242424',padding:8,border:'1px solid '+ACCENT,
+                        borderRadius:6,boxShadow:'0 8px 22px #0009'
+                      }},
+                        h('textarea',{autoFocus:true,'aria-label':'Edit SVG text inline',value:textDraft,
+                          onChange:e=>setTextDraft(e.target.value),onKeyDown:e=>{
+                            if(e.key==='Escape'){e.stopPropagation();setEditingText('')}
+                            if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.stopPropagation();void commitText()}
+                          },
+                          style:{...field,minHeight:75,resize:'both',font:'14px system-ui'}}),
+                        h('div',{style:{display:'flex',justifyContent:'flex-end',gap:6,marginTop:6}},
+                          h('button',{style:button,onClick:()=>setEditingText('')},'Cancel'),
+                          h('button',{style:{...button,borderColor:ACCENT},onClick:()=>void commitText(),disabled:busy},'Apply text'))
+                      )
+                    })()
                   )
                 ):
                 h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
@@ -265,6 +311,35 @@ window.__ModuleLoader__.load({
             h('strong',null,'Properties'),selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
                 h('div',null,selected.tag+' #'+selected.id),
+                selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
+                  h('strong',{style:{fontSize:12,color:ACCENT}},'Text / Typography'),
+                  h('textarea',{style:{...field,minHeight:80,resize:'vertical'},value:textDraft,
+                    'aria-label':'Text content',onChange:e=>setTextDraft(e.target.value),
+                    disabled:!selectedText.editable}),
+                  h('button',{style:button,disabled:busy||!selectedText.editable||textDraft===selectedText.text,
+                    onClick:()=>void commitText()},'Save text'),
+                  h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}},
+                    ['font-family','font-size','font-weight','font-style','letter-spacing','text-anchor'].map(key=>
+                      h('label',{key,style:{display:'grid',gap:3,color:'#aaa9a5',fontSize:11}},
+                        key,
+                        key==='font-family'?
+                          h('select',{style:field,value:selected.attributes[key]||'Inter, Arial',
+                            disabled:busy||!selected.attributes[key],
+                            onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
+                            ['Inter, Arial','Arial','Georgia','Verdana','Times New Roman','Courier New'].map(font=>h('option',{key:font,value:font},font))):
+                        key==='font-weight'||key==='font-style'||key==='text-anchor'?
+                          h('select',{style:field,value:selected.attributes[key]||'normal',
+                            disabled:busy||!selected.attributes[key],
+                            onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
+                            (key==='font-weight'?['normal','400','500','600','700','bold']:key==='font-style'?['normal','italic','oblique']:['start','middle','end']).map(value=>h('option',{key:value,value},value))):
+                          h('input',{style:field,type:'number',step:1,value:selected.attributes[key]||'',
+                            disabled:busy||!selected.attributes[key],
+                            onChange:e=>setValue(e.target.value),
+                            onBlur:e=>{if(e.target.value&&e.target.value!==selected.attributes[key])void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})}})
+                      ))
+                  ),
+                  h('small',{style:{color:'#989690'}},'Double-click on a text layer in the canvas to edit directly.'))
+                ),
                 h('label',null,'Property',h('select',{style:field,value:attribute,onChange:e=>{setAttribute(e.target.value);setValue(selected.attributes[e.target.value]||'')}},Object.keys(selected.attributes).map(k=>h('option',{value:k,key:k},k)))),
                 attribute&&h('label',null,'Value',h('input',{style:field,value,onChange:e=>setValue(e.target.value)})),
                 h('button',{style:button,disabled:busy||!attribute,onClick:()=>save({kind:'svg-attribute',id:active,attribute,value})},'Apply without AI')):
