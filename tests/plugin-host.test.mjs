@@ -300,3 +300,63 @@ test('create native cubic Bézier then edit its control point, keeping exact Und
   assert.equal(undoCreate.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),initial)
 }))
+
+
+test('native path midpoint insertion then Undo restores exact source bytes',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100">\n <path id="p" d="M0 0 C0 40 40 40 40 0 L70 15"/>\n</svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const doc=(await invoke('GET',url)).json
+  assert.deepEqual(doc.pathNodes[0].segments.map(seg=>seg.type),['C','L'])
+  const update=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,kind:'svg-path-topology',
+    id:'p',operation:'insert',commandIndex:2
+  })
+  assert.equal(update.status,200)
+  const after=(await invoke('GET',url)).json.document
+  assert.ok(after.source.includes('C 0 20 10 30 20 30 C 30 30 40 20 40 0'))
+  assert.equal(update.json.patches.length,1)
+  const undone=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:after.hash,
+    kind:'patches',patches:update.json.result.inverse
+  })
+  assert.equal(undone.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('remove an L endpoint then Undo restores the original line exactly',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="p" d="M0 0 L20 20 L30 30"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const doc=(await invoke('GET',url)).json.document
+  const removed=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    kind:'svg-path-topology',id:'p',operation:'remove',commandIndex:2
+  })
+  assert.equal(removed.status,200)
+  const edited=(await invoke('GET',url)).json.document
+  assert.equal(edited.source,original.replace(' L20 20',''))
+  const undone=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:edited.hash,
+    kind:'patches',patches:removed.json.result.inverse
+  })
+  assert.equal(undone.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('topology operations reject stale external writes and unsafe curve removal',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="p" d="M0 0 Q25 50 50 0"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const doc=(await invoke('GET',url)).json.document
+  const refused=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    kind:'svg-path-topology',id:'p',operation:'remove',commandIndex:2
+  })
+  assert.equal(refused.status,400)
+  assert.equal(refused.json.error,'unsupported-segment')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+  const concurrent=original.replace('Q25 50','Q30 50')
+  await writeFile(path.join(root,'icon.svg'),concurrent)
+  const stale=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    kind:'svg-path-topology',id:'p',operation:'insert',commandIndex:2
+  })
+  assert.equal(stale.status,409)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),concurrent)
+}))
