@@ -467,3 +467,22 @@ test('Host API identity token prevents same-byte external file replacement',()=>
   assert.equal(accepted.status,200)
   assert.ok((await readFile(file,'utf8')).includes('fill="#cc0000"'))
 }))
+
+
+test('legacy native write without file identity is rejected with HTTP 428, even if SHA matches',()=>fixture(async(invoke,root)=>{
+  const original=(await invoke('GET',url)).json.document
+  const rejected=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:original.hash,
+    kind:'svg-attribute',id:'box',attribute:'fill',value:'blue'
+  })
+  assert.equal(rejected.status,428)
+  assert.equal(rejected.json.error,'missing-revision')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original.source)
+  for(const bad of ['',null,'0'.repeat(64),'not-an-identity']){
+    const response=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'icon.svg',baseHash:original.hash,baseIdentity:bad,
+      kind:'svg-attribute',id:'box',attribute:'fill',value:'blue'
+    })
+    assert.equal(response.status,bad==='0'.repeat(64)?409:428)
+  }
+}))
