@@ -1,6 +1,6 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.12` on a draft source branch (not released). GitHub Actions [run 43970321870](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43970321870), tested commit `147b5109f0e08c02e4772ca9500e4b93d8f16abf`: **191 PASS, 0 FAIL, 0 SKIP**. Real DSH Desktop/Web installation **NOT_RUN**. See [alpha.12 evidence](ALPHA12-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.13` on a draft source branch (not released). GitHub Actions [run 43973328639](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43973328639), tested source SHA `deb959be98d1807ef2ea0741a42d7c5356d48b54`: **195 PASS, 0 FAIL, 0 SKIP**. Interprocess writes now use a cooperating native lock; real DSH Desktop/Web installation and universal atomic CAS remain **NOT_RUN/NOT_IMPLEMENTED**. See [alpha.13 evidence](ALPHA13-EVIDENCE.md).
 
 ## What it can do
 
@@ -63,7 +63,7 @@ Native patch engine (src/native-patch.mjs)
 - HTML is previewed and source-editable, but **not yet visually selectable** with mapped CSS/DOM source edits.
 - Undo/Redo toolbar is implemented for recent successful saves within the mounted UI; **persistent history across reload/restart is not implemented**.
 - Source editor replaces whole document content on explicit save; only semantic SVG attribute modifications use minimal source spans. A file hash guards saves but source editor is not a syntax validator.
-- The native file store has *process-local* write serialization and a last-minute on-disk recheck; it **does not provide an atomic compare-and-swap across independent processes**, and directory symlink/rename races require a stronger isolation design before release.
+- Native edits use **both process-local serialization and an atomic directory lock shared between cooperating processes**, plus SHA preconditions and a last-minute on-disk recheck. **External editors do not honor the lock**, so true universal compare-and-swap is not guaranteed. A hard crash can leave a stale lock that must only be manually removed after confirming no active writer. Directory symlink/rename races require an isolation review before release.
 - No external imagery or scripts in preview; HTML depending on external CSS/JS will not render identically to production.
 - Native API fetch URLs are now origin-root (`/design-studio-native`) so they resolve correctly under nested conversation routes. This is covered by mocked client tests, **not** live DSH.
 - No DSH Desktop or Web smoke test, no packaging/install success claim, no UI screenshot validation, no security review, no accessibility check and no Windows integration test yet.
@@ -74,6 +74,8 @@ Native patch engine (src/native-patch.mjs)
 |---|---|
 | Core patch tests | PASS (GitHub Actions) |
 | Native store round-trip tests | PASS (GitHub Actions) |
+| Cross-process writer lock race and failure cleanup | PASS (GitHub Actions, separate Node processes) |
+| External editor / NFS / OS race isolation | NOT_RUN |
 | SVG targeted source-edit tests | PASS (GitHub Actions) |
 | Mocked Host routes, client registration, lifecycle and pointer events | PASS (GitHub Actions) |
 | Session workspace file discovery and mocked selection UI | PASS (GitHub Actions) |
