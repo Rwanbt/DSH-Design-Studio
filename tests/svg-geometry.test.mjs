@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { svgGeometry, svgMoveEdits, svgResizeEdits } from '../src/svg-geometry.mjs'
+import { svgGeometry, svgMoveEdits, svgResizeEdits, svgResizeCornerGeometry, svgResizeCornerEdits } from '../src/svg-geometry.mjs'
 import { svgAttributePatch } from '../src/svg-attributes.mjs'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 
@@ -86,4 +86,28 @@ test('resize clamps to positive dimensions and rejects circle/NaN', () => {
   assert.deepEqual(svgResizeEdits(rectangle,-10000,-10000).map(x=>x.value),['1','1'])
   assert.throws(()=>svgResizeEdits(svgGeometry(source).handles[1],2,2),TypeError)
   assert.throws(()=>svgResizeEdits(rectangle,Infinity,2),TypeError)
+})
+
+test('four corner resize preserves opposite anchor for rectangles',()=>{
+  const item=svgGeometry(source).handles[0]
+  assert.deepEqual(svgResizeCornerGeometry(item,'nw',20,30),{x:110,y:90,width:440,height:210})
+  assert.deepEqual(svgResizeCornerGeometry(item,'ne',20,30),{x:90,y:90,width:480,height:210})
+  assert.deepEqual(svgResizeCornerGeometry(item,'sw',20,30),{x:110,y:60,width:440,height:270})
+  assert.deepEqual(svgResizeCornerGeometry(item,'se',20,30),{x:90,y:60,width:480,height:270})
+})
+test('aspect ratio is locked for resize and XML source writes remain scoped',()=>{
+  const item=svgGeometry(source).handles[0]
+  const geometry=svgResizeCornerGeometry(item,'se',46,0,true)
+  assert.ok(Math.abs(geometry.width/geometry.height-item.width/item.height)<1e-9)
+  const edits=svgResizeCornerEdits(item,'nw',10,10,true)
+  const patches=edits.map(edit=>svgAttributePatch(source,edit))
+  const out=applyNativePatches({source,format:'svg',baseHash:sourceHash(source),patches})
+  assert.equal(out.ok,true)
+  assert.equal(out.source.replace(/id="card" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*"/,'id="card" x="90" y="60" width="460" height="240"'),source)
+})
+test('corner resize rejects unsupported shapes/corners and invalid deltas',()=>{
+  const item=svgGeometry(source).handles[0]
+  assert.throws(()=>svgResizeCornerEdits(item,'middle',10,0),TypeError)
+  assert.throws(()=>svgResizeCornerEdits(item,'nw',Infinity,0),TypeError)
+  assert.throws(()=>svgResizeCornerEdits(svgGeometry(source).handles[1],'se',3,3),TypeError)
 })
