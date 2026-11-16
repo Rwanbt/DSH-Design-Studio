@@ -15,7 +15,7 @@ window.__ModuleLoader__.load({
       return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '">' + svgLayout + '</head><body style="margin:' + (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
     }
     async function request(endpoint, options) {
-      const response = await fetch(new URL(api + endpoint, document.baseURI),{credentials:'same-origin',...options})
+      const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})
       const result = await response.json()
       if (!response.ok || !result.ok) throw new Error(result.message || result.error || 'Request failed')
       return result
