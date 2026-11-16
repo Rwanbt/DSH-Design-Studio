@@ -1,10 +1,11 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.6` (source branch, not released). New alpha.6 layer ops and DSH URL integration are in review. CI evidence for this head is recorded in `docs/experiments/ALPHA6-EVIDENCE.md` when completed. Earlier alpha.5 validation: GitHub Actions run `43947189260` with 89 PASS, 0 FAIL, 0 SKIP. Real DSH installation is **NOT_RUN**.
+**Status:** experimental `0.1.0-alpha.7` (source branch, not released). [GitHub Actions run 43955013097](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43955013097) on commit `6e853a8a19a2f6150f26aba569169562468bb63b`: **119 PASS, 0 FAIL, 0 SKIP**, including mocked Host lifecycle and source file picker tests. Real DSH installation is **NOT_RUN**. See [alpha.7 evidence](ALPHA7-EVIDENCE.md).
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
+- **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
 - **Resize** rectangles/ellipses from any of four corners, anchoring the opposite corner. Hold **Shift** to preserve their aspect ratio. Circle resizing is not yet supported.
@@ -28,12 +29,13 @@ npm run check
 
 Native DSH bundle metadata is in `package.json` and `cordis.patch.yml`. The entrypoints are `src/plugin-host.mjs` and `client.js`. **Real DSH installation remains NOT_RUN**; install as a local bundle in a *disposable/test* Harness profile only, using that version's supported plugin manager. Do not replace or shadow another installed `dsh-design-studio` plugin until the name conflict and lifecycle are verified.
 
-For a simple local manual test, place `examples/design.svg` inside the active session workspace, type the relative path in the plugin view and click **Open**. Select `rect #card`, choose `fill`, adjust its value and click **Apply without AI**. For a drag exercise, drag the `card` outline on the preview, release the pointer, and check that only `x` and `y` changed in the original SVG. Reopen the source file outside DSH and compare the changed bytes.
+For a simple local manual test, place `examples/design.svg` inside the active session workspace, select **Parcourir…** or type the relative path and click **Open**. Select `rect #card`, choose `fill`, adjust its value and click **Apply without AI**. For a drag exercise, drag the `card` outline on the preview, release the pointer, and check that only `x` and `y` changed in the original SVG. Reopen the source file outside DSH and compare the changed bytes.
 
 ## Architecture
 
 ```text
 DSH conversation.view (client.js)
+    ↓ GET /design-studio-native/files?sessionId=... (read-only list)
     ↓ GET /design-studio-native/document?sessionId=...&file=...
     ↓ POST /design-studio-native/apply
 DSH Host plugin (src/plugin-host.mjs)
@@ -67,7 +69,8 @@ Native patch engine (src/native-patch.mjs)
 | Core patch tests | PASS (GitHub Actions) |
 | Native store round-trip tests | PASS (GitHub Actions) |
 | SVG targeted source-edit tests | PASS (GitHub Actions) |
-| Mocked Host routes, client registration and pointer events | PASS (GitHub Actions) |
+| Mocked Host routes, client registration, lifecycle and pointer events | PASS (GitHub Actions) |
+| Session workspace file discovery and mocked selection UI | PASS (GitHub Actions) |
 | Actual DSH UI opening and selection | NOT_RUN |
 | Runtime security isolation | NOT_RUN |
 | SVG rectangle/circle/ellipse pointer drag (mocked) | PASS (GitHub Actions simulation) |
