@@ -129,7 +129,7 @@ window.__ModuleLoader__.load({
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
         select(handle.id);setError('')
-        dragRef.current={id:handle.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:rect.width,height:rect.height,handle,mode}
+        dragRef.current={id:handle.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:rect.width,height:rect.height,handle,mode,corner:mode==='resize'?(event.currentTarget?.dataset?.corner||'se'):null}
         setDragDelta(null)
         try {event.currentTarget.setPointerCapture(event.pointerId)} catch (_) {}
         event.preventDefault()
@@ -139,7 +139,7 @@ window.__ModuleLoader__.load({
         if(!drag || drag.pointerId!==event.pointerId || !artboard) return
         const dx=(event.clientX-drag.startX)*artboard.width/drag.width
         const dy=(event.clientY-drag.startY)*artboard.height/drag.height
-        setDragDelta({id:drag.id,dx,dy,mode:drag.mode})
+        setDragDelta({id:drag.id,dx,dy,mode:drag.mode,corner:drag.corner,lockAspect:!!event.shiftKey})
       }
       function finishDrag(event,cancel=false) {
         const drag=dragRef.current
@@ -155,10 +155,22 @@ window.__ModuleLoader__.load({
         const item=drag.handle
         let edits
         if(drag.mode==='resize' && item.resizable) {
-          const w=Math.max(1,item.width+dx),height=Math.max(1,item.height+dy)
+          const corner=drag.corner||'se'
+          const leftSide=corner.includes('w'),topSide=corner.includes('n')
+          let w=Math.max(1,item.width+(leftSide?-dx:dx))
+          let height=Math.max(1,item.height+(topSide?-dy:dy))
+          if(event.shiftKey) {
+            const ratioX=w/item.width,ratioY=height/item.height
+            const scale=Math.max(1/item.width,1/item.height,
+              Math.abs(ratioX-1)>=Math.abs(ratioY-1)?ratioX:ratioY)
+            w=item.width*scale;height=item.height*scale
+          }
+          const x=leftSide?item.x+item.width-w:item.x
+          const y=topSide?item.y+item.height-height:item.y
           edits=item.tag==='rect'?
-            [{id:item.id,attribute:'width',value:number(w)},{id:item.id,attribute:'height',value:number(height)}]:
-            [{id:item.id,attribute:'cx',value:number(item.x+w/2)},{id:item.id,attribute:'cy',value:number(item.y+height/2)},
+            [{id:item.id,attribute:'x',value:number(x)},{id:item.id,attribute:'y',value:number(y)},
+             {id:item.id,attribute:'width',value:number(w)},{id:item.id,attribute:'height',value:number(height)}]:
+            [{id:item.id,attribute:'cx',value:number(x+w/2)},{id:item.id,attribute:'cy',value:number(y+height/2)},
              {id:item.id,attribute:'rx',value:number(w/2)},{id:item.id,attribute:'ry',value:number(height/2)}]
         }else{
           edits=[
@@ -193,10 +205,22 @@ window.__ModuleLoader__.load({
                   h('div',{style:{position:'absolute',inset:0,touchAction:'none'},'aria-label':'Direct manipulation overlay'},
                     handles.flatMap(handle=>{
                       const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0,mode:'move'}
-                      const left=handle.x+(delta.mode==='move'?delta.dx:0)
-                      const top=handle.y+(delta.mode==='move'?delta.dy:0)
-                      const width=delta.mode==='resize'?Math.max(1,handle.width+delta.dx):handle.width
-                      const height=delta.mode==='resize'?Math.max(1,handle.height+delta.dy):handle.height
+                      let left=handle.x+(delta.mode==='move'?delta.dx:0)
+                      let top=handle.y+(delta.mode==='move'?delta.dy:0)
+                      let width=handle.width,height=handle.height
+                      if(delta.mode==='resize') {
+                        const corner=delta.corner||'se',leftSide=corner.includes('w'),topSide=corner.includes('n')
+                        width=Math.max(1,handle.width+(leftSide?-delta.dx:delta.dx))
+                        height=Math.max(1,handle.height+(topSide?-delta.dy:delta.dy))
+                        if(delta.lockAspect) {
+                          const ratioX=width/handle.width,ratioY=height/handle.height
+                          const scale=Math.max(1/handle.width,1/handle.height,
+                            Math.abs(ratioX-1)>=Math.abs(ratioY-1)?ratioX:ratioY)
+                          width=handle.width*scale;height=handle.height*scale
+                        }
+                        left=leftSide?handle.x+handle.width-width:handle.x
+                        top=topSide?handle.y+handle.height-height:handle.y
+                      }
                       const main=h('button',{key:handle.id,type:'button',title:'Drag '+handle.id+' to move', 'aria-label':'Drag '+handle.tag+' '+handle.id,
                         style:{position:'absolute',left:((left-artboard.x)/artboard.width*100)+'%',top:((top-artboard.y)/artboard.height*100)+'%',
                           width:(width/artboard.width*100)+'%',height:(height/artboard.height*100)+'%',
@@ -209,17 +233,24 @@ window.__ModuleLoader__.load({
                         onPointerCancel:event=>finishDrag(event,true)
                       })
                       if(!handle.resizable || active!==handle.id) return [main]
-                      const resize=h('button',{key:handle.id+'-resize',type:'button','aria-label':'Resize '+handle.tag+' '+handle.id,
-                        title:'Drag the bottom-right corner to resize',
-                        style:{position:'absolute',left:((left+width-artboard.x)/artboard.width*100)+'%',
-                          top:((top+height-artboard.y)/artboard.height*100)+'%',transform:'translate(-50%,-50%)',
-                          width:14,height:14,padding:0,border:'2px solid #fff',borderRadius:3,
-                          background:'#4d8eff',cursor:'nwse-resize',touchAction:'none',zIndex:3},
-                        onPointerDown:event=>{event.stopPropagation();startDrag(event,handle,'resize')},
-                        onPointerMove:moveDrag,
-                        onPointerUp:event=>finishDrag(event),
-                        onPointerCancel:event=>finishDrag(event,true)})
-                      return [main,resize]
+                      const corners=['nw','ne','sw','se']
+                      const resizes=corners.map(corner=>{
+                        const west=corner.includes('w'),north=corner.includes('n')
+                        const px=left+(west?0:width),py=top+(north?0:height)
+                        return h('button',{key:handle.id+'-resize-'+corner,type:'button',
+                          'aria-label':corner==='se'?'Resize '+handle.tag+' '+handle.id:'Resize '+corner.toUpperCase()+' '+handle.tag+' '+handle.id,
+                          title:'Resize from '+corner.toUpperCase()+' corner · Shift locks aspect ratio',
+                          'data-corner':corner,
+                          style:{position:'absolute',left:((px-artboard.x)/artboard.width*100)+'%',
+                            top:((py-artboard.y)/artboard.height*100)+'%',transform:'translate(-50%,-50%)',
+                            width:14,height:14,padding:0,border:'2px solid #fff',borderRadius:3,
+                            background:'#4d8eff',cursor:west===north?'nwse-resize':'nesw-resize',touchAction:'none',zIndex:3},
+                          onPointerDown:event=>{event.stopPropagation();startDrag(event,handle,'resize')},
+                          onPointerMove:moveDrag,
+                          onPointerUp:event=>finishDrag(event),
+                          onPointerCancel:event=>finishDrag(event,true)})
+                      })
+                      return [main,...resizes]
                     })
                   )
                 ):
@@ -237,7 +268,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65}},'Experimental editor. SVG primitives can be moved with pointer or arrow keys (Shift: 10 units); rectangles/ellipses resized. Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
+        h('small',{style:{opacity:0.65}},'Experimental editor. SVG primitives move with pointer or arrow keys; rectangles/ellipses resize from four corners (Shift: lock ratio). Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
       )
     }
     return {
