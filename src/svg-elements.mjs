@@ -95,8 +95,14 @@ function scannedElements(source) {
       if (!node || node.tag !== tag) fail('invalid-svg', 'Mismatched XML closing tag')
       node.end = end
     } else {
+      if (tag === 'script' || tag === 'foreignObject') {
+        fail('unsupported-svg', 'Executable and foreign SVG nodes are not supported')
+      }
       const raw = selfClosing ? tail.replace(/\/\s*$/, '') : tail
       const attrs = attributes(raw, attrStart)
+      if ([...attrs.keys()].some(name => /^on[a-z]/i.test(name))) {
+        fail('unsupported-svg', 'SVG event-handler attributes are not supported')
+      }
       const id = attrs.get('id')?.value
       if (id !== undefined) {
         if (used.has(id)) fail('ambiguous-svg', 'Duplicate XML id: ' + id)
