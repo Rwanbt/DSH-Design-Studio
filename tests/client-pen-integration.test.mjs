@@ -23,6 +23,23 @@ async function untilRecorded(file,fragment) {
   }
   assert.fail('Native file never contained expected Pen operation: '+fragment)
 }
+async function untilReady(render) {
+  const deadline=Date.now()+2500
+  while(Date.now()<deadline) {
+    const button=find(render(),n=>n.props?.['aria-label']==='Activate Pen tool')
+    if(button && button.props.disabled===false)return
+    await new Promise(resolve=>setTimeout(resolve,15))
+  }
+  assert.fail('Pen UI did not settle after saving')
+}
+async function untilExact(file,expected) {
+  const deadline=Date.now()+2500
+  while(Date.now()<deadline) {
+    if((await readFile(file,'utf8'))===expected)return
+    await new Promise(resolve=>setTimeout(resolve,15))
+  }
+  assert.fail('Pen undo did not restore expected native document')
+}
 async function withPenClient(fn) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-pen-client-'))
   const file=path.join(root,'design.svg')
@@ -85,27 +102,31 @@ test('Pen UI creates, extends and closes source-accurate SVG path through real n
   find(render(),n=>n.props?.['aria-label']==='Activate Pen tool').props.onClick()
   assert.ok(find(render(),n=>n.props?.['aria-label']==='Pen drawing surface'))
   gesture(render,{x:20,y:20,id:1})
-  await settle()
-  assert.equal((await readFile(file,'utf8')).includes('d="M 10 10"'),true)
+  await untilRecorded(file,'d="M 10 10"')
+  await untilReady(render)
+  const first=await readFile(file,'utf8')
   gesture(render,{x:40,y:40,id:2})
-  await settle()
-  assert.equal((await readFile(file,'utf8')).includes('d="M 10 10 L 20 20"'),true)
+  await untilRecorded(file,'d="M 10 10 L 20 20"')
+  await untilReady(render)
+  const second=await readFile(file,'utf8')
   gesture(render,{x:140,y:100,endX:160,endY:100,id:3})
-  await settle()
+  await untilRecorded(file,' C ')
+  await untilReady(render)
   const drawn=await readFile(file,'utf8')
-  assert.ok(drawn.includes('C '),drawn)
   assert.ok(drawn.includes('70 50'),drawn)
   const close=find(render(),n=>n.props?.['aria-label']==='Close current pen path')
   assert.ok(close)
   assert.equal(close.props.disabled,false)
   close.props.onClick()
-  await settle()
-  assert.ok((await readFile(file,'utf8')).includes(' Z"'))
-  for(let i=0;i<4;i++){
+  await untilRecorded(file,' Z"')
+  await untilReady(render)
+  const stages=[drawn,second,first,initial]
+  for(const expected of stages){
     const undo=find(render(),n=>n.props?.['aria-label']==='Undo saved edit')
     assert.equal(undo.props.disabled,false,'History must support each of four pen operations')
     undo.props.onClick()
-    await settle()
+    await untilExact(file,expected)
+    await untilReady(render)
   }
   assert.equal(await readFile(file,'utf8'),initial)
   const writes=app.calls().filter(call=>call.method==='POST')
