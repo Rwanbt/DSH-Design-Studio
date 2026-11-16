@@ -1,6 +1,6 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.4` (source branch; **no release**). Verified on commit `4eca802a6d8d4fb019d7da05eae403dd9e8977ce`: [GitHub Actions run 43930240559](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43930240559), **74 PASS, 0 FAIL, 0 SKIP**. Tests use mocked Host/Client interactions; **real DSH install remains NOT_RUN**.
+**Status:** experimental `0.1.0-alpha.5` (source branch; **not released**). Last verified code/CI run: [GitHub Actions 43946872717](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43946872717), commit `ef2459e302760566f28ce9dc5b55b7a8c1ffdda0`: **89 PASS, 0 FAIL, 0 SKIP**. These are Node tests and simulated host/client interactions. **Real DSH Desktop/Web install is NOT_RUN.**
 
 ## What it can do
 
@@ -8,7 +8,8 @@
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
 - **Resize** rectangles/ellipses from any of four corners, anchoring the opposite corner. Hold **Shift** to preserve their aspect ratio. Circle resizing is not yet supported.
-- **Create** rectangles, circles and ellipses with manual toolbar buttons. The editor inserts a new native SVG element with a unique generated `shape-N` ID, without rewriting existing elements. Requires simple untransformed SVG with a root `viewBox` and an explicit closing `</svg>` tag.
+- **Create** rectangles, circles, ellipses and **editable native SVG text objects** with manual toolbar buttons. The editor inserts a new native SVG element with a unique generated `shape-N` ID, without rewriting existing elements. Requires simple untransformed SVG with a root `viewBox` and an explicit closing `</svg>` tag.
+- **Edit simple SVG text directly** by double-clicking its approximate selection area or using an inspectable text field. Supports simple text and the plugin's generated multiline `<tspan>` structure; rich nested text remains uneditable. Font family, size, weight, style, letter spacing and alignment may be edited only where corresponding SVG attributes already exist. User content is escaped for XML.
 - **Nudge** a selected SVG shape with arrow keys by one SVG unit, or ten units with Shift.
 - **Undo/Redo** recorded manual saves via validated source inverse/forward patches. History is **in-memory per current browser editor session**, bounded to 30 entries and 2 MiB per entry; it is not persisted across DSH restart. External modifications must be reloaded and never silently overwritten.
 - Show SVG node IDs in a layer list and manually edit an **existing** attribute (`fill`, `stroke`, `x`, `y`, `width`, `height`, `d`, etc.), provided the node has a **unique** `id`.
@@ -48,6 +49,7 @@ Native patch engine (src/native-patch.mjs)
 
 - **Pointer drag of basic SVG rectangles/circles/ellipses is experimental**: four corner resize handles for rectangles/ellipses; no edge handles, freehand drawing, multi-select, Bézier-node editor, groups, transforms, guides, snapping or full responsive property editor. The overlay uses rectangular hit areas, not exact painted-path hit testing. Some SVGs intentionally disable drag when geometries cannot be mapped safely. Tests simulate pointer events; real DSH browser gestures remain unverified.
 - Shape creation is deliberately conservative: malformed, ambiguous, transformed, grouped or script-bearing SVG files are rejected rather than silently modified. The ID allocator is workspace-local, deterministic and does not yet support changing ID names through the GUI.
+- Text hit areas are estimated from text length and font size, not exact glyph geometry. The inline text editor does not yet implement true font metrics or production-grade multiline layout. Selecting complex text falls back to source editing.
 - SVG inspector only edits existing attributes of uniquely identified nodes. No XML DOM / general SVG parser; `<script>` and `<!DOCTYPE>` SVGs are rejected for inspector editing.
 - HTML is previewed and source-editable, but **not yet visually selectable** with mapped CSS/DOM source edits.
 - Undo/Redo toolbar is implemented for recent successful saves within the mounted UI; **persistent history across reload/restart is not implemented**.
@@ -69,10 +71,14 @@ Native patch engine (src/native-patch.mjs)
 | SVG rectangle/circle/ellipse pointer drag (mocked) | PASS (GitHub Actions simulation) |
 | Four-corner rectangle/ellipse resize with Shift, keyboard nudge, in-memory undo/redo | PASS (GitHub Actions unit simulations) |
 | Manual SVG shape creation and native undo | PASS (GitHub Actions file/API tests) |
+| SVG text content edits / multiline tspan / typography / text creation | PASS (GitHub Actions unit/API tests) |
+| Inline editor, text inspector, Add Text UI (mocked client) | PASS (GitHub Actions client simulations) |
 | Undo/redo native source round-trip and conflict rejection | PASS (GitHub Actions file/API integration tests) |
 | Real DSH browser pointer interaction | NOT_RUN |
 | Freehand vector drawing / Bézier handles | NOT_IMPLEMENTED |
 | Real HTML visual source mapping | NOT_IMPLEMENTED |
 | CI on multiple operating systems | NOT_RUN |
+
+UI direction is documented in [V3 Graphite decision](../design/INTERFACE-V3-GRAPHITE.md). The separate HTML V3 concept is **not** this running plugin; the real plugin uses the native DSH React/Host shell and is only partially visually aligned so far.
 
 **Do not merge to `main` or publish an npm release from this experimental branch without an explicit smoke test and review.**
