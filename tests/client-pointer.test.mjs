@@ -7,7 +7,7 @@ const source = '<svg viewBox="0 0 100 100"><rect id="box" x="10" y="20" width="3
 const documentData = { file: 'design.svg', format: 'svg', source, hash: 'original-sha256' }
 const handle = {
   id:'box',tag:'rect',x:10,y:20,width:30,height:40,
-  move:{x:'x',y:'y',initialX:10,initialY:20}
+  move:{x:'x',y:'y',initialX:10,initialY:20},resizable:true
 }
 
 function createHarness() {
@@ -34,7 +34,7 @@ function createHarness() {
     assert.ok(String(url).includes('design-studio-native/'),'Editor must not call AI endpoints')
     if(options.method==='POST'){
       writes.push(JSON.parse(options.body))
-      return {ok:true,json:async()=>({ok:true,result:{changed:true}})}
+      return {ok:true,json:async()=>({ok:true,result:{changed:true,inverse:[{start:0,end:1,before:'a',after:'b'}]},patches:[{start:0,end:1,before:'b',after:'a'}]})}
     }
     return {ok:true,json:async()=>({
       ok:true,document:documentData,
@@ -104,4 +104,44 @@ test('click without movement selects an element but does not write the file',asy
   control.props.onPointerUp({pointerId:1,clientX:30,clientY:30})
   await new Promise(resolve=>setTimeout(resolve,5))
   assert.equal(harness.writes().length,0)
+})
+
+test('selected rectangle gets bottom-right resize handle and commits dimensions',async()=>{
+  const harness=createHarness()
+  await harness.init()
+  await find(harness.render(),node=>node.type==='button' && node.children?.includes('Open')).props.onClick()
+  let control=find(harness.render(),node=>node.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture:()=>{}}
+  control.props.onPointerDown({button:0,pointerId:1,clientX:20,clientY:20,currentTarget:target,preventDefault:()=>{}})
+  control.props.onPointerUp({pointerId:1,clientX:20,clientY:20})
+  const resize=find(harness.render(),node=>node.props?.['aria-label']==='Resize rect box')
+  assert.ok(resize,'The selected rectangle must expose a dedicated resize control')
+  resize.props.onPointerDown({button:0,pointerId:2,clientX:20,clientY:20,currentTarget:target,stopPropagation:()=>{},preventDefault:()=>{}})
+  resize.props.onPointerMove({pointerId:2,clientX:40,clientY:60})
+  resize.props.onPointerUp({pointerId:2,clientX:40,clientY:60})
+  await new Promise(resolve=>setTimeout(resolve,10))
+  assert.deepEqual(harness.writes()[0].edits,[
+    {id:'box',attribute:'width',value:'40'},
+    {id:'box',attribute:'height',value:'60'}
+  ])
+})
+test('undo and redo use saved inverse and forward patches without AI',async()=>{
+  const harness=createHarness()
+  await harness.init()
+  await find(harness.render(),node=>node.type==='button' && node.children?.includes('Open')).props.onClick()
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture:()=>{}}
+  const control=find(harness.render(),node=>node.props?.['aria-label']==='Drag rect box')
+  control.props.onPointerDown({button:0,pointerId:3,clientX:0,clientY:0,currentTarget:target,preventDefault:()=>{}})
+  control.props.onPointerUp({pointerId:3,clientX:20,clientY:20})
+  await new Promise(resolve=>setTimeout(resolve,10))
+  let undo=find(harness.render(),node=>node.props?.['aria-label']==='Undo saved edit')
+  assert.equal(undo.props.disabled,false)
+  await undo.props.onClick()
+  assert.equal(harness.writes()[1].kind,'patches')
+  assert.deepEqual(harness.writes()[1].patches,[{start:0,end:1,before:'a',after:'b'}])
+  const redo=find(harness.render(),node=>node.props?.['aria-label']==='Redo saved edit')
+  assert.equal(redo.props.disabled,false)
+  await redo.props.onClick()
+  assert.equal(harness.writes()[2].kind,'patches')
+  assert.deepEqual(harness.writes()[2].patches,[{start:0,end:1,before:'b',after:'a'}])
 })
