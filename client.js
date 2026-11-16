@@ -316,7 +316,7 @@ window.__ModuleLoader__.load({
       function chooseHtmlProperty(property) {
         setHtmlProperty(property)
         const item=htmlElements.find(node=>node.id===htmlActive)
-        const escaped=property.replace(/[.*+?^\x24{}()|[\]\\]/g,'\\      const selected=nodes.find(n=>n.id===active)')
+        const escaped=property
         const current=new RegExp('(?:^|;)\\s*'+escaped+'\\s*:\\s*([^;]*)','i')
         setHtmlValue(current.exec(item?.style||'')?.[1]?.trim()||'')
       }
