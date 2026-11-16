@@ -1,7 +1,7 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
-import { listSvgPathModels, svgPathPointPatches } from './svg-paths.mjs'
+import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch } from './svg-paths.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -102,6 +102,11 @@ export function createRouteHandler(ctx) {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           const created=svgShapeInsertPatch(doc.source,params.shape)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-path-topology') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[svgPathTopologyPatch(doc.source,{
+            id:params.id,operation:params.operation,commandIndex:params.commandIndex
+          })]
         } else if (params.kind === 'svg-path-point') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=svgPathPointPatches(doc.source,{id:params.id,index:params.index,x:params.x,y:params.y})
