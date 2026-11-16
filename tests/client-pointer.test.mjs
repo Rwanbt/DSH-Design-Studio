@@ -147,3 +147,22 @@ test('undo and redo use saved inverse and forward patches without AI',async()=>{
   assert.equal(harness.writes()[2].kind,'patches')
   assert.deepEqual(harness.writes()[2].patches,[{start:0,end:1,before:'b',after:'a'}])
 })
+
+test('arrow key nudges selected shape by one unit; Shift uses ten units',async()=>{
+  const harness=createHarness()
+  await harness.init()
+  await find(harness.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  let root=harness.render()
+  const selected=find(root,node=>node.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture:()=>{}}
+  selected.props.onPointerDown({button:0,pointerId:11,clientX:10,clientY:10,currentTarget:target,preventDefault:()=>{}})
+  selected.props.onPointerUp({pointerId:11,clientX:10,clientY:10})
+  root=harness.render()
+  let prevented=false
+  root.props.onKeyDown({key:'ArrowRight',shiftKey:true,target:{tagName:'BUTTON'},preventDefault:()=>{prevented=true}})
+  await new Promise(resolve=>setTimeout(resolve,10))
+  assert.equal(prevented,true)
+  assert.equal(harness.writes()[0].kind,'svg-attribute')
+  assert.equal(harness.writes()[0].attribute,'x')
+  assert.equal(harness.writes()[0].value,'20')
+})
