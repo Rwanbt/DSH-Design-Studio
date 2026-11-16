@@ -1,6 +1,7 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
+import { listSvgPathModels, svgPathPointPatches } from './svg-paths.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -74,16 +75,17 @@ export function createRouteHandler(ctx) {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             nodes=listEditableSvgNodes(document.source)
             textNodes=listSvgTextNodes(document.source).map(({id,text,editable,attributes})=>({id,text,editable,attributes}))
             geometry=svgGeometry(document.source)
+            pathNodes=listSvgPathModels(document.source)
             if(geometry.warning) warning=geometry.warning
           } catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,geometry,warning})
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
@@ -100,6 +102,9 @@ export function createRouteHandler(ctx) {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           const created=svgShapeInsertPatch(doc.source,params.shape)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-path-point') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=svgPathPointPatches(doc.source,{id:params.id,index:params.index,x:params.x,y:params.y})
         } else if (params.kind === 'svg-text') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTextPatch(doc.source,{id:params.id,value:params.value})]
