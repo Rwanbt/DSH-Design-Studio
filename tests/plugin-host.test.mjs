@@ -486,3 +486,50 @@ test('legacy native write without file identity is rejected with HTTP 428, even 
     assert.equal(response.status,bad==='0'.repeat(64)?409:428)
   }
 }))
+
+
+test('HTML visual property editor preserves all unrelated source bytes and Undo restores the original',()=>fixture(async(invoke,root)=>{
+  const input='<!doctype html>\n<main id="app"><h1 id="title" style="color: red; padding: 12px;">Hello</h1></main>\n'
+  await writeFile(path.join(root,'page.html'),input)
+  const opened=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  assert.equal(opened.status,200)
+  const doc=opened.json.document
+  assert.deepEqual(opened.json.htmlElements.map(n=>n.id),['app','title'])
+  const update=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'page.html',baseHash:doc.hash,baseIdentity:doc.identity,
+    kind:'html-style',id:'title',property:'color',value:'#bda991'
+  })
+  assert.equal(update.status,200,JSON.stringify(update.json))
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),input.replace('color: red','color: #bda991'))
+  assert.equal(update.json.patches.length,1)
+  const changed=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  const reverted=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'page.html',baseHash:changed.json.document.hash,
+    baseIdentity:changed.json.document.identity,kind:'patches',patches:update.json.result.inverse
+  })
+  assert.equal(reverted.status,200)
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),input)
+}))
+test('HTML visual editor refuses CSS injection and a stale file identity',()=>fixture(async(invoke,root)=>{
+  const input='<main id="app" style="display: block;">OK</main>'
+  await writeFile(path.join(root,'page.html'),input)
+  const doc=(await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')).json.document
+  for(const malicious of ['url(https://evil.test)', 'block;position:fixed', '<script>']){
+    const r=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'page.html',baseHash:doc.hash,baseIdentity:doc.identity,
+      kind:'html-style',id:'app',property:'display',value:malicious
+    })
+    assert.equal(r.status,400)
+    assert.equal(r.json.error,'invalid-value')
+  }
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),input)
+  const nextFile=path.join(root,'new-page.html')
+  await writeFile(nextFile,input)
+  await rename(nextFile,path.join(root,'page.html'))
+  const rejected=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'page.html',baseHash:doc.hash,baseIdentity:doc.identity,
+    kind:'html-style',id:'app',property:'display',value:'flex'
+  })
+  assert.equal(rejected.status,409)
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),input)
+}))
