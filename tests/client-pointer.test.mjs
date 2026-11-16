@@ -10,7 +10,7 @@ const handle = {
   move:{x:'x',y:'y',initialX:10,initialY:20},resizable:true
 }
 
-function createHarness(extraHandles=[]) {
+function createHarness(extraHandles=[],extraPaths=[]) {
   const state=[]
   let index=0
   let component
@@ -39,7 +39,9 @@ function createHarness(extraHandles=[]) {
     return {ok:true,json:async()=>({
       ok:true,document:documentData,
       nodes:[{id:'box',tag:'rect',attributes:{x:'10',y:'20',width:'30',height:'40'}},
-        ...extraHandles.map(other=>({id:other.id,tag:other.tag,attributes:{}}))],
+        ...extraHandles.map(other=>({id:other.id,tag:other.tag,attributes:{}})),
+        ...extraPaths.map(p=>({id:p.id,tag:'path',attributes:{d:p.d||''}}))],
+      pathNodes:extraPaths,
       geometry:{artboard:{x:0,y:0,width:100,height:100},handles:[handle,...extraHandles]},warning:null
     })}
   }
@@ -548,4 +550,79 @@ test('smart guides align moving object edges to nearby SVG sibling edges',async(
   shape.props.onPointerUp({pointerId:102,clientX:56,clientY:0})
   await new Promise(resolve=>setTimeout(resolve,16))
   assert.equal(h.writes()[0].edits[0].value,'40','right edge should align exactly to neighbor left edge')
+})
+
+
+function samplePath() {
+  const d='M1 2 C3 4 5 6 7 8'
+  const span=(token)=>{const start=d.indexOf(token);return {start,end:start+token.length}}
+  return {
+    id:'curve',editable:true,d,
+    points:[
+      {index:0,role:'anchor',x:1,y:2,xSpan:span('1'),ySpan:span('2'),linkIndex:null},
+      {index:1,role:'cubic-in',x:3,y:4,xSpan:span('3'),ySpan:span('4'),linkIndex:0},
+      {index:2,role:'cubic-out',x:5,y:6,xSpan:span('5'),ySpan:span('6'),linkIndex:3},
+      {index:3,role:'anchor',x:7,y:8,xSpan:span('7'),ySpan:span('8'),linkIndex:null}
+    ]
+  }
+}
+test('selecting an editable path exposes anchor and Bézier control handles',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const layer=find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve'))
+  assert.ok(layer)
+  layer.props.onClick()
+  assert.ok(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay'))
+  for(let i=0;i<4;i++)assert.ok(find(h.render(),n=>n.props?.['aria-label']==='Move path point '+i+' of curve'))
+  const lines=find(h.render(),n=>n.type==='line'&&n.props.key==='path-connector-2')
+  assert.ok(lines,'Bezier control lines must connect to their anchors')
+  assert.equal(h.writes().length,0)
+})
+test('dragging a Bézier control previews live path without writes then commits one native action',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 2 of curve')
+  let captured=false,stopped=false
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){captured=true}}
+  control.props.onPointerDown({button:0,pointerId:55,clientX:0,clientY:0,currentTarget:target,
+    stopPropagation(){stopped=true},preventDefault(){}})
+  control.props.onPointerMove({pointerId:55,clientX:20,clientY:10})
+  assert.equal(captured,true)
+  assert.equal(stopped,true)
+  const overlay=find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay')
+  const preview=find(overlay,n=>n.type==='path')
+  assert.equal(preview.props.d,'M1 2 C3 4 15 11 7 8')
+  assert.equal(h.writes().length,0)
+  control.props.onPointerUp({pointerId:55,clientX:20,clientY:10})
+  await new Promise(resolve=>setTimeout(resolve,18))
+  assert.equal(h.writes().length,1)
+  assert.equal(h.writes()[0].kind,'svg-path-point')
+  assert.equal(h.writes()[0].id,'curve')
+  assert.equal(h.writes()[0].index,2)
+  assert.equal(h.writes()[0].x,15)
+  assert.equal(h.writes()[0].y,11)
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay')?.children[0]?.props?.d,'M1 2 C3 4 5 6 7 8')
+})
+test('Alt bypasses grid snap for Bézier nodes; cancel causes no save',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  control.props.onPointerDown({button:0,pointerId:5,clientX:0,clientY:0,currentTarget:target,stopPropagation(){},preventDefault(){}})
+  control.props.onPointerMove({pointerId:5,clientX:16,clientY:4,altKey:true})
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve').props.style.left,'11%')
+  control.props.onPointerCancel({pointerId:5,clientX:16,clientY:4})
+  await new Promise(resolve=>setTimeout(resolve,15))
+  assert.equal(h.writes().length,0)
+})
+test('unsupported complex path remains selectable but has no active point controls',async()=>{
+  const h=createHarness([],[{id:'curve',editable:false,reason:'unsupported-path',points:[]}]);await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay'),null)
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Move path point 0 of curve'),null)
+  assert.equal(h.writes().length,0)
 })
