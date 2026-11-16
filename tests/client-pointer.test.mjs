@@ -121,6 +121,8 @@ test('selected rectangle gets bottom-right resize handle and commits dimensions'
   resize.props.onPointerUp({pointerId:2,clientX:40,clientY:60})
   await new Promise(resolve=>setTimeout(resolve,10))
   assert.deepEqual(harness.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'10'},
+    {id:'box',attribute:'y',value:'20'},
     {id:'box',attribute:'width',value:'40'},
     {id:'box',attribute:'height',value:'60'}
   ])
@@ -165,4 +167,44 @@ test('arrow key nudges selected shape by one unit; Shift uses ten units',async()
   assert.equal(harness.writes()[0].kind,'svg-attribute')
   assert.equal(harness.writes()[0].attribute,'x')
   assert.equal(harness.writes()[0].value,'20')
+})
+
+test('north-west resize preserves opposite bottom-right corner',async()=>{
+  const harness=createHarness();await harness.init()
+  await find(harness.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture:()=>{}}
+  const control=find(harness.render(),node=>node.props?.['aria-label']==='Drag rect box')
+  control.props.onPointerDown({button:0,pointerId:1,clientX:0,clientY:0,currentTarget:target,preventDefault:()=>{}})
+  control.props.onPointerUp({pointerId:1,clientX:0,clientY:0})
+  const nw=find(harness.render(),node=>node.props?.['aria-label']==='Resize NW rect box')
+  assert.ok(nw)
+  const handleTarget={...target,dataset:{corner:'nw'}}
+  nw.props.onPointerDown({button:0,pointerId:2,clientX:0,clientY:0,currentTarget:handleTarget,stopPropagation:()=>{},preventDefault:()=>{}})
+  nw.props.onPointerMove({pointerId:2,clientX:20,clientY:10})
+  nw.props.onPointerUp({pointerId:2,clientX:20,clientY:10})
+  await new Promise(resolve=>setTimeout(resolve,10))
+  assert.deepEqual(harness.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'20'},
+    {id:'box',attribute:'y',value:'25'},
+    {id:'box',attribute:'width',value:'20'},
+    {id:'box',attribute:'height',value:'35'}
+  ])
+})
+test('Shift corner resize preserves original aspect ratio',async()=>{
+  const harness=createHarness();await harness.init()
+  await find(harness.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture:()=>{},dataset:{corner:'se'}}
+  const control=find(harness.render(),node=>node.props?.['aria-label']==='Drag rect box')
+  control.props.onPointerDown({button:0,pointerId:1,clientX:0,clientY:0,currentTarget:target,preventDefault:()=>{}})
+  control.props.onPointerUp({pointerId:1,clientX:0,clientY:0})
+  const resize=find(harness.render(),node=>node.props?.['aria-label']==='Resize rect box')
+  resize.props.onPointerDown({button:0,pointerId:3,clientX:0,clientY:0,currentTarget:target,stopPropagation:()=>{},preventDefault:()=>{}})
+  resize.props.onPointerUp({pointerId:3,clientX:20,clientY:0,shiftKey:true})
+  await new Promise(resolve=>setTimeout(resolve,10))
+  assert.deepEqual(harness.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'10'},
+    {id:'box',attribute:'y',value:'20'},
+    {id:'box',attribute:'width',value:'40'},
+    {id:'box',attribute:'height',value:'53.333'}
+  ])
 })
