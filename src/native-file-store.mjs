@@ -33,6 +33,13 @@ function validateRelativePath(file) {
   if (parts.some((part) => part === '' || part === '.' || part === '..')) {
     throw error('invalid-path', 'Dot segments and empty path components are forbidden')
   }
+  // Reject Windows path aliases and NTFS alternate data streams on all OSes,
+  // so the same saved workspace path has a stable meaning everywhere.
+  if (parts.some(part => /[:*?"<>|\u0000-\u001f\u007f]/u.test(part) ||
+      /[. ]$/u.test(part) ||
+      /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/iu.test(part))) {
+    throw error('invalid-path', 'Ambiguous or OS-reserved path component')
+  }
   const format = path.posix.extname(file).slice(1).toLowerCase()
   if (!FORMATS.has(format)) throw error('unsupported-format', 'Only SVG, HTML and CSS can be opened')
   return { parts, format }
