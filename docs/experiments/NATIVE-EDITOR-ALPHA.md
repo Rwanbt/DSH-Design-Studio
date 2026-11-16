@@ -1,18 +1,20 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.7` (source branch, not released). [GitHub Actions run 43955013097](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43955013097) on commit `6e853a8a19a2f6150f26aba569169562468bb63b`: **119 PASS, 0 FAIL, 0 SKIP**, including mocked Host lifecycle and source file picker tests. Real DSH installation is **NOT_RUN**. See [alpha.7 evidence](ALPHA7-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.8` (source branch, not released). GitHub Actions [run 43958121836](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43958121836), source commit `b7ba7d8a5b767d8e56d4441929ed41ff51dba6d8`: **132 PASS, 0 FAIL, 0 SKIP** (Node 22 and mocked DSH client). Actual DSH Desktop/Web installation is **NOT_RUN**. See [alpha.8 evidence](ALPHA8-EVIDENCE.md).
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
 - **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
+- **Navigate the SVG canvas** without touching source: Select / Hand, drag pan (hand, middle-button or temporary Space), Ctrl/Cmd+wheel pointer-anchored zoom, wheel/trackpad pan, +/- zoom and Fit to recenter. Keyboard shortcuts V, H and 0. Zoom range 12.5%–800%; no tokens are needed.
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
 - **Resize** rectangles/ellipses from any of four corners, anchoring the opposite corner. Hold **Shift** to preserve their aspect ratio. Circle resizing is not yet supported.
 - **Duplicate/Delete selected SVG layers** through checked source-span operations, with generated unique IDs, keyboard shortcuts Ctrl+D / Delete and in-session Undo/Redo. The experimental mapper currently supports direct children of the SVG root without nested graphics; unsupported cases fail rather than rewriting unknown markup. Executable SVG nodes are rejected.
 - **Create** rectangles, circles, ellipses and **editable native SVG text objects** with manual toolbar buttons. The editor inserts a new native SVG element with a unique generated `shape-N` ID, without rewriting existing elements. Requires simple untransformed SVG with a root `viewBox` and an explicit closing `</svg>` tag.
 - **Edit simple SVG text directly** by double-clicking its approximate selection area or using an inspectable text field. Supports simple text and the plugin's generated multiline `<tspan>` structure; rich nested text remains uneditable. Font family, size, weight, style, letter spacing and alignment may be edited only where corresponding SVG attributes already exist. User content is escaped for XML.
 - **Nudge** a selected SVG shape with arrow keys by one SVG unit, or ten units with Shift.
+- **Recover safely from uncertain saves**: if a write was acknowledged but the source cannot be reloaded, or a save reports a stale revision, the editor blocks further writes, clears uncertain history and offers a manual reload instead of silently continuing from stale content.
 - **Undo/Redo** recorded manual saves via validated source inverse/forward patches. History is **in-memory per current browser editor session**, bounded to 30 entries and 2 MiB per entry; it is not persisted across DSH restart. External modifications must be reloaded and never silently overwritten.
 - Show SVG node IDs in a layer list and manually edit an **existing** attribute (`fill`, `stroke`, `x`, `y`, `width`, `height`, `d`, etc.), provided the node has a **unique** `id`.
 - Expand *Manual source editor* to edit and save native SVG/HTML/CSS text directly.
@@ -71,6 +73,8 @@ Native patch engine (src/native-patch.mjs)
 | SVG targeted source-edit tests | PASS (GitHub Actions) |
 | Mocked Host routes, client registration, lifecycle and pointer events | PASS (GitHub Actions) |
 | Session workspace file discovery and mocked selection UI | PASS (GitHub Actions) |
+| Zoom, pan, Fit, Space/middle-button navigation; post-zoom SVG drag | PASS (GitHub Actions event simulation) |
+| Save/reload failure and stale revision UI recovery | PASS (GitHub Actions event simulation) |
 | Actual DSH UI opening and selection | NOT_RUN |
 | Runtime security isolation | NOT_RUN |
 | SVG rectangle/circle/ellipse pointer drag (mocked) | PASS (GitHub Actions simulation) |
