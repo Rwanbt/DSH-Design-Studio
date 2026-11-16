@@ -9,10 +9,12 @@ window.__ModuleLoader__.load({
     const pane = { background:'var(--dsw-alias-surface-1,#202124)', color:'var(--dsw-alias-content-primary,#e8e7e2)', border:'1px solid var(--dsw-alias-border,#37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
-    function safePreview(source, format) {
+    function safePreview(source, format, selectedHtmlId='') {
       const policy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
-      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '">' + svgLayout + '</head><body style="margin:' + (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
+      const marked = /^(?:[A-Za-z][\w:.-]{0,79})$/.test(selectedHtmlId)?
+        '<style>[id="'+selectedHtmlId+'"]{outline:2px solid #bda991!important;outline-offset:2px!important;}</style>':''
+      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '">' + svgLayout + marked + '</head><body style="margin:' + (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
     }
     async function request(endpoint, options) {
       const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})
@@ -35,6 +37,10 @@ window.__ModuleLoader__.load({
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
       const [nodes,setNodes] = React.useState([])
+      const [htmlElements,setHtmlElements] = React.useState([])
+      const [htmlActive,setHtmlActive] = React.useState('')
+      const [htmlProperty,setHtmlProperty] = React.useState('background-color')
+      const [htmlValue,setHtmlValue] = React.useState('')
       const [textNodes,setTextNodes] = React.useState([])
       const [editingText,setEditingText] = React.useState('')
       const [textDraft,setTextDraft] = React.useState('')
@@ -83,6 +89,8 @@ window.__ModuleLoader__.load({
           }
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
+          setHtmlElements(data.htmlElements||[])
+          if(doc?.file!==targetFile){setHtmlActive('');setHtmlValue('')}
           setReloadRequired(false)
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
@@ -295,6 +303,23 @@ window.__ModuleLoader__.load({
         setAttribute(property);setValue(property ? node.attributes[property]:'')
       }
       const selected=nodes.find(n=>n.id===active)
+      const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
+      const htmlProps=['color','background-color','display','width','height','padding','margin',
+        'gap','font-size','border-radius','font-weight','text-align','flex-direction',
+        'justify-content','align-items','opacity']
+      function chooseHtmlElement(id) {
+        setHtmlActive(id)
+        const item=htmlElements.find(node=>node.id===id)
+        const current=new RegExp('(?:^|;)\\s*'+htmlProperty+'\\s*:\\s*([^;]*)','i')
+        setHtmlValue(current.exec(item?.style||'')?.[1]?.trim()||'')
+      }
+      function chooseHtmlProperty(property) {
+        setHtmlProperty(property)
+        const item=htmlElements.find(node=>node.id===htmlActive)
+        const escaped=property.replace(/[.*+?^\x24{}()|[\]\\]/g,'\\      const selected=nodes.find(n=>n.id===active)')
+        const current=new RegExp('(?:^|;)\\s*'+escaped+'\\s*:\\s*([^;]*)','i')
+        setHtmlValue(current.exec(item?.style||'')?.[1]?.trim()||'')
+      }
       const selectedText=textNodes.find(node=>node.id===active)
       const selectedPath=pathNodes.find(node=>node.id===active)
       function startTextEditing(nodeId) {
