@@ -102,7 +102,7 @@ function validatedValue(attribute,value) {
   } else if(['fill','stroke'].includes(attribute)) {
     if(!/^(?:none|transparent|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]+|url\(#[A-Za-z_][\w.:-]*\))$/.test(value)) fail('invalid-value','Unsupported or unsafe paint value')
   } else if(attribute==='font-family') {
-    if(!/^[\\p{L}\\p{N} ,._-]{1,120}$/u.test(value)) fail('invalid-value','Unsupported font family name')
+    if(!/^[\p{L}\p{N} ,._-]{1,120}$/u.test(value)) fail('invalid-value','Unsupported font family name')
   } else if(attribute==='font-weight') {
     if(!/^(?:normal|bold|[1-9]00)$/.test(value)) fail('invalid-value','Unsupported font weight')
   } else if(attribute==='font-style') {
