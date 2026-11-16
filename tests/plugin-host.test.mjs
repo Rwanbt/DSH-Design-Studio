@@ -36,7 +36,7 @@ test('manual SVG open exposes editable id-based properties',()=>fixture(async in
 }))
 test('manual SVG property editing writes native SVG and rejects stale edits',()=>fixture(async(invoke,root)=>{
   const initial=(await invoke('GET',url)).json.document
-  const body={sessionId:'known',file:'icon.svg',baseHash:initial.hash,kind:'svg-attribute',id:'box',attribute:'fill',value:'#abc'}
+  const body={sessionId:'known',file:'icon.svg',baseHash:initial.hash,baseIdentity:initial.identity,kind:'svg-attribute',id:'box',attribute:'fill',value:'#abc'}
   const updated=await invoke('POST','/design-studio-native/apply',body)
   assert.equal(updated.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg><rect id="box" fill="#abc" width="10"/></svg>')
@@ -53,7 +53,7 @@ test('HTML/SVG path traversal rejected in API',()=>fixture(async invoke=>{
 }))
 test('malicious SVG external paint references rejected in API',()=>fixture(async invoke=>{
   const d=(await invoke('GET',url)).json.document
-  const r=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:d.hash,kind:'svg-attribute',id:'box',attribute:'fill',value:'url(https://evil.test/x)'})
+  const r=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:d.hash,baseIdentity:d.identity,kind:'svg-attribute',id:'box',attribute:'fill',value:'url(https://evil.test/x)'})
   assert.equal(r.status,400);assert.equal(r.json.error,'invalid-value')
 }))
 
@@ -71,7 +71,7 @@ test('SVG coordinate batch moves both coordinates with one native save',()=>fixt
   const doc=(await invoke('GET',url)).json
   assert.deepEqual(doc.geometry.handles.map(h=>h.id),['box'])
   const edits=[{id:'box',attribute:'x',value:'35'},{id:'box',attribute:'y',value:'12'}]
-  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,kind:'svg-attributes',edits})
+  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,baseIdentity:doc.document.identity,kind:'svg-attributes',edits})
   assert.equal(result.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 100 100"><rect id="box" x="35" y="12" width="10" height="20"/></svg>')
 }))
@@ -79,7 +79,7 @@ test('SVG batch rejects duplicate and invalid edit without modifying file',()=>f
   await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 100 100"><rect id="box" x="5" y="7" width="10" height="20"/></svg>')
   const doc=(await invoke('GET',url)).json.document
   const edits=[{id:'box',attribute:'x',value:'22'},{id:'box',attribute:'x',value:'23'}]
-  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attributes',edits})
+  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-attributes',edits})
   assert.equal(result.status,400)
   assert.equal(result.json.error,'overlap')
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),doc.source)
@@ -91,19 +91,19 @@ test('native edit, undo and redo round trip preserves exact SVG bytes',()=>fixtu
   const url='/design-studio-native/document?sessionId=known&file=icon.svg'
   const endpoint='/design-studio-native/apply'
   const first=(await invoke('GET',url)).json.document
-  const move=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:first.hash,kind:'svg-attributes',
+  const move=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:first.hash,baseIdentity:first.identity,kind:'svg-attributes',
     edits:[{id:'box',attribute:'x',value:'15'},{id:'box',attribute:'y',value:'27'}]})
   assert.equal(move.status,200)
   assert.equal(move.json.patches.length,2)
   assert.equal(move.json.result.inverse.length,2)
   const changed=(await invoke('GET',url)).json.document
   assert.notEqual(changed.source,original)
-  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',
+  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:changed.hash,baseIdentity:changed.identity,kind:'patches',
     patches:move.json.result.inverse})
   assert.equal(undo.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
   const reverted=(await invoke('GET',url)).json.document
-  const redo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:reverted.hash,kind:'patches',
+  const redo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:reverted.hash,baseIdentity:reverted.identity,kind:'patches',
     patches:move.json.patches})
   assert.equal(redo.status,200)
   assert.equal((await invoke('GET',url)).json.document.source,changed.source)
@@ -111,12 +111,12 @@ test('native edit, undo and redo round trip preserves exact SVG bytes',()=>fixtu
 test('undo refuses stale file after external edit and does not overwrite it',()=>fixture(async(invoke,root)=>{
   const endpoint='/design-studio-native/apply'
   const initial=(await invoke('GET',url)).json.document
-  const first=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:initial.hash,kind:'svg-attribute',id:'box',attribute:'fill',value:'blue'})
+  const first=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:initial.hash,baseIdentity:initial.identity,kind:'svg-attribute',id:'box',attribute:'fill',value:'blue'})
   assert.equal(first.status,200)
   const expected=(await invoke('GET',url)).json.document
   const external='<svg><rect id="box" fill="green" width="10"/></svg>'
   await writeFile(path.join(root,'icon.svg'),external)
-  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:expected.hash,kind:'patches',patches:first.json.result.inverse})
+  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:expected.hash,baseIdentity:expected.identity,kind:'patches',patches:first.json.result.inverse})
   assert.equal(undo.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),external)
 }))
@@ -126,14 +126,14 @@ test('manual Add rectangle route inserts shape and supports exact undo',()=>fixt
   await writeFile(path.join(root,'icon.svg'),initial)
   const current=(await invoke('GET',url)).json.document
   const created=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:current.hash,kind:'svg-add-shape',shape:'rect'
+    sessionId:'known',file:'icon.svg',baseHash:current.hash,baseIdentity:current.identity,kind:'svg-add-shape',shape:'rect'
   })
   assert.equal(created.status,200)
   assert.equal(created.json.createdId,'shape-1')
   const newDoc=(await invoke('GET',url)).json.document
   assert.ok(newDoc.source.includes('<rect id="shape-1"'))
   const undone=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:newDoc.hash,kind:'patches',patches:created.json.result.inverse
+    sessionId:'known',file:'icon.svg',baseHash:newDoc.hash,baseIdentity:newDoc.identity,kind:'patches',patches:created.json.result.inverse
   })
   assert.equal(undone.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),initial)
@@ -144,7 +144,7 @@ test('native layer duplication is atomic and reversible with same source hash',(
   await writeFile(path.join(root,'icon.svg'),original)
   const opened=(await invoke('GET',url)).json.document
   const copied=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-layer',id:'block',operation:'duplicate'
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,baseIdentity:opened.identity,kind:'svg-layer',id:'block',operation:'duplicate'
   })
   assert.equal(copied.status,200)
   assert.equal(copied.json.createdId,'block-copy')
@@ -152,7 +152,7 @@ test('native layer duplication is atomic and reversible with same source hash',(
   const changed=(await invoke('GET',url)).json.document
   assert.equal(changed.source.includes('id="block-copy"'),true)
   const undo=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',patches:copied.json.result.inverse
+    sessionId:'known',file:'icon.svg',baseHash:changed.hash,baseIdentity:changed.identity,kind:'patches',patches:copied.json.result.inverse
   })
   assert.equal(undo.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
@@ -162,14 +162,14 @@ test('delete SVG text layer and undo; refuse stale file instead of overwriting',
   await writeFile(path.join(root,'icon.svg'),original)
   const opened=(await invoke('GET',url)).json.document
   const del=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-layer',id:'title',operation:'delete'
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,baseIdentity:opened.identity,kind:'svg-layer',id:'title',operation:'delete'
   })
   assert.equal(del.status,200)
   assert.equal((await readFile(path.join(root,'icon.svg'),'utf8')).includes('<text'),false)
   const changed=(await invoke('GET',url)).json.document
   await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 150 100"><rect id="external" x="2" y="3" width="5" height="7"/></svg>')
   const stale=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',patches:del.json.result.inverse
+    sessionId:'known',file:'icon.svg',baseHash:changed.hash,baseIdentity:changed.identity,kind:'patches',patches:del.json.result.inverse
   })
   assert.equal(stale.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 150 100"><rect id="external" x="2" y="3" width="5" height="7"/></svg>')
@@ -179,7 +179,7 @@ test('nested SVG layers cannot be deleted by incomplete source mapper',()=>fixtu
   await writeFile(path.join(root,'icon.svg'),original)
   const doc=(await invoke('GET',url)).json.document
   const result=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-layer',id:'child',operation:'delete'
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-layer',id:'child',operation:'delete'
   })
   assert.equal(result.status,400)
   assert.equal(result.json.error,'unsupported-svg')
@@ -224,14 +224,14 @@ test('native Bézier anchor/control editing is reversible and preserves all unre
   assert.equal(pathModel.points[2].role,'cubic-out')
   assert.deepEqual(pathModel.points[2].link,{x:70,y:80})
   const edited=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:opened.json.document.hash,
+    sessionId:'known',file:'icon.svg',baseHash:opened.json.document.hash,baseIdentity:opened.json.document.identity,
     kind:'svg-path-point',id:'curve',index:2,x:54.5,y:57.25
   })
   assert.equal(edited.status,200)
   assert.equal(edited.json.patches.length,2)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original.replace('50,60','54.5,57.25'))
   const revert=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:edited.json.result.hash,
+    sessionId:'known',file:'icon.svg',baseHash:edited.json.result.hash,baseIdentity:edited.json.result.identity,
     kind:'patches',patches:edited.json.result.inverse
   })
   assert.equal(revert.status,200)
@@ -244,7 +244,7 @@ test('unsupported relative path cannot be edited and source is preserved',()=>fi
   assert.equal(current.status,200)
   assert.equal(current.json.pathNodes[0].editable,false)
   const refused=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:current.json.document.hash,
+    sessionId:'known',file:'icon.svg',baseHash:current.json.document.hash,baseIdentity:current.json.document.identity,
     kind:'svg-path-point',id:'rel',index:0,x:15,y:10
   })
   assert.equal(refused.status,400)
@@ -258,7 +258,7 @@ test('stale path edit is rejected after external SVG modification',()=>fixture(a
   const concurrent=original.replace('L30 40','L35 40')
   await writeFile(path.join(root,'icon.svg'),concurrent)
   const refused=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:opened.hash,
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,baseIdentity:opened.identity,
     kind:'svg-path-point',id:'p',index:1,x:38,y:45
   })
   assert.equal(refused.status,409)
@@ -271,7 +271,7 @@ test('create native cubic Bézier then edit its control point, keeping exact Und
   await writeFile(path.join(root,'icon.svg'),initial)
   const open=(await invoke('GET',url)).json.document
   const created=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:open.hash,kind:'svg-add-shape',shape:'path'
+    sessionId:'known',file:'icon.svg',baseHash:open.hash,baseIdentity:open.identity,kind:'svg-add-shape',shape:'path'
   })
   assert.equal(created.status,200)
   assert.equal(created.json.createdId,'shape-1')
@@ -281,20 +281,20 @@ test('create native cubic Bézier then edit its control point, keeping exact Und
   assert.equal(editable.editable,true)
   assert.deepEqual(editable.points.map(p=>p.role),['anchor','cubic-in','cubic-out','anchor'])
   const changed=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:afterCreate.document.hash,
+    sessionId:'known',file:'icon.svg',baseHash:afterCreate.document.hash,baseIdentity:afterCreate.document.identity,
     kind:'svg-path-point',id:'shape-1',index:1,x:73,y:42
   })
   assert.equal(changed.status,200)
   const afterEdit=(await invoke('GET',url)).json.document
   assert.ok(afterEdit.source.includes('73 42'))
   const undoEdit=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:afterEdit.hash,
+    sessionId:'known',file:'icon.svg',baseHash:afterEdit.hash,baseIdentity:afterEdit.identity,
     kind:'patches',patches:changed.json.result.inverse
   })
   assert.equal(undoEdit.status,200)
   const afterUndo=(await invoke('GET',url)).json.document
   const undoCreate=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:afterUndo.hash,
+    sessionId:'known',file:'icon.svg',baseHash:afterUndo.hash,baseIdentity:afterUndo.identity,
     kind:'patches',patches:created.json.result.inverse
   })
   assert.equal(undoCreate.status,200)
@@ -308,7 +308,7 @@ test('native path midpoint insertion then Undo restores exact source bytes',()=>
   const doc=(await invoke('GET',url)).json
   assert.deepEqual(doc.pathNodes[0].segments.map(seg=>seg.type),['C','L'])
   const update=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,kind:'svg-path-topology',
+    sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,baseIdentity:doc.document.identity,kind:'svg-path-topology',
     id:'p',operation:'insert',commandIndex:2
   })
   assert.equal(update.status,200)
@@ -316,7 +316,7 @@ test('native path midpoint insertion then Undo restores exact source bytes',()=>
   assert.ok(after.source.includes('C 0 20 10 30 20 30 C 30 30 40 20 40 0'))
   assert.equal(update.json.patches.length,1)
   const undone=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:after.hash,
+    sessionId:'known',file:'icon.svg',baseHash:after.hash,baseIdentity:after.identity,
     kind:'patches',patches:update.json.result.inverse
   })
   assert.equal(undone.status,200)
@@ -327,14 +327,14 @@ test('remove an L endpoint then Undo restores the original line exactly',()=>fix
   await writeFile(path.join(root,'icon.svg'),original)
   const doc=(await invoke('GET',url)).json.document
   const removed=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,
     kind:'svg-path-topology',id:'p',operation:'remove',commandIndex:2
   })
   assert.equal(removed.status,200)
   const edited=(await invoke('GET',url)).json.document
   assert.equal(edited.source,original.replace(' L20 20',''))
   const undone=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:edited.hash,
+    sessionId:'known',file:'icon.svg',baseHash:edited.hash,baseIdentity:edited.identity,
     kind:'patches',patches:removed.json.result.inverse
   })
   assert.equal(undone.status,200)
@@ -345,7 +345,7 @@ test('topology operations reject stale external writes and unsafe curve removal'
   await writeFile(path.join(root,'icon.svg'),original)
   const doc=(await invoke('GET',url)).json.document
   const refused=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,
     kind:'svg-path-topology',id:'p',operation:'remove',commandIndex:2
   })
   assert.equal(refused.status,400)
@@ -354,7 +354,7 @@ test('topology operations reject stale external writes and unsafe curve removal'
   const concurrent=original.replace('Q25 50','Q30 50')
   await writeFile(path.join(root,'icon.svg'),concurrent)
   const stale=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,
     kind:'svg-path-topology',id:'p',operation:'insert',commandIndex:2
   })
   assert.equal(stale.status,409)
@@ -375,7 +375,7 @@ test('pen workflow starts, appends straight and cubic commands, closes, and undo
   const inverse=[]
   for(const operation of operations){
     const result=await invoke('POST','/design-studio-native/apply',{
-      sessionId:'known',file:'icon.svg',baseHash:current.hash,...operation,
+      sessionId:'known',file:'icon.svg',baseHash:current.hash,baseIdentity:current.identity,...operation,
     })
     assert.equal(result.status,200,JSON.stringify(result.json))
     if(operation.operation==='start')assert.equal(result.json.createdId,'shape-1')
@@ -385,7 +385,7 @@ test('pen workflow starts, appends straight and cubic commands, closes, and undo
   assert.ok(current.source.includes('d="M 10 10 L 20 20 C 30 15 50 35 60 40 Z"'))
   for(const patches of inverse.reverse()){
     const reverted=await invoke('POST','/design-studio-native/apply',{
-      sessionId:'known',file:'icon.svg',baseHash:current.hash,kind:'patches',patches
+      sessionId:'known',file:'icon.svg',baseHash:current.hash,baseIdentity:current.identity,kind:'patches',patches
     })
     assert.equal(reverted.status,200)
     current=(await invoke('GET',url)).json.document
@@ -402,7 +402,7 @@ test('pen refuses early closure and malformed tangent requests without touching 
     {operation:'append',id:'p',x:20,y:30,c1:{x:NaN,y:0},c2:{x:7,y:8}}
   ]){
     const result=await invoke('POST','/design-studio-native/apply',{
-      sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-pen',...request
+      sessionId:'known',file:'icon.svg',baseHash:opened.hash,baseIdentity:opened.identity,kind:'svg-pen',...request
     })
     assert.equal(result.status,400)
   }
@@ -414,7 +414,7 @@ test('external changes during pen gesture cause stale revision, not source overw
   const opened=(await invoke('GET',url)).json.document
   await writeFile(path.join(root,'icon.svg'),original.replace('L10 10','L11 10'))
   const stale=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-pen',
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,baseIdentity:opened.identity,kind:'svg-pen',
     operation:'append',id:'p',x:20,y:30
   })
   assert.equal(stale.status,409)
@@ -428,7 +428,7 @@ test('held cross-process lock returns HTTP 423 without writing any source',()=>f
   const lockPath=path.join(root,'.icon.svg.dsh-native.lock')
   await mkdir(lockPath)
   const result=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attribute',
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-attribute',
     id:'box',attribute:'fill',value:'#bada55'
   })
   assert.equal(result.status,423)
@@ -436,7 +436,7 @@ test('held cross-process lock returns HTTP 423 without writing any source',()=>f
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
   await rmdir(lockPath)
   const retried=await invoke('POST','/design-studio-native/apply',{
-    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attribute',
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-attribute',
     id:'box',attribute:'fill',value:'#bada55'
   })
   assert.equal(retried.status,200)
