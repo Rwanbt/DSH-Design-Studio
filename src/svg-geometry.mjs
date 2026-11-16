@@ -1,4 +1,5 @@
 import { listEditableSvgNodes, svgRootAttributes } from './svg-attributes.mjs'
+import { listSvgTextNodes } from './svg-text.mjs'
 
 const MOVABLE = new Set(['rect', 'circle', 'ellipse'])
 const MAX_COORD = 1_000_000
@@ -50,6 +51,25 @@ export function svgGeometry(source) {
     }
     if (width <= 0 || height <= 0) continue
     handles.push({ id: node.id, tag: node.tag, x, y, width, height, move, resizable: node.tag === 'rect' || node.tag === 'ellipse' })
+  }
+  // Text hit areas are an estimate rather than glyph-perfect hit testing.
+  for(const textNode of listSvgTextNodes(source)) {
+    if(!textNode.editable)continue
+    const a=textNode.attributes
+    const x=finiteCoord(a.x), baseline=finiteCoord(a.y)
+    const size=a['font-size']===undefined?16:finiteCoord(a['font-size'])
+    if(x===null || baseline===null || size===null || size<=0)continue
+    const lines=textNode.text.split('\n')
+    const longest=Math.max(1,...lines.map(line=>Array.from(line).length))
+    const width=Math.max(8,Math.min(artboard.width*2,longest*size*0.58))
+    const height=size*Math.max(1,lines.length)*1.2
+    const alignment=a['text-anchor']
+    const left=alignment==='middle'?x-width/2:alignment==='end'?x-width:x
+    handles.push({
+      id:textNode.id, tag:'text',x:left,y:baseline-size,width,height,
+      move:{x:'x',y:'y',initialX:x,initialY:baseline},
+      resizable:false,text:true,
+    })
   }
   return { artboard, handles, warning: null }
 }
