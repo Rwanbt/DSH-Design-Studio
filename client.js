@@ -878,6 +878,11 @@ window.__ModuleLoader__.load({
                         ' points · ancres carrées, poignées Bézier rondes. Les boutons + insèrent un point au milieu du segment.'),
                       h('small',{style:{color:'#989690'}},
                         'Insertion sur ligne ou courbe : le segment est subdivisé. Suppression limitée aux points terminant une ligne simple.'),
+                      selectedPath.penExtendable&&h('button',{style:button,type:'button',
+                        'aria-label':'Resume selected path with pen tool',
+                        disabled:busy||reloadRequired||source!==doc.source,
+                        onClick:()=>{setPenPathId(selectedPath.id);setPenOutgoing(null);setCanvasTool('pen')}
+                      },'✒ Reprendre le tracé avec la Plume'),
                       h('div',{style:{display:'flex',flexDirection:'column',gap:5,maxHeight:190,overflow:'auto'}},
                         (selectedPath.segments||[]).map(segment=>
                           h('div',{key:segment.commandIndex,style:{display:'flex',gap:5,alignItems:'center'}},
