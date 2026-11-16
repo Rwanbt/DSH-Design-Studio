@@ -1,4 +1,4 @@
-import { listEditableSvgNodes } from './svg-attributes.mjs'
+import { listEditableSvgNodes, svgRootAttributes } from './svg-attributes.mjs'
 
 const MOVABLE = new Set(['rect', 'circle', 'ellipse'])
 const MAX_COORD = 1_000_000
@@ -12,17 +12,17 @@ function finiteCoord(value) {
 export function svgGeometry(source) {
   // Conservative subset: no transformed/nested groups or non-standard aspect ratios.
   // The SVG source is NOT parsed through a browser or executed.
-  const root = source.match(/<svg(?=[\s>])([^>]*?)>/i)
-  if (!root || /<g(?:\s|>)/i.test(source) || /\btransform\s*=/i.test(source)) {
-    return { artboard: null, handles: [], warning: 'Drag editing requires an untransformed SVG with a root viewBox and no groups' }
+  if (/<g(?:\\s|>)/i.test(source) || /<foreignObject(?:\\s|>)/i.test(source) || /\\btransform\\s*=/i.test(source)) {
+    return { artboard: null, handles: [], warning: 'Drag editing requires an untransformed SVG with no groups or foreignObject' }
   }
-  const attrs = root[1]
-  const boxMatch = attrs.match(/\bviewBox\s*=\s*(["'])(.*?)\1/i)
-  const ratio = attrs.match(/\bpreserveAspectRatio\s*=\s*(["'])(.*?)\1/i)
-  if (!boxMatch || (ratio && !/^xMidYMid\s+meet$/.test(ratio[2].trim()))) {
+  let root
+  try { root = svgRootAttributes(source) }
+  catch (error) { return { artboard: null, handles: [], warning: error.code || 'invalid-svg' } }
+  const ratio = root.preserveAspectRatio
+  if (typeof root.viewBox !== 'string' || (ratio && !/^xMidYMid\\s+meet$/.test(ratio.trim()))) {
     return { artboard: null, handles: [], warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
   }
-  const parts = boxMatch[2].trim().split(/[\s,]+/).map(Number)
+  const parts = root.viewBox.trim().split(/[\s,]+/).map(Number)
   if (parts.length !== 4 || parts.some(value => !Number.isFinite(value) || Math.abs(value) > MAX_COORD) ||
       parts[2] <= 0 || parts[3] <= 0) {
     return { artboard: null, handles: [], warning: 'Invalid or unsupported viewBox' }
