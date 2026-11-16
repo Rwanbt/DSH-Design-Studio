@@ -91,7 +91,10 @@ export function createRouteHandler(ctx) {
         const params=await bodyJson(req)
         const store=await storeFor(ctx,params.sessionId)
         const doc=await store.read(params.file)
-        if (doc.hash !== params.baseHash) return reply(res,409,{ok:false,error:'stale-revision',message:'File changed; reopen before editing'})
+        if (doc.hash !== params.baseHash ||
+            (params.baseIdentity !== undefined && doc.identity !== params.baseIdentity)) {
+          return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
+        }
         let patches; let createdId=null
         if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
@@ -145,7 +148,7 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
-        const result=await store.apply(params.file,{baseHash:params.baseHash,patches})
+        const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
         return reply(res,200,{ok:true,result,patches,createdId})
       }
       return reply(res,404,{ok:false,error:'not-found'})
