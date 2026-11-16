@@ -658,9 +658,18 @@ window.__ModuleLoader__.load({
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
           h('aside',{className:'dsh-studio-sidebar',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
-            h('strong',null,'Calques'),h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
-              nodes.length?nodes.map(n=>h('button',{key:n.id,style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},onClick:()=>select(n.id)},n.tag+' #'+n.id)):
-              h('small',null,'No addressable SVG nodes (unique id attributes required).'))),
+            h('strong',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':'Calques'),
+            h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
+              (doc.format==='html'||doc.format==='htm')?
+                (htmlElements.length?htmlElements.map(n=>h('button',{key:n.id,type:'button',
+                  'aria-label':'Select HTML element '+n.id,
+                  style:{...button,textAlign:'left',background:htmlActive===n.id?'#494034':'transparent'},
+                  onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
+                  h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
+                (nodes.length?nodes.map(n=>h('button',{key:n.id,
+                  style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},
+                  onClick:()=>select(n.id)},n.tag+' #'+n.id)):
+                  h('small',null,'No addressable SVG nodes (unique id attributes required).')))),
           h('div',{className:'dsh-studio-canvas',style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}},
               h('strong',null,'Canevas · '+doc.format.toUpperCase()),
@@ -883,9 +892,30 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+                h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format,htmlActive),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
-            h('strong',null,'Design · Propriétés'),selected?
+            h('strong',null,'Design · Propriétés'),selectedHtml?
+              h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
+                h('strong',{style:{color:ACCENT}},selectedHtml.tag+' #'+selectedHtml.id),
+                h('small',{style:{color:'#a9a6a1'}},'HTML natif : propriétés inline ciblées. La prévisualisation surligne l’élément sélectionné.'),
+                !selectedHtml.editable?h('small',{style:{color:'#f1b6aa'}},
+                  'Lecture seule : '+(selectedHtml.reason||'structure complexe')):
+                h('div',{style:{display:'grid',gap:8}},
+                  h('label',null,'Propriété CSS',
+                    h('select',{style:{...field,marginTop:4},'aria-label':'HTML style property',
+                      value:htmlProperty,onChange:e=>chooseHtmlProperty(e.target.value)},
+                      htmlProps.map(property=>h('option',{key:property,value:property},property)))),
+                  h('label',null,'Valeur',
+                    h('input',{style:{...field,marginTop:4},'aria-label':'HTML style value',
+                      value:htmlValue,placeholder:'ex : 12px, flex, #bda991',
+                      onChange:e=>setHtmlValue(e.target.value)})),
+                  h('button',{style:{...button,borderColor:ACCENT},
+                    'aria-label':'Apply HTML visual style',
+                    disabled:busy||reloadRequired||source!==doc.source||!htmlValue,
+                    onClick:()=>void save({kind:'html-style',id:htmlActive,property:htmlProperty,value:htmlValue})
+                  },'Appliquer au HTML · sans IA'),
+                  h('small',{style:{opacity:.7}},'Modifie uniquement l’attribut style du nœud sélectionné, avec Undo/Redo.'))):
+              selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
                 h('div',null,selected.tag+' #'+selected.id),
                 h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
