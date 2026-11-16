@@ -151,6 +151,9 @@ export function createNativeFileStore(workspace) {
         identity: current.identity }
     },
     async apply(file, { baseHash, baseIdentity, patches }) {
+      if (typeof baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(baseIdentity)) {
+        throw error('missing-revision','Open document in the current editor before saving')
+      }
       const target = await ensureSafeFile(workspace, file)
       return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
         const checked = await ensureSafeFile(workspace, file)
@@ -158,7 +161,7 @@ export function createNativeFileStore(workspace) {
         const current = await readChecked(target.absolute)
         if (current.key !== checked.entries.at(-1).key ||
             current.rawHash !== baseHash ||
-            (baseIdentity !== undefined && current.identity !== baseIdentity)) {
+            current.identity !== baseIdentity) {
           throw error('stale-revision','On-disk file identity or revision changed; reload before saving')
         }
         const result = applyNativePatches({source: current.source, format: target.format, baseHash: sourceHash(current.source), patches})
