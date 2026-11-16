@@ -10,7 +10,7 @@ const handle = {
   move:{x:'x',y:'y',initialX:10,initialY:20},resizable:true
 }
 
-function createHarness() {
+function createHarness(extraHandles=[]) {
   const state=[]
   let index=0
   let component
@@ -38,8 +38,9 @@ function createHarness() {
     }
     return {ok:true,json:async()=>({
       ok:true,document:documentData,
-      nodes:[{id:'box',tag:'rect',attributes:{x:'10',y:'20',width:'30',height:'40'}}],
-      geometry:{artboard:{x:0,y:0,width:100,height:100},handles:[handle]},warning:null
+      nodes:[{id:'box',tag:'rect',attributes:{x:'10',y:'20',width:'30',height:'40'}},
+        ...extraHandles.map(other=>({id:other.id,tag:other.tag,attributes:{}}))],
+      geometry:{artboard:{x:0,y:0,width:100,height:100},handles:[handle,...extraHandles]},warning:null
     })}
   }
   let definition
@@ -513,4 +514,38 @@ test('cancelled grid-snap gestures never save source changes',async()=>{
   await new Promise(resolve=>setTimeout(resolve,12))
   assert.equal(h.writes().length,0)
   assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x'),null)
+})
+
+
+test('Alt bypasses both smart guides and grid snapping for precise positioning',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:101,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerMove({pointerId:101,clientX:13,clientY:0,altKey:true})
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Drag rect box').props.style.left,'16.5%')
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x'),null)
+  shape.props.onPointerUp({pointerId:101,clientX:13,clientY:0,altKey:true})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes().length,1)
+  assert.equal(h.writes()[0].edits[0].value,'16.5')
+  assert.equal(h.writes()[0].edits[1].value,'20')
+})
+test('smart guides align moving object edges to nearby SVG sibling edges',async()=>{
+  const sibling={id:'neighbor',tag:'rect',x:70,y:25,width:10,height:20,
+    move:{x:'x',y:'y',initialX:70,initialY:25},resizable:true}
+  const h=createHarness([sibling]);await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:102,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerMove({pointerId:102,clientX:56,clientY:0})
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x').props.style.left,'70%')
+  shape.props.onPointerUp({pointerId:102,clientX:56,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes()[0].edits[0].value,'40','right edge should align exactly to neighbor left edge')
 })
