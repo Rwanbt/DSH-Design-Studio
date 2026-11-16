@@ -74,11 +74,11 @@ test('a failed edit releases the cross-process lock and allows the next save',()
   const store=createNativeFileStore(root)
   const doc=await store.read('page.html')
   await assert.rejects(store.apply('page.html',{
-    baseHash:doc.hash,
+    baseHash:doc.hash,baseIdentity:doc.identity,
     patches:[{start:3,end:6,before:'wrong',after:'blue'}],
   }),{code:'precondition-failed'})
   const saved=await store.apply('page.html',{
-    baseHash:doc.hash,
+    baseHash:doc.hash,baseIdentity:doc.identity,
     patches:[{start:3,end:6,before:'old',after:'new'}],
   })
   assert.equal(saved.changed,true)
