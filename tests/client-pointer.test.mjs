@@ -355,3 +355,45 @@ test('V/H keyboard tool switching avoids SVG writes and editable inputs',async()
   assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Select canvas tool').props.style.background,'#51483d')
   assert.equal(h.writes().length,0)
 })
+
+
+test('Space temporarily pans instead of dragging selected artwork',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const root=h.render()
+  let prevent=false
+  root.props.onKeyDown({key:' ',code:'Space',target:{tagName:'BUTTON'},preventDefault(){prevent=true}})
+  assert.equal(prevent,true)
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Select canvas tool').props.style.background,'#51483d')
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  let shapePrevented=false
+  shape.props.onPointerDown({button:0,pointerId:5,clientX:10,clientY:10,currentTarget:target,preventDefault(){shapePrevented=true}})
+  assert.equal(shapePrevented,false,'Artwork must not capture pointer while Space is held')
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  viewport.props.onPointerDown({button:0,pointerId:5,clientX:10,clientY:10,currentTarget:{
+    getBoundingClientRect:()=>({width:400,height:300}),setPointerCapture(){}},preventDefault(){}})
+  viewport.props.onPointerMove({pointerId:5,clientX:60,clientY:30})
+  viewport.props.onPointerUp({pointerId:5})
+  assert.match(find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform,/translate\(50px, 20px\)/)
+  assert.equal(h.writes().length,0)
+  h.render().props.onKeyUp({key:' ',code:'Space'})
+  assert.match(find(h.render(),n=>n.props?.['aria-label']==='Drag rect box').props.style.cursor,/move/)
+})
+test('Space hand mode lets pan gestures pass through resize handles',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  shape.props.onPointerDown({button:0,pointerId:1,clientX:10,clientY:10,currentTarget:target,preventDefault(){}})
+  shape.props.onPointerUp({pointerId:1,clientX:10,clientY:10})
+  h.render().props.onKeyDown({key:' ',target:{tagName:'BUTTON'},preventDefault(){}})
+  const corner=find(h.render(),n=>n.props?.['aria-label']==='Resize NW rect box')
+  assert.ok(corner)
+  let stopped=false
+  corner.props.onPointerDown({button:0,pointerId:2,clientX:10,clientY:10,currentTarget:{
+    dataset:{corner:'nw'},parentElement:{getBoundingClientRect:()=>({width:200,height:200})}
+  },stopPropagation(){stopped=true},preventDefault(){}})
+  assert.equal(stopped,false,'Temporary hand tool must allow pointer events to bubble to viewport')
+  assert.equal(h.writes().length,0)
+})
