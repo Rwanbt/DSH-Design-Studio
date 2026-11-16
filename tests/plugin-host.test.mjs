@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, symlink, writeFile, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createRouteHandler } from '../src/plugin-host.mjs'
@@ -184,4 +184,29 @@ test('nested SVG layers cannot be deleted by incomplete source mapper',()=>fixtu
   assert.equal(result.status,400)
   assert.equal(result.json.error,'unsupported-svg')
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+
+test('GET /files lists only supported workspace files and hides symlinks and excluded directories',()=>fixture(async(invoke,root)=>{
+  await mkdir(path.join(root,'pages'))
+  await mkdir(path.join(root,'node_modules'))
+  await writeFile(path.join(root,'pages','landing.HTML'),'<h1>Hello</h1>')
+  await writeFile(path.join(root,'pages','theme.css'),'a{}')
+  await writeFile(path.join(root,'node_modules','private.svg'),'<svg/>')
+  await writeFile(path.join(root,'.hidden.svg'),'<svg/>')
+  await symlink('icon.svg',path.join(root,'shortcut.svg'))
+  const response=await invoke('GET','/design-studio-native/files?sessionId=known')
+  assert.equal(response.status,200)
+  assert.deepEqual(response.json.files.map(file=>file.path),['icon.svg','pages/landing.HTML','pages/theme.css'])
+  assert.equal(response.json.ok,true)
+  for(const item of response.json.files) {
+    assert.equal(typeof item.size,'number')
+    assert.equal(item.path.startsWith('/'),false)
+    assert.equal(Object.hasOwn(item,'source'),false)
+  }
+  assert.equal(JSON.stringify(response.json).includes(root),false)
+}))
+test('GET /files rejects access outside active conversation session',()=>fixture(async invoke=>{
+  const response=await invoke('GET','/design-studio-native/files?sessionId=unknown')
+  assert.equal(response.status,400)
+  assert.equal(response.json.error,'no-session')
 }))
