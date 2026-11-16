@@ -2,7 +2,7 @@
 
 Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML and CSS** files manually, with AI, or in a hybrid workflow.
 
-> Status: **P0/P1 — experimental alpha.11 on `feat/native-file-persistence`**. A native DSH Host/Client prototype supports SVG primitive creation, moving, resizing, properties, direct SVG layer duplicate/delete, session workspace file browsing, zoom/pan/fit canvas navigation, configurable grid/snap/smart guides, conservative Bézier point/topology editing, and recovery after uncertain saves, simple native SVG text editing and manual SVG/HTML/CSS source editing. Simulated host/client tests pass; **real DSH installation, visual UX and production readiness remain unverified**.
+> Status: **P0/P1 — experimental alpha.12 on `feat/native-file-persistence`**. A native DSH Host/Client prototype supports SVG primitive creation, moving, resizing, properties, direct SVG layer duplicate/delete, session workspace file browsing, zoom/pan/fit canvas navigation, configurable grid/snap/smart guides, conservative Bézier point/topology editing and manual Pen drawing, and recovery after uncertain saves, simple native SVG text editing and manual SVG/HTML/CSS source editing. Simulated host/client tests pass; **real DSH installation, visual UX and production readiness remain unverified**.
 
 ## Non-negotiable principles
 
@@ -31,7 +31,7 @@ Read `docs/roadmap/IMPLEMENTATION-PLAN.md` and `docs/audits/SOURCE-MATRIX.md` on
 
 ### Experimental alpha
 
-See [alpha.11 evidence](docs/experiments/ALPHA11-EVIDENCE.md) for the latest verified CI command, canvas navigation, save/reload safeguards and explicit real-DSH test blockers.
+See [alpha.12 evidence](docs/experiments/ALPHA12-EVIDENCE.md) for the latest verified CI command, canvas navigation, save/reload safeguards and explicit real-DSH test blockers.
 
 Run `npm run check` with Node.js 22+ to execute the native patch/store, SVG adapter and mocked DSH Host/Client tests. No model credentials are needed. The native bundle is `@rwanbt/dsh-design-studio`; **do not treat it as a tested installer or stable release**. `examples/design.svg` is a sample document to open relative to a DSH session workspace. The alpha.7 **Parcourir…** picker can list supported files directly from the active conversation workspace, without searching unrelated local directories.
 
