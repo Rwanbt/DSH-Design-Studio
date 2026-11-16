@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseEditablePath, parseEditablePathDetailed, listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch } from '../src/svg-paths.mjs'
+import { parseEditablePath, parseEditablePathDetailed, listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from '../src/svg-paths.mjs'
 import { applyNativePatches,sourceHash } from '../src/native-patch.mjs'
 
 const start='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">\n'+
@@ -155,4 +155,49 @@ test('source mapping prevents unrelated path edits, malformed ID and script/tran
 test('a maximal explicit path refuses insert when it would exceed command bounds',()=>{
   const input=pathDoc('M0 0 '+'L1 1 '.repeat(127))
   assert.throws(()=>svgPathTopologyPatch(input,{id:'p',operation:'insert',commandIndex:2}),{code:'unsupported-path'})
+})
+
+
+test('pen can extend a single direct root path with lines and close it without touching existing bytes',()=>{
+  const input=pathDoc('M 3 4')
+  const first=svgPenContinuePatch(input,{id:'p',operation:'append',x:15,y:20})
+  const afterFirst=applied(input,[first])
+  assert.equal(afterFirst.source,pathDoc('M 3 4 L 15 20'))
+  const second=svgPenContinuePatch(afterFirst.source,{id:'p',operation:'append',x:35,y:40})
+  const afterSecond=applied(afterFirst.source,[second])
+  assert.equal(afterSecond.source,pathDoc('M 3 4 L 15 20 L 35 40'))
+  const closing=svgPenContinuePatch(afterSecond.source,{id:'p',operation:'close'})
+  const closed=applied(afterSecond.source,[closing])
+  assert.equal(closed.source,pathDoc('M 3 4 L 15 20 L 35 40 Z'))
+  assert.equal(applied(closed.source,closed.inverse).source,afterSecond.source)
+  assert.equal(applied(afterSecond.source,afterSecond.inverse).source,afterFirst.source)
+  assert.equal(applied(afterFirst.source,afterFirst.inverse).source,input)
+})
+test('pen appends editable cubic segments with exact source span and inverse',()=>{
+  const doc=pathDoc('M0 0')
+  const patch=svgPenContinuePatch(doc,{id:'p',operation:'append',x:60,y:30,c1:{x:12,y:20},c2:{x:48,y:40}})
+  const out=applied(doc,[patch])
+  assert.equal(out.source,pathDoc('M0 0 C 12 20 48 40 60 30'))
+  assert.deepEqual(parseEditablePathDetailed('M0 0 C 12 20 48 40 60 30').points.map(p=>p.role),
+    ['anchor','cubic-in','cubic-out','anchor'])
+  assert.equal(applied(out.source,out.inverse).source,doc)
+})
+test('pen refuses malformed, non-finite, repeated, ambiguous and closed edits',()=>{
+  const base=pathDoc('M 0 0')
+  const rejected=[
+    {id:'p',operation:'append',x:0,y:0},
+    {id:'p',operation:'append',x:Infinity,y:10},
+    {id:'p',operation:'append',x:5,y:2,c1:{x:3,y:3}},
+    {id:'p',operation:'append',x:5,y:2,c1:{x:0,y:4},c2:{x:NaN,y:0}},
+    {id:'p',operation:'close'},
+    {id:'p',operation:'delete'},
+  ]
+  for(const payload of rejected)assert.throws(()=>svgPenContinuePatch(base,payload))
+  assert.throws(()=>svgPenContinuePatch(pathDoc('M0 0 L3 4 Z'),{id:'p',operation:'append',x:8,y:8}),{code:'unsupported-path'})
+  assert.throws(()=>svgPenContinuePatch(pathDoc('M0 0 M10 10'),{id:'p',operation:'append',x:8,y:8}),{code:'unsupported-path'})
+  assert.throws(()=>svgPenContinuePatch(pathDoc('m0 0'),{id:'p',operation:'append',x:8,y:8}),{code:'unsupported-path'})
+})
+test('pen refuses the 129th command and preserves original path data',()=>{
+  const base=pathDoc('M0 0 '+'L1 1 '.repeat(127))
+  assert.throws(()=>svgPenContinuePatch(base,{id:'p',operation:'append',x:2,y:3}),{code:'unsupported-path'})
 })
