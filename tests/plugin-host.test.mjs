@@ -56,3 +56,31 @@ test('malicious SVG external paint references rejected in API',()=>fixture(async
   const r=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:d.hash,kind:'svg-attribute',id:'box',attribute:'fill',value:'url(https://evil.test/x)'})
   assert.equal(r.status,400);assert.equal(r.json.error,'invalid-value')
 }))
+
+test('geometry is exposed for SVG with a viewBox and a movable rectangle',()=>fixture(async invoke=>{
+  const base='/design-studio-native/document?sessionId=known&file=icon.svg'
+  const r=await invoke('GET',base)
+  assert.equal(r.status,200)
+  // Current original sample has no viewBox; dragging is deliberately unavailable.
+  assert.equal(r.json.geometry.artboard,null)
+  assert.deepEqual(r.json.geometry.handles,[])
+}))
+test('SVG coordinate batch moves both coordinates with one native save',()=>fixture(async(invoke,root)=>{
+  await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 100 100"><rect id="box" x="5" y="7" width="10" height="20"/></svg>')
+  const url='/design-studio-native/document?sessionId=known&file=icon.svg'
+  const doc=(await invoke('GET',url)).json
+  assert.deepEqual(doc.geometry.handles.map(h=>h.id),['box'])
+  const edits=[{id:'box',attribute:'x',value:'35'},{id:'box',attribute:'y',value:'12'}]
+  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.document.hash,kind:'svg-attributes',edits})
+  assert.equal(result.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 100 100"><rect id="box" x="35" y="12" width="10" height="20"/></svg>')
+}))
+test('SVG batch rejects duplicate and invalid edit without modifying file',()=>fixture(async(invoke,root)=>{
+  await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 100 100"><rect id="box" x="5" y="7" width="10" height="20"/></svg>')
+  const doc=(await invoke('GET',url)).json.document
+  const edits=[{id:'box',attribute:'x',value:'22'},{id:'box',attribute:'x',value:'23'}]
+  const result=await invoke('POST','/design-studio-native/apply',{sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attributes',edits})
+  assert.equal(result.status,400)
+  assert.equal(result.json.error,'overlap')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),doc.source)
+}))
