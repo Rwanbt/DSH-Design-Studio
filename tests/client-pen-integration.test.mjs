@@ -14,6 +14,15 @@ function find(node,predicate) {
   return find(node.children||[],predicate)
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,100))
+async function untilRecorded(file,fragment) {
+  const deadline=Date.now()+2000
+  while(Date.now()<deadline) {
+    const source=await readFile(file,'utf8')
+    if(source.includes(fragment))return
+    await new Promise(resolve=>setTimeout(resolve,20))
+  }
+  assert.fail('Native file never contained expected Pen operation: '+fragment)
+}
 async function withPenClient(fn) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-pen-client-'))
   const file=path.join(root,'design.svg')
@@ -155,7 +164,7 @@ test('closed SVG paths are not offered as resumable pen strokes',()=>withPenClie
   gesture(render,{x:40,y:40,id:2});await settle()
   gesture(render,{x:90,y:70,id:3});await settle()
   find(render(),n=>n.props?.['aria-label']==='Close current pen path').props.onClick()
-  await settle()
+  await untilRecorded(app.file,' Z"')
   find(render(),n=>n.props?.['aria-label']==='Select canvas tool').props.onClick()
   assert.equal(find(render(),n=>n.props?.['aria-label']==='Resume selected path with pen tool'),null)
 }))
