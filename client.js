@@ -731,7 +731,19 @@ window.__ModuleLoader__.load({
                   onClick:()=>setSmartGuides(v=>!v),title:'Aligner automatiquement les bords et centres · Alt désactive temporairement'},'Repères')
               )),
 
-            doc.format==='css'?h('p',null,'CSS file · use source editor below'):
+            doc.format==='css'?
+                  h('div',{className:'dsh-studio-css-rule-preview',
+                    style:{background:'#24262a',border:'1px solid #414142',borderRadius:8,
+                      padding:18,minHeight:240,display:'grid',alignContent:'start',gap:12}},
+                    h('strong',{style:{color:ACCENT}},selectedCss?.selector||'Feuille de style native'),
+                    h('small',{style:{color:'#bbb9b4'}},
+                      'Sélectionne une règle simple à gauche. Les changements ciblent le fichier .css ouvert.'),
+                    selectedCss?.declarations?.map(declaration=>h('div',{key:declaration.property,
+                      style:{display:'flex',gap:8,justifyContent:'space-between'}},
+                      h('code',{style:{color:'#ccc'}},declaration.property),
+                      h('code',{style:{color:'#e8cdb1'}},declaration.value))
+                    )
+                  ):
               artboard && doc.format==='svg'?
                 h('div',{className:'dsh-studio-viewport',ref:viewportRef,
                   'aria-label':'Canvas viewport',
@@ -921,19 +933,6 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                doc.format==='css'?
-                  h('div',{className:'dsh-studio-css-rule-preview',
-                    style:{background:'#24262a',border:'1px solid #414142',borderRadius:8,
-                      padding:18,minHeight:240,display:'grid',alignContent:'start',gap:12}},
-                    h('strong',{style:{color:ACCENT}},selectedCss?.selector||'Feuille de style native'),
-                    h('small',{style:{color:'#bbb9b4'}},
-                      'Sélectionne une règle simple à gauche. Les changements ciblent le fichier .css ouvert.'),
-                    selectedCss?.declarations?.map(declaration=>h('div',{key:declaration.property,
-                      style:{display:'flex',gap:8,justifyContent:'space-between'}},
-                      h('code',{style:{color:'#ccc'}},declaration.property),
-                      h('code',{style:{color:'#e8cdb1'}},declaration.value))
-                    )
-                  ):
                   h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format,htmlActive),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
             h('strong',null,'Design · Propriétés'),selectedCss?
