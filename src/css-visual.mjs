@@ -19,7 +19,11 @@ function scan(source) {
   for(let i=0;i<source.length;i++){
     const current=source[i],next=source[i+1]
     if(comment){
-      if(current==='*'&&next==='/'){comment=false;i++}
+      if(current==='*'&&next==='/'){
+        comment=false
+        if(depth===0)start=i+2
+        i++
+      }
       continue
     }
     if(quote){
@@ -87,6 +91,9 @@ function indexed(source) {
     let entries=[],reason=null
     try{entries=declarations(source,rule)}
     catch(e){reason=e.code||'unsupported-css'}
+    if(entries.some((entry,index)=>entries.findIndex(other=>other.property===entry.property)!==index)) {
+      reason='duplicate-property'
+    }
     if(count.get(rule.selector)!==1)reason='duplicate-selector'
     return {...rule,editable:!reason,reason,entries}
   })
