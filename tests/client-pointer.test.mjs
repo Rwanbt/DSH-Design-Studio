@@ -251,3 +251,107 @@ test('delete key on a selected layer sends native delete but not when editing te
   harness.render().props.onKeyDown({key:'Delete',target:{tagName:'TEXTAREA'},preventDefault:()=>{throw Error('Keyboard event intercepted in editor')}})
   assert.equal(harness.writes().length,1)
 })
+
+
+test('zoom toolbar changes artboard scale without writing an SVG file', async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Canvas zoom level').children[0],'100%')
+  find(h.render(),n=>n.props?.['aria-label']==='Zoom in canvas').props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Canvas zoom level').children[0],'125%')
+  assert.match(find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform,/scale\(1.25\)/)
+  find(h.render(),n=>n.props?.['aria-label']==='Zoom out canvas').props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Canvas zoom level').children[0],'100%')
+  assert.equal(h.writes().length,0)
+})
+test('Ctrl+wheel zoom anchors the hovered point rather than jumping to center',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  viewport.props.ref.current={getBoundingClientRect:()=>({left:10,top:20,width:400,height:300})}
+  let prevented=false
+  viewport.props.onWheel({ctrlKey:true,deltaX:0,deltaY:-100,clientX:310,clientY:170,target:{tagName:'DIV'},preventDefault(){prevented=true}})
+  assert.equal(prevented,true)
+  const transform=find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform
+  const match=/translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(transform)
+  assert.ok(match,transform)
+  const zoom=Number(match[3]),x=Number(match[1]),y=Number(match[2])
+  assert.ok(Math.abs(zoom-Math.exp(0.2))<1e-9)
+  assert.ok(Math.abs(x-(1-zoom)*100)<1e-9,'Hovered x remains fixed under zoom')
+  assert.ok(Math.abs(y)<1e-9)
+  assert.equal(h.writes().length,0)
+})
+test('hand tool pans via mouse/touch pointer events and never mutates source',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Pan canvas tool').props.onClick()
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  let captured=false
+  const target={getBoundingClientRect:()=>({left:0,top:0,width:500,height:400}),setPointerCapture:()=>{captured=true}}
+  viewport.props.onPointerDown({button:0,pointerId:42,clientX:80,clientY:90,pointerType:'touch',currentTarget:target,preventDefault(){}})
+  viewport.props.onPointerMove({pointerId:42,clientX:120,clientY:115})
+  viewport.props.onPointerUp({pointerId:42})
+  assert.equal(captured,true)
+  assert.match(find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform,/translate\(40px, 25px\)/)
+  assert.equal(h.writes().length,0)
+})
+test('middle-button panning works without switching out of selection tool',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  viewport.props.onPointerDown({button:1,pointerId:4,clientX:20,clientY:30,currentTarget:{
+    getBoundingClientRect:()=>({left:0,top:0,width:500,height:400}),setPointerCapture(){}},preventDefault(){}})
+  viewport.props.onPointerMove({pointerId:4,clientX:10,clientY:50})
+  viewport.props.onPointerCancel({pointerId:4})
+  assert.match(find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform,/translate\(-10px, 20px\)/)
+  assert.equal(h.writes().length,0)
+})
+test('normal trackpad wheel pans viewport while remaining offline and read-only',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  viewport.props.onWheel({deltaX:8,deltaY:12,target:{tagName:'DIV'},preventDefault(){}})
+  assert.match(find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform,/translate\(-8px, -12px\)/)
+  assert.equal(h.writes().length,0)
+})
+test('Fit recenters portrait artboard within known viewport without any file save',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const viewport=find(h.render(),n=>n.props?.['aria-label']==='Canvas viewport')
+  viewport.props.ref.current={getBoundingClientRect:()=>({left:0,top:0,width:500,height:200})}
+  find(h.render(),n=>n.props?.['aria-label']==='Zoom in canvas').props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Fit canvas view').props.onClick()
+  const transform=find(h.render(),n=>n.props?.className==='dsh-studio-artboard').props.style.transform
+  assert.match(transform,/translate\(0px, 0px\)/)
+  assert.match(transform,/scale\(0.344\)/)
+  assert.equal(h.writes().length,0)
+})
+test('moving an SVG handle at zoom level 125% preserves SVG coordinates',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Zoom in canvas').props.onClick()
+  const control=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:250,height:250})},setPointerCapture(){}}
+  control.props.onPointerDown({button:0,pointerId:9,clientX:40,clientY:50,currentTarget:target,preventDefault(){}})
+  control.props.onPointerUp({pointerId:9,clientX:65,clientY:75})
+  await new Promise(resolve=>setTimeout(resolve,15))
+  assert.equal(h.writes().length,1)
+  assert.deepEqual(h.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'20'},
+    {id:'box',attribute:'y',value:'30'},
+  ])
+})
+test('V/H keyboard tool switching avoids SVG writes and editable inputs',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  let used=false
+  h.render().props.onKeyDown({key:'h',target:{tagName:'BUTTON'},preventDefault(){used=true}})
+  assert.equal(used,true)
+  let pan=find(h.render(),n=>n.props?.['aria-label']==='Pan canvas tool')
+  assert.equal(pan.props.style.background,'#51483d')
+  h.render().props.onKeyDown({key:'v',target:{tagName:'TEXTAREA'},preventDefault(){throw Error('Input shortcut hijacked')}})
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Pan canvas tool').props.style.background,'#51483d')
+  h.render().props.onKeyDown({key:'v',target:{tagName:'BUTTON'},preventDefault(){}})
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Select canvas tool').props.style.background,'#51483d')
+  assert.equal(h.writes().length,0)
+})
