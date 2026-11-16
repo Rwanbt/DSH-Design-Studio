@@ -39,7 +39,7 @@ export function parseEditablePath(d) {
   function point(role,commandIndex) {
     const x=coordinate(),y=coordinate()
     const result={index:points.length,role,commandIndex,x:x.value,y:y.value,
-      xSpan:{start:x.start,end:x.end},ySpan:{start:y.start,end:y.end},link:null,linkIndex:null}
+      xSpan:{start:x.start,end:x.end},ySpan:{start:y.start,end:y.end},link:null,linkIndex:null,linkIndex2:null}
     points.push(result)
     return result
   }
@@ -63,7 +63,7 @@ export function parseEditablePath(d) {
     } else if(command==='Q') {
       const control=point('quadratic',commands)
       const end=point('anchor',commands)
-      control.link={x:end.x,y:end.y};control.linkIndex=end.index
+      control.link={x:end.x,y:end.y};control.linkIndex=end.index;control.linkIndex2=previous.index
       previous=end
     } else if(command==='C') {
       const control1=point('cubic-in',commands)
@@ -105,8 +105,8 @@ export function listSvgPathModels(source) {
     try {
       const {points}=model(source,node.id)
       return {id:node.id,editable:true,d:node.attributes.d,
-        points:points.map(({index,role,x,y,link,linkIndex,xSpan,ySpan})=>
-          ({index,role,x,y,link,linkIndex,xSpan,ySpan}))}
+        points:points.map(({index,role,x,y,link,linkIndex,linkIndex2,xSpan,ySpan})=>
+          ({index,role,x,y,link,linkIndex,linkIndex2,xSpan,ySpan}))}
     }catch(e){
       return {id:node.id,editable:false,reason:e.code||'unsupported-path',points:[]}
     }
