@@ -82,7 +82,7 @@ test('Browse button obtains only session-local native files and renders file lis
   assert.deepEqual(app.requests.map(x=>x.pathname),['/design-studio-native/files'])
   assert.ok(app.requests[0].search.includes('sessionId=known'))
   const shown=findAll(app.render(),n=>n.props?.['aria-label']?.startsWith('Open file ')).map(n=>n.props['aria-label'])
-  assert.deepEqual(shown,['Open file assets/icon.svg','Open file pages/layout.html'])
+  assert.deepEqual(shown,['Open file assets/icon.svg','Open file pages/layout.html'],JSON.stringify({requests:app.requests,buttons:findAll(app.render(),n=>n.type==='button').map(n=>n.props['aria-label']||n.children),alerts:findAll(app.render(),n=>n.props?.role==='alert').map(n=>n.children)}))
 })
 test('selecting listed HTML opens native source without typing relative path',async()=>{
   const app=await harness()
