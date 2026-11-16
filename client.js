@@ -222,6 +222,12 @@ window.__ModuleLoader__.load({
       function onEditorKeyDown(event) {
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
+        if(event.key==='Escape' && (dragRef.current || pathDragRef.current)) {
+          event.preventDefault()
+          dragRef.current=null;pathDragRef.current=null
+          setDragDelta(null);setPathDrag(null)
+          return
+        }
         const command=event.ctrlKey || event.metaKey
         if(!command && !event.altKey && (event.key===' ' || event.code==='Space')) {
           event.preventDefault()
