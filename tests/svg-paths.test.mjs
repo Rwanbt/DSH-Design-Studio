@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseEditablePath, listSvgPathModels, svgPathPointPatches } from '../src/svg-paths.mjs'
+import { parseEditablePath, parseEditablePathDetailed, listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch } from '../src/svg-paths.mjs'
 import { applyNativePatches,sourceHash } from '../src/native-patch.mjs'
 
 const start='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">\n'+
@@ -83,4 +83,76 @@ test('disallows script, handlers, foreignObject, duplicate IDs and missing d',()
 test('enforces path limits and refuses unknown SVG shape IDs',()=>{
   assert.throws(()=>parseEditablePath('M0 0 '+'L1 1 '.repeat(150)),{code:'unsupported-path'})
   assert.throws(()=>svgPathPointPatches(start,{id:'ghost',index:0,x:0,y:0}),{code:'unknown-node'})
+})
+
+
+function pathDoc(d) {return '<svg viewBox="0 0 100 100"><path id="p" fill="none" d="'+d+'"/></svg>'}
+test('line insertion adds one midpoint anchor and preserves original SVG bytes outside segment',()=>{
+  const input=pathDoc('M0 0 L10 10 L20 0')
+  const patch=svgPathTopologyPatch(input,{id:'p',operation:'insert',commandIndex:2})
+  const output=applied(input,[patch])
+  assert.equal(output.ok,true)
+  assert.equal(output.source,pathDoc('M0 0 L 5 5 L 10 10 L20 0'))
+  assert.equal(parseEditablePathDetailed('M0 0 L 5 5 L 10 10 L20 0').points.length,4)
+  assert.equal(applied(output.source,output.inverse).source,input)
+})
+test('line deletion removes one explicit L command only; both directions round trip',()=>{
+  const input=pathDoc('M0 0 L10 10 L20 0 Z')
+  const patch=svgPathTopologyPatch(input,{id:'p',operation:'remove',commandIndex:2})
+  const output=applied(input,[patch])
+  assert.equal(output.ok,true)
+  assert.equal(output.source,pathDoc('M0 0 L20 0 Z'))
+  assert.equal(applied(output.source,output.inverse).source,input)
+})
+test('cubic subdivision at t=0.5 reproduces original curve and supports exact Undo',()=>{
+  const d='M0 0 C0 40 40 40 40 0 L70 15'
+  const input=pathDoc(d)
+  const patch=svgPathTopologyPatch(input,{id:'p',operation:'insert',commandIndex:2})
+  const output=applied(input,[patch])
+  assert.equal(output.ok,true)
+  assert.equal(output.source,pathDoc('M0 0 C 0 20 10 30 20 30 C 30 30 40 20 40 0 L70 15'))
+  assert.equal(parseEditablePathDetailed('M0 0 C 0 20 10 30 20 30 C 30 30 40 20 40 0 L70 15').points.length,8)
+  assert.equal(applied(output.source,output.inverse).source,input)
+})
+test('quadratic subdivision returns two connected quadratics with unchanged curve shape',()=>{
+  const input=pathDoc('M0 0 Q20 40 40 0')
+  const patch=svgPathTopologyPatch(input,{id:'p',operation:'insert',commandIndex:2})
+  const output=applied(input,[patch])
+  assert.equal(output.source,pathDoc('M0 0 Q 10 20 20 20 Q 30 20 40 0 '))
+  assert.equal(applied(output.source,output.inverse).source,input)
+})
+test('topology metadata exposes only drawable segments and safe line removal',()=>{
+  const doc=pathDoc('M0 0 C20 30 30 20 40 0 L60 10 Z')
+  const model=listSvgPathModels(doc)[0]
+  assert.equal(model.editable,true)
+  assert.deepEqual(model.segments.map(x=>[x.commandIndex,x.type,x.removable]),[[2,'C',false],[3,'L',true]])
+  assert.deepEqual(model.segments[0].midpoint,{x:22.5,y:18.75})
+  assert.equal(model.segments[1].endIndex,4)
+})
+test('topology command selector rejects move, close, unknown index, implicit and nested',()=>{
+  const doc=pathDoc('M0 0 L5 5 Z')
+  for(const opts of [
+    {operation:'insert',commandIndex:1},
+    {operation:'insert',commandIndex:3},
+    {operation:'remove',commandIndex:1},
+    {operation:'delete',commandIndex:2},
+    {operation:'insert',commandIndex:250},
+    {operation:'insert',commandIndex:0},
+    {operation:'insert',commandIndex:1.5},
+  ])assert.throws(()=>svgPathTopologyPatch(doc,{id:'p',...opts}))
+  assert.throws(()=>svgPathTopologyPatch(pathDoc('M0 0 Q20 20 40 0'),{id:'p',operation:'remove',commandIndex:2}),{code:'unsupported-segment'})
+  assert.throws(()=>svgPathTopologyPatch(pathDoc('m0 0 l2 2'),{id:'p',operation:'insert',commandIndex:2}))
+})
+test('source mapping prevents unrelated path edits, malformed ID and script/transform',()=>{
+  const bad=[
+    '<svg viewBox="0 0 100 100"><g><path id="p" d="M0 0 L10 10"/></g></svg>',
+    '<svg viewBox="0 0 100 100"><path id="p" transform="rotate(4)" d="M0 0 L10 10"/></svg>',
+    '<svg viewBox="0 0 100 100"><path id="p" d="M0 0 L10 10" onload="bad()"/></svg>',
+  ]
+  for(const source of bad)assert.throws(()=>svgPathTopologyPatch(source,{id:'p',operation:'insert',commandIndex:2}))
+  assert.throws(()=>svgPathTopologyPatch(pathDoc('M0 0 L10 10'),{id:'not-p',operation:'insert',commandIndex:2}),{code:'unknown-node'})
+})
+test('a maximal explicit path refuses insert when it would exceed command bounds',()=>{
+  const input=pathDoc('M0 0 '+'L1 1 '.repeat(127))
+  assert.throws(()=>svgPathTopologyPatch(input,{id:'p',operation:'insert',commandIndex:2}),{code:'unsupported-path'})
 })
