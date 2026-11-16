@@ -30,11 +30,12 @@ window.__ModuleLoader__.load({
       const [error,setError] = React.useState('')
       const [warning,setWarning] = React.useState('')
       const [busy,setBusy] = React.useState(false)
-      async function load() {
+      async function load(force=false, targetFile=file) {
+        if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return}
         if(!sessionId) {setError('Open a conversation first');return}
         setBusy(true);setError('')
         try {
-          const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(file)
+          const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setWarning(data.warning||'');setActive('');setAttribute('');setValue('')
@@ -42,10 +43,11 @@ window.__ModuleLoader__.load({
       }
       async function save(payload) {
         if(!doc)return
+        if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return}
         setBusy(true);setError('')
         try {
           await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,...payload})})
-          await load()
+          await load(true,doc.file)
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
       }
       function select(nodeId) {
@@ -61,7 +63,7 @@ window.__ModuleLoader__.load({
           h('span',{style:{fontSize:11,opacity:0.7}},'SVG / HTML / CSS · No AI needed')),
         h('div',{style:{display:'flex',gap:8}},
           h('input',{style:{...field,flex:1},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
-          h('button',{style:button,onClick:load,disabled:busy||!sessionId},busy?'Loading…':'Open')),
+          h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open')),
         error&&h('div',{role:'alert',style:{color:'#ff8585'}},error),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{style:{display:'grid',gridTemplateColumns:'minmax(130px,1fr) minmax(240px,3fr) minmax(170px,1.3fr)',gap:12,minHeight:380}},
