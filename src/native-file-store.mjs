@@ -75,7 +75,7 @@ async function ensureSafeFile(workspace, file) {
     entries.push({path:current,key:nodeKey(info)})
     if (info.isSymbolicLink()) throw error('symlink-forbidden', 'Symlinks inside the workspace are not editable')
     if (i < parts.length - 1 && !info.isDirectory()) throw error('invalid-path', 'Parent is not a directory')
-    if (i === parts.length - 1 && (!info.isFile() || info.nlink !== 1)) {
+    if (i === parts.length - 1 && (!info.isFile() || info.nlink !== 1n)) {
       throw error('invalid-file', 'Only regular, non-hardlinked files are editable')
     }
   }
