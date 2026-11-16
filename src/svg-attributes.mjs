@@ -61,6 +61,19 @@ function tags(source) {
   return output
 }
 
+export function svgRootAttributes(source) {
+  const roots = tags(source).filter(item => item.tag === 'svg')
+  if (roots.length !== 1) fail('ambiguous-svg', 'Expected exactly one SVG root')
+  const result = {}
+  for (const attr of roots[0].attrs) {
+    if (Object.prototype.hasOwnProperty.call(result, attr.name)) {
+      fail('ambiguous-svg', 'Duplicate SVG root attribute')
+    }
+    result[attr.name] = attr.value
+  }
+  return result
+}
+
 export function listEditableSvgNodes(source) {
   const used=new Set()
   const nodes=[]
