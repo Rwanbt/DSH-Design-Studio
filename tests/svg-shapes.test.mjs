@@ -37,3 +37,13 @@ test('refuses multi-root and transformed SVGs',()=>{
   assert.throws(()=>svgShapeInsertPatch('<svg viewBox="0 0 10 10"></svg><svg viewBox="0 0 10 10"></svg>','rect'))
   assert.throws(()=>svgShapeInsertPatch('<svg viewBox="0 0 10 10"><g transform="translate(1)"></g></svg>','rect'))
 })
+
+test('manual path creation generates editable explicit cubic coordinates and can undo',()=>{
+  const created=svgShapeInsertPatch(base,'path')
+  assert.equal(created.id,'shape-1')
+  const output=applyNativePatches({source:base,format:'svg',baseHash:sourceHash(base),patches:[created.patch]})
+  assert.equal(output.ok,true)
+  assert.match(output.source,/<path id="shape-1" d="M [^"]+ C [^"]+" fill="none" stroke="#bca38d"/)
+  assert.equal(output.source.replace(created.patch.after,''),base)
+  assert.equal(applyNativePatches({source:output.source,format:'svg',baseHash:output.hash,patches:output.inverse}).source,base)
+})
