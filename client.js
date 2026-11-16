@@ -8,9 +8,10 @@ window.__ModuleLoader__.load({
     const pane = { background:'var(--dsw-alias-surface-1,#171b27)', color:'var(--dsw-alias-content-primary,#e7eaf1)', border:'1px solid var(--dsw-alias-border,#35394a)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #626a80', borderRadius:6, padding:'6px 10px', background:'transparent', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #626a80', background:'var(--dsw-alias-surface-2,#232838)', color:'inherit', padding:'6px 8px' }
-    function safePreview(source) {
+    function safePreview(source, format) {
       const policy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
-      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '"></head><body style="margin:12px">' + source + '</body></html>'
+      const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
+      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '">' + svgLayout + '</head><body style="margin:' + (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
     }
     async function request(endpoint, options) {
       const response = await fetch(new URL(api + endpoint, document.baseURI),{credentials:'same-origin',...options})
@@ -30,7 +31,10 @@ window.__ModuleLoader__.load({
       const [error,setError] = React.useState('')
       const [warning,setWarning] = React.useState('')
       const [busy,setBusy] = React.useState(false)
-      async function load(force=false, targetFile=file) {
+      const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
+      const [dragDelta,setDragDelta] = React.useState(null)
+      const dragRef=React.useRef(null)
+      async function load(force=false, targetFile=file, retainSelection='') {
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return}
         if(!sessionId) {setError('Open a conversation first');return}
         setBusy(true);setError('')
@@ -38,7 +42,13 @@ window.__ModuleLoader__.load({
           const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
-          setWarning(data.warning||'');setActive('');setAttribute('');setValue('')
+          setGeometry(data.geometry||{artboard:null,handles:[]})
+          setDragDelta(null);dragRef.current=null
+          setWarning(data.warning||'')
+          const remembered = (data.nodes||[]).find(node=>node.id===retainSelection)
+          setActive(remembered?retainSelection:'')
+          const retainedAttr=remembered && remembered.attributes[attribute]?attribute:Object.keys(remembered?.attributes||{})[0]||''
+          setAttribute(retainedAttr);setValue(remembered && retainedAttr ? remembered.attributes[retainedAttr]: '')
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
       }
       async function save(payload) {
@@ -47,7 +57,7 @@ window.__ModuleLoader__.load({
         setBusy(true);setError('')
         try {
           await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,...payload})})
-          await load(true,doc.file)
+          await load(true,doc.file,active)
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
       }
       function select(nodeId) {
@@ -57,6 +67,41 @@ window.__ModuleLoader__.load({
         setAttribute(property);setValue(property ? node.attributes[property]:'')
       }
       const selected=nodes.find(n=>n.id===active)
+      const {artboard,handles=[]}=geometry
+      function startDrag(event,handle) {
+        if(event.button!==0 || busy) return
+        if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
+        const rect=event.currentTarget.parentElement.getBoundingClientRect()
+        if(rect.width<=0 || rect.height<=0) return
+        select(handle.id);setError('')
+        dragRef.current={id:handle.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:rect.width,height:rect.height,handle}
+        setDragDelta(null)
+        try {event.currentTarget.setPointerCapture(event.pointerId)} catch (_) {}
+        event.preventDefault()
+      }
+      function moveDrag(event) {
+        const drag=dragRef.current
+        if(!drag || drag.pointerId!==event.pointerId || !artboard) return
+        const dx=(event.clientX-drag.startX)*artboard.width/drag.width
+        const dy=(event.clientY-drag.startY)*artboard.height/drag.height
+        setDragDelta({id:drag.id,dx,dy})
+      }
+      function finishDrag(event,cancel=false) {
+        const drag=dragRef.current
+        if(!drag || drag.pointerId!==event.pointerId) return
+        dragRef.current=null
+        setDragDelta(null)
+        if(cancel || !artboard || busy) return
+        const dx=(event.clientX-drag.startX)*artboard.width/drag.width
+        const dy=(event.clientY-drag.startY)*artboard.height/drag.height
+        const pixelMovement=Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)
+        if(pixelMovement<3) return
+        const edits=[
+          {id:drag.id,attribute:drag.handle.move.x,value:String(Math.round((drag.handle.move.initialX+dx)*1000)/1000)},
+          {id:drag.id,attribute:drag.handle.move.y,value:String(Math.round((drag.handle.move.initialY+dy)*1000)/1000)}
+        ]
+        void save({kind:'svg-attributes',edits})
+      }
       return h('section',{style:{...pane,height:'min(80vh,860px)',overflow:'auto',display:'flex',flexDirection:'column',gap:12,fontFamily:'system-ui,sans-serif',fontSize:13}},
         h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
           h('strong',{style:{fontSize:16}},'Design Studio · Manual'),
@@ -74,7 +119,27 @@ window.__ModuleLoader__.load({
           h('div',{style:{...pane,overflow:'auto'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:6}},h('strong',null,'Preview'),h('small',null,doc.format.toUpperCase())),
             doc.format==='css'?h('p',null,'CSS file · use source editor below'):
-              h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+              artboard && doc.format==='svg'?
+                h('div',{style:{position:'relative',width:'100%',aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',overflow:'hidden',borderRadius:6}},
+                  h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
+                  h('div',{style:{position:'absolute',inset:0,touchAction:'none'},'aria-label':'Direct manipulation overlay'},
+                    handles.map(handle=>{
+                      const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0}
+                      return h('button',{key:handle.id,type:'button',title:'Drag '+handle.id+' to move', 'aria-label':'Drag '+handle.tag+' '+handle.id,
+                        style:{position:'absolute',left:((handle.x+delta.dx-artboard.x)/artboard.width*100)+'%',top:((handle.y+delta.dy-artboard.y)/artboard.height*100)+'%',
+                          width:(handle.width/artboard.width*100)+'%',height:(handle.height/artboard.height*100)+'%',
+                          minWidth:5,minHeight:5,border:active===handle.id?'2px solid #4d8eff':'1px dashed #a8c7ff',
+                          borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
+                          background:active===handle.id?'rgba(77,142,255,.09)':'transparent',boxSizing:'border-box',cursor:busy?'wait':'move',touchAction:'none',padding:0},
+                        onPointerDown:event=>startDrag(event,handle),
+                        onPointerMove:moveDrag,
+                        onPointerUp:event=>finishDrag(event),
+                        onPointerCancel:event=>finishDrag(event,true)
+                      })
+                    })
+                  )
+                ):
+                h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{style:{...pane,overflow:'auto'}},
             h('strong',null,'Properties'),selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
@@ -88,7 +153,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65}},'Experimental editor. Preview is sandboxed. No drag, freehand vector drawing or live DSH compatibility claim yet.')
+        h('small',{style:{opacity:0.65}},'Experimental editor. SVG rectangles, circles and ellipses can be dragged when viewBox and coordinates are explicit; HTML source editing remains manual. DSH live UI not verified.')
       )
     }
     return {
