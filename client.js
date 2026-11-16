@@ -45,6 +45,7 @@ window.__ModuleLoader__.load({
       const panRef=React.useRef(null)
       const viewportRef=React.useRef(null)
       const [canvasTool,setCanvasTool]=React.useState('select')
+      const [spaceHeld,setSpaceHeld]=React.useState(false)
       const [camera,setCamera]=React.useState({zoom:1,offsetX:0,offsetY:0})
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
@@ -169,7 +170,7 @@ window.__ModuleLoader__.load({
         }
       }
       function startPan(event) {
-        if(event.button!==1 && !(canvasTool==='hand' && event.button===0))return
+        if(event.button!==1 && !((canvasTool==='hand'||spaceHeld) && event.button===0))return
         const rect=event.currentTarget.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0)return
         panRef.current={pointerId:event.pointerId,startX:event.clientX,startY:event.clientY}
@@ -191,6 +192,11 @@ window.__ModuleLoader__.load({
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
         const command=event.ctrlKey || event.metaKey
+        if(!command && !event.altKey && (event.key===' ' || event.code==='Space')) {
+          event.preventDefault()
+          setSpaceHeld(true)
+          return
+        }
         if(!command && !event.altKey && !event.shiftKey && (event.key==='v' || event.key==='h')) {
           event.preventDefault()
           setCanvasTool(event.key==='h'?'hand':'select')
@@ -230,6 +236,9 @@ window.__ModuleLoader__.load({
         const previous=item.move[axis==='x'?'initialX':'initialY']
         void save({kind:'svg-attribute',id:item.id,attribute:property,value:String(Math.round((previous+amount)*1000)/1000)})
       }
+      function onEditorKeyUp(event) {
+        if(event.key===' ' || event.code==='Space') setSpaceHeld(false)
+      }
       function select(nodeId) {
         setActive(nodeId)
         setEditingText('')
@@ -258,7 +267,7 @@ window.__ModuleLoader__.load({
       }
       const {artboard,handles=[]}=geometry
       function startDrag(event,handle,mode='move') {
-        if(event.button!==0 || busy || canvasTool!=='select') return
+        if(event.button!==0 || busy || canvasTool!=='select' || spaceHeld) return
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
@@ -314,7 +323,7 @@ window.__ModuleLoader__.load({
         }
         void save({kind:'svg-attributes',edits})
       }
-      return h('section',{className:'dsh-studio-workbench',onKeyDown:onEditorKeyDown,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
+      return h('section',{className:'dsh-studio-workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
         h('style',null,[
           '.dsh-studio-workbench *{box-sizing:border-box}',
           '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid #bca58c;outline-offset:1px}',
@@ -396,7 +405,7 @@ window.__ModuleLoader__.load({
                   onPointerCancel:endPan,
                   style:{position:'relative',width:'100%',height:'100%',minHeight:340,flex:'1 1 auto',
                     overflow:'hidden',touchAction:'none',borderRadius:6,
-                    cursor:panRef.current?'grabbing':canvasTool==='hand'?'grab':'default',
+                    cursor:panRef.current?'grabbing':canvasTool==='hand'||spaceHeld?'grab':'default',
                     background:'transparent'}},
                   h('div',{className:'dsh-studio-artboard',
                     style:{position:'absolute',left:'50%',top:'50%',width:'100%',
@@ -429,7 +438,7 @@ window.__ModuleLoader__.load({
                           width:(width/artboard.width*100)+'%',height:(height/artboard.height*100)+'%',
                           minWidth:5,minHeight:5,border:active===handle.id?'2px solid #c8ab87':'1px dashed #8b847c',
                           borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
-                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'?'grab':'move',touchAction:'none',padding:0},
+                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'||spaceHeld?'grab':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
                         onDoubleClick:handle.text&&canvasTool==='select'?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
@@ -449,7 +458,7 @@ window.__ModuleLoader__.load({
                             top:((py-artboard.y)/artboard.height*100)+'%',transform:'translate(-50%,-50%)',
                             width:14,height:14,padding:0,border:'2px solid #262626',borderRadius:3,
                             background:'#bca88a',cursor:west===north?'nwse-resize':'nesw-resize',touchAction:'none',zIndex:3},
-                          onPointerDown:event=>{event.stopPropagation();startDrag(event,handle,'resize')},
+                          onPointerDown:event=>{if(canvasTool==='select'&&!spaceHeld)event.stopPropagation();startDrag(event,handle,'resize')},
                           onPointerMove:moveDrag,
                           onPointerUp:event=>finishDrag(event),
                           onPointerCancel:event=>finishDrag(event,true)})
@@ -527,7 +536,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Canevas SVG: V sélection, H main, clic milieu déplacement, Ctrl+molette zoom, molette/pavé tactile panoramique, 0 recentrer. Modifications natives avec Undo/Redo de session. Installation DSH réelle non validée.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Canevas SVG: V sélection, H main, Espace+glisser/clic milieu déplacement, Ctrl+molette zoom, molette/pavé tactile panoramique, 0 recentrer. Modifications natives avec Undo/Redo de session. Installation DSH réelle non validée.')
       )
     }
     return {
