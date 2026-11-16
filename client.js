@@ -54,6 +54,11 @@ window.__ModuleLoader__.load({
       const panRef=React.useRef(null)
       const viewportRef=React.useRef(null)
       const [canvasTool,setCanvasTool]=React.useState('select')
+      const [penPathId,setPenPathId]=React.useState('')
+      const [penOutgoing,setPenOutgoing]=React.useState(null)
+      const [penPreview,setPenPreview]=React.useState(null)
+      const penGestureRef=React.useRef(null)
+      const penPendingRef=React.useRef(false)
       const [spaceHeld,setSpaceHeld]=React.useState(false)
       const [camera,setCamera]=React.useState({zoom:1,offsetX:0,offsetY:0})
       const [gridVisible,setGridVisible]=React.useState(false)
@@ -72,6 +77,8 @@ window.__ModuleLoader__.load({
           if(doc?.file!==targetFile) {
             setCamera({zoom:1,offsetX:0,offsetY:0})
             setCanvasTool('select')
+            setPenPathId('');setPenOutgoing(null);setPenPreview(null)
+            penGestureRef.current=null;penPendingRef.current=false
             panRef.current=null
           }
           setFile(targetFile)
@@ -108,7 +115,7 @@ window.__ModuleLoader__.load({
         const opened=await load(false,picked)
         if(opened)setShowFiles(false)
       }
-      async function save(payload, historyMode='record') {
+      async function save(payload, historyMode='record',onSaved=null) {
         if(!doc || busy)return false
         if(reloadRequired){setError('Document state uncertain. Reload the file before making further changes.');return false}
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
@@ -132,6 +139,7 @@ window.__ModuleLoader__.load({
               setRedoStack([])
             }
           }
+          if(typeof onSaved==='function')onSaved(response)
           return true
         }catch(e){
           const uncertain=!Number.isInteger(e.status) || e.status>=500 || e.status===409
@@ -222,9 +230,10 @@ window.__ModuleLoader__.load({
       function onEditorKeyDown(event) {
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
-        if(event.key==='Escape' && (dragRef.current || pathDragRef.current)) {
+        if(event.key==='Escape' && (dragRef.current || pathDragRef.current || penGestureRef.current)) {
           event.preventDefault()
           dragRef.current=null;pathDragRef.current=null
+          penGestureRef.current=null;setPenPreview(null)
           setDragDelta(null);setPathDrag(null)
           return
         }
@@ -234,9 +243,10 @@ window.__ModuleLoader__.load({
           setSpaceHeld(true)
           return
         }
-        if(!command && !event.altKey && !event.shiftKey && (event.key==='v' || event.key==='h')) {
+        if(!command && !event.altKey && !event.shiftKey && (event.key==='v' || event.key==='h' || event.key==='p')) {
           event.preventDefault()
-          setCanvasTool(event.key==='h'?'hand':'select')
+          setCanvasTool(event.key==='h'?'hand':event.key==='p'?'pen':'select')
+          if(event.key==='p'){setPenPathId('');setPenOutgoing(null)}
           return
         }
         if(!command && !event.altKey && artboard && ['+','=','-','0'].includes(event.key)) {
@@ -361,6 +371,88 @@ window.__ModuleLoader__.load({
         const next=pathPosition(event,gesture)
         if(next.x===gesture.x && next.y===gesture.y)return
         void save({kind:'svg-path-point',...next})
+      }
+      function positionInArtboard(event,target) {
+        const rect=target.getBoundingClientRect()
+        if(!rect || rect.width<=0 || rect.height<=0 || !artboard)return null
+        const nx=(event.clientX-rect.left)/rect.width
+        const ny=(event.clientY-rect.top)/rect.height
+        if(!Number.isFinite(nx)||!Number.isFinite(ny)||nx<0||nx>1||ny<0||ny>1)return null
+        let x=artboard.x+nx*artboard.width,y=artboard.y+ny*artboard.height
+        if(snapToGrid&&!event.altKey&&gridStep>0) {
+          x=snapAxis(x,artboard.x,gridStep);y=snapAxis(y,artboard.y,gridStep)
+        }
+        return {x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000}
+      }
+      function startPenGesture(event) {
+        if(event.button!==0 || canvasTool!=='pen'||spaceHeld||penPendingRef.current||
+          busy||reloadRequired||source!==doc?.source||!artboard)return
+        const point=positionInArtboard(event,event.currentTarget)
+        if(!point)return
+        penGestureRef.current={pointerId:event.pointerId,point,startX:event.clientX,startY:event.clientY,
+          left:event.currentTarget.getBoundingClientRect().left}
+        setPenPreview({anchor:point,control:null})
+        try{event.currentTarget.setPointerCapture(event.pointerId)}catch(_){}
+        event.preventDefault();event.stopPropagation()
+      }
+      function movePenGesture(event) {
+        const gesture=penGestureRef.current
+        if(!gesture||gesture.pointerId!==event.pointerId)return
+        const delta={x:(event.clientX-gesture.startX)*artboard.width/event.currentTarget.getBoundingClientRect().width,
+          y:(event.clientY-gesture.startY)*artboard.height/event.currentTarget.getBoundingClientRect().height}
+        setPenPreview({anchor:gesture.point,control:{x:gesture.point.x+delta.x,y:gesture.point.y+delta.y}})
+      }
+      async function finishPenGesture(event,cancel=false) {
+        const gesture=penGestureRef.current
+        if(!gesture||gesture.pointerId!==event.pointerId)return
+        penGestureRef.current=null;setPenPreview(null)
+        if(cancel||penPendingRef.current||busy||reloadRequired||source!==doc?.source)return
+        const magnitude=Math.hypot(event.clientX-gesture.startX,event.clientY-gesture.startY)
+        const rect=event.currentTarget.getBoundingClientRect()
+        if(!rect?.width||!rect?.height)return
+        const tangent=magnitude>=4?{
+          x:(event.clientX-gesture.startX)*artboard.width/rect.width,
+          y:(event.clientY-gesture.startY)*artboard.height/rect.height,
+        }:null
+        const point=gesture.point
+        const current=pathNodes.find(p=>p.id===penPathId && p.editable)
+        const anchors=current?.points?.filter(p=>p.role==='anchor')||[]
+        // The initial gesture creates M only; all later gestures extend that path.
+        let request
+        if(!penPathId)request={kind:'svg-pen',operation:'start',x:point.x,y:point.y}
+        else if(current&&anchors.length) {
+          const prev=anchors.at(-1)
+          const dx=point.x-prev.x,dy=point.y-prev.y
+          if(Math.hypot(dx,dy)<1e-4)return
+          request={kind:'svg-pen',operation:'append',id:penPathId,x:point.x,y:point.y}
+          if(tangent||penOutgoing) {
+            const c1=penOutgoing?
+              {x:prev.x+penOutgoing.x,y:prev.y+penOutgoing.y}:
+              {x:prev.x+dx/3,y:prev.y+dy/3}
+            const c2=tangent?
+              {x:point.x-tangent.x,y:point.y-tangent.y}:
+              {x:point.x-dx/3,y:point.y-dy/3}
+            request.c1=c1;request.c2=c2
+          }
+        }else {
+          setError('Tracé Plume non disponible : sélectionner Nouvelle Plume pour recommencer.')
+          return
+        }
+        penPendingRef.current=true
+        try {
+          const saved=await save(request,'record',response=>{
+            if(response.createdId)setPenPathId(response.createdId)
+          })
+          if(saved)setPenOutgoing(tangent)
+        }finally{penPendingRef.current=false}
+      }
+      async function closePenPath() {
+        if(!penPathId||penPendingRef.current||busy||reloadRequired)return
+        penPendingRef.current=true
+        try {
+          const saved=await save({kind:'svg-pen',operation:'close',id:penPathId})
+          if(saved){setPenPathId('');setPenOutgoing(null)}
+        }finally{penPendingRef.current=false}
       }
       function snapAxis(value, origin, step) {
         if (!Number.isFinite(value) || !Number.isFinite(origin) || !Number.isFinite(step) || step<=0) return value
