@@ -14,8 +14,8 @@ async function fixture(run) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-cross-process-lock-'))
   try {await run(root)}finally{await rm(root,{recursive:true,force:true})}
 }
-function childWriter(root,hash,replacement,gate) {
-  const child=spawn(process.execPath,[worker,root,'page.html',hash,replacement,gate],
+function childWriter(root,hash,identity,replacement,gate) {
+  const child=spawn(process.execPath,[worker,root,'page.html',hash,identity,replacement,gate],
     {stdio:['ignore','pipe','pipe']})
   let output='',errors='',readyDone=false
   let resolveReady,rejectReady
@@ -39,9 +39,9 @@ function childWriter(root,hash,replacement,gate) {
 
 test('two genuinely independent Node processes cannot both save one revision',()=>fixture(async root=>{
   await writeFile(path.join(root,'page.html'),'<p>old</p>')
-  const hash=(await createNativeFileStore(root).read('page.html')).hash
+  const {hash,identity}=await createNativeFileStore(root).read('page.html')
   const gate=path.join(root,'go.start')
-  const a=childWriter(root,hash,'one',gate), b=childWriter(root,hash,'two',gate)
+  const a=childWriter(root,hash,identity,'one',gate), b=childWriter(root,hash,identity,'two',gate)
   await Promise.all([a.ready,b.ready])
   await writeFile(gate,'go')
   const results=await Promise.all([a.done,b.done])
