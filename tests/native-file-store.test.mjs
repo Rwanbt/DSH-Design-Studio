@@ -56,7 +56,8 @@ test('two saves from one revision cannot both succeed', () => workspace(async(ro
   assert.equal(results.filter(r=>r.status==='rejected'&&r.reason.code==='stale-revision').length,1)
 }))
 test('rejects relative traversal and absolute, Windows paths and unsupported extensions', () => workspace(async(root,store)=>{
-  for (const pathName of ['../bad.svg','a/../bad.svg','/tmp/a.svg','C:\\tmp\\x.svg','foo.js','a//b.svg']) {
+  for (const pathName of ['../bad.svg','a/../bad.svg','/tmp/a.svg','C:\\tmp\\x.svg','foo.js','a//b.svg',
+    'page:ads.svg','CON.svg','aux/file.css','COM1.svg','name?.html','page .css','folder./page.svg','bad\u0001name.svg']) {
     await assert.rejects(store.read(pathName))
   }
 }))
