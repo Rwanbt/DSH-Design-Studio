@@ -31,7 +31,7 @@ function createHarness() {
   let registration
   const ctx={slots:{inject:(_name,callback)=>callback(),register:(details,view)=>{registration=details;component=view;return()=>{}}}}
   const fetch=async (url,options={})=>{
-    assert.ok(String(url).includes('design-studio-native/'),'Editor must not call AI endpoints')
+    assert.ok(new URL(String(url)).pathname.startsWith('/design-studio-native/'),'Editor must use same-origin root API routes, never an AI endpoint')
     if(options.method==='POST'){
       writes.push(JSON.parse(options.body))
       return {ok:true,json:async()=>({ok:true,result:{changed:true,inverse:[{start:0,end:1,before:'a',after:'b'}]},patches:[{start:0,end:1,before:'b',after:'a'}]})}
@@ -47,7 +47,7 @@ function createHarness() {
     async init() {
       runInNewContext(await readFile(new URL('../client.js',import.meta.url),'utf8'),{
         window:{__ModuleLoader__:{load:d=>definition=d}},URL,
-        document:{baseURI:'https://dsh.example/'},fetch
+        document:{baseURI:'https://dsh.example/workspaces/conversation/session/'},fetch
       })
       const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
       plugin.apply(ctx)
