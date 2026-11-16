@@ -167,12 +167,12 @@ test('delete SVG text layer and undo; refuse stale file instead of overwriting',
   assert.equal(del.status,200)
   assert.equal((await readFile(path.join(root,'icon.svg'),'utf8')).includes('<text'),false)
   const changed=(await invoke('GET',url)).json.document
-  await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 150 100"></svg>')
+  await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 150 100"><rect id="external" x="2" y="3" width="5" height="7"/></svg>')
   const stale=await invoke('POST','/design-studio-native/apply',{
     sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',patches:del.json.result.inverse
   })
   assert.equal(stale.status,409)
-  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 150 100"></svg>')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 150 100"><rect id="external" x="2" y="3" width="5" height="7"/></svg>')
 }))
 test('nested SVG layers cannot be deleted by incomplete source mapper',()=>fixture(async(invoke,root)=>{
   const original='<svg viewBox="0 0 100 100"><g><rect id="child" x="2" y="2" width="3" height="3"/></g></svg>'
