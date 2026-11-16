@@ -99,3 +99,49 @@ export function svgResizeEdits(handle, deltaX, deltaY) {
     { id: handle.id, attribute: 'ry', value: rounded(height / 2) },
   ]
 }
+
+/**
+ * Four-corner resize for untransformed rectangles/ellipses, in SVG user units.
+ * With lockAspect=true, preserve original width/height; the opposing corner
+ * stays anchored. The minimum width/height is 1 SVG unit. Crossovers clamp.
+ */
+export function svgResizeCornerGeometry(handle, corner, dx, dy, lockAspect = false) {
+  if (!handle || !handle.resizable || !['rect','ellipse'].includes(handle.tag) ||
+      !['nw','ne','sw','se'].includes(corner) ||
+      ![dx,dy,handle.x,handle.y,handle.width,handle.height].every(Number.isFinite) ||
+      handle.width <= 0 || handle.height <= 0) {
+    throw new TypeError('Unsupported SVG corner resize')
+  }
+  const leftSide=corner.includes('w'), topSide=corner.includes('n')
+  const anchorX=leftSide?handle.x+handle.width:handle.x
+  const anchorY=topSide?handle.y+handle.height:handle.y
+  let width=Math.max(1,handle.width + (leftSide?-dx:dx))
+  let height=Math.max(1,handle.height + (topSide?-dy:dy))
+  if(lockAspect) {
+    // Choose the axis with the largest proportional movement; clamp once.
+    const scale=Math.max(Math.max(1/handle.width,1/handle.height),
+      Math.abs(width/handle.width-1)>=Math.abs(height/handle.height-1)?
+        width/handle.width:height/handle.height)
+    width=Math.max(1,handle.width*scale)
+    height=Math.max(1,handle.height*scale)
+  }
+  const x=leftSide?anchorX-width:anchorX
+  const y=topSide?anchorY-height:anchorY
+  return {x,y,width,height}
+}
+
+export function svgResizeCornerEdits(handle,corner,dx,dy,lockAspect=false) {
+  const rect=svgResizeCornerGeometry(handle,corner,dx,dy,lockAspect)
+  if(handle.tag==='rect')return [
+    {id:handle.id,attribute:'x',value:rounded(rect.x)},
+    {id:handle.id,attribute:'y',value:rounded(rect.y)},
+    {id:handle.id,attribute:'width',value:rounded(rect.width)},
+    {id:handle.id,attribute:'height',value:rounded(rect.height)},
+  ]
+  return [
+    {id:handle.id,attribute:'cx',value:rounded(rect.x+rect.width/2)},
+    {id:handle.id,attribute:'cy',value:rounded(rect.y+rect.height/2)},
+    {id:handle.id,attribute:'rx',value:rounded(rect.width/2)},
+    {id:handle.id,attribute:'ry',value:rounded(rect.height/2)},
+  ]
+}
