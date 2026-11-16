@@ -328,15 +328,17 @@ window.__ModuleLoader__.load({
           }
           const pointsX=[handle.x,handle.x+handle.width/2,handle.x+handle.width]
           const pointsY=[handle.y,handle.y+handle.height/2,handle.y+handle.height]
-          let bestX=toleranceX,bestY=toleranceY
+          let bestX=toleranceX,bestY=toleranceY,correctionX=0,correctionY=0
           for(const point of pointsX)for(const target of xTargets) {
             const distance=target-(point+deltaX)
-            if(Math.abs(distance)<bestX) {bestX=Math.abs(distance);guideX=target;deltaX+=distance}
+            if(Math.abs(distance)<bestX) {bestX=Math.abs(distance);guideX=target;correctionX=distance}
           }
           for(const point of pointsY)for(const target of yTargets) {
             const distance=target-(point+deltaY)
-            if(Math.abs(distance)<bestY) {bestY=Math.abs(distance);guideY=target;deltaY+=distance}
+            if(Math.abs(distance)<bestY) {bestY=Math.abs(distance);guideY=target;correctionY=distance}
           }
+          deltaX+=correctionX
+          deltaY+=correctionY
         }
         return {dx:deltaX,dy:deltaY,guideX,guideY}
       }
