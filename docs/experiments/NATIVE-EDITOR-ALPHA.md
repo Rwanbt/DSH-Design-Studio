@@ -1,12 +1,13 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.11` (source branch, not released). GitHub Actions [run 43966767066](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43966767066), source commit `4c9041896101ffa3de3387a643eeb3ae64093f9f`: **177 PASS, 0 FAIL, 0 SKIP** (Node 22; mock React/DSH events). Real DSH Desktop/Web installation **NOT_RUN**. See [alpha.11 evidence](ALPHA11-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.12` on a draft source branch (not released). GitHub Actions [run 43970321870](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43970321870), tested commit `147b5109f0e08c02e4772ca9500e4b93d8f16abf`: **191 PASS, 0 FAIL, 0 SKIP**. Real DSH Desktop/Web installation **NOT_RUN**. See [alpha.12 evidence](ALPHA12-EVIDENCE.md).
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
 - **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
+- **Outil Plume** : mode de dessin au pointeur (P), création d'un tracé natif au clic, segments droits par clics successifs et cubiques au clic-glissé, fermeture explicite, reprise des chemins ouverts depuis l'inspecteur ; Échap annule un geste non sauvegardé. Les lignes/contrôles existants continuent d'être modifiables manuellement et via les patches natifs, sans IA.
 - **Points et segments SVG** : ajout d'un point au milieu d'un segment `L/Q/C` via un bouton **+** sur le canevas ou l'inspecteur, subdivision Bézier par De Casteljau (précision six décimales) et suppression conservatrice des seuls points terminant une ligne explicite `L`. Une seule commande de `d` est réécrite, sans reconstruire le SVG. Opérations annulables.
 - **Tracés SVG natifs et poignées Bézier** : création d'une courbe cubique par le bouton **Tracé**, édition des ancres et des contrôles de chemins `M/L/Q/C/Z` absolus explicites, aperçu à l'écran pendant le glissement, écriture ciblée de deux nombres du chemin au relâchement, Annuler/Rétablir et annulation par Échap. Les chemins relatifs, arcs et structures complexes demeurent en lecture seule.
 - **Grille et magnétisme** : affichage réglable, pas de 2 à 100 unités SVG, accrochage activable pour les déplacements/redimensionnements, et **repères intelligents** (centres/bords d'autres éléments ou du document) pour les déplacements. **Alt** désactive temporairement l'accrochage pour un placement libre. Ce sont des outils manuels : aucun token IA et aucune écriture tant que le pointeur n'est pas relâché.
