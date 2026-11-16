@@ -53,6 +53,10 @@ window.__ModuleLoader__.load({
       const [canvasTool,setCanvasTool]=React.useState('select')
       const [spaceHeld,setSpaceHeld]=React.useState(false)
       const [camera,setCamera]=React.useState({zoom:1,offsetX:0,offsetY:0})
+      const [gridVisible,setGridVisible]=React.useState(false)
+      const [snapToGrid,setSnapToGrid]=React.useState(false)
+      const [smartGuides,setSmartGuides]=React.useState(true)
+      const [gridStep,setGridStep]=React.useState(10)
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
       async function load(force=false, targetFile=file, retainSelection='') {
@@ -288,6 +292,54 @@ window.__ModuleLoader__.load({
         return ok
       }
       const {artboard,handles=[]}=geometry
+      function snapAxis(value, origin, step) {
+        if (!Number.isFinite(value) || !Number.isFinite(origin) || !Number.isFinite(step) || step<=0) return value
+        return origin+Math.round((value-origin)/step)*step
+      }
+      function snapDrag(drag,dx,dy,shiftKey=false) {
+        if(!artboard || !drag) return {dx,dy,guideX:null,guideY:null}
+        const handle=drag.handle
+        const resize=drag.mode==='resize'
+        const corner=drag.corner||'se'
+        let deltaX=dx,deltaY=dy,guideX=null,guideY=null
+        if(snapToGrid && Number.isFinite(gridStep) && gridStep>0) {
+          if(resize) {
+            const baseX=corner.includes('w')?handle.x:handle.x+handle.width
+            const baseY=corner.includes('n')?handle.y:handle.y+handle.height
+            deltaX=snapAxis(baseX+dx,artboard.x,gridStep)-baseX
+            deltaY=snapAxis(baseY+dy,artboard.y,gridStep)-baseY
+          }else{
+            deltaX=snapAxis(handle.move.initialX+dx,artboard.x,gridStep)-handle.move.initialX
+            deltaY=snapAxis(handle.move.initialY+dy,artboard.y,gridStep)-handle.move.initialY
+          }
+        }
+        // In the first alignment milestone, smart guides cover untransformed
+        // moves only; aspect-locked resizing remains explicit and deterministic.
+        if(smartGuides && !resize && !shiftKey) {
+          const toleranceX=6*artboard.width/drag.width
+          const toleranceY=6*artboard.height/drag.height
+          const xTargets=[artboard.x,artboard.x+artboard.width/2,artboard.x+artboard.width]
+          const yTargets=[artboard.y,artboard.y+artboard.height/2,artboard.y+artboard.height]
+          for(const other of handles) {
+            if(other.id===handle.id) continue
+            if(![other.x,other.y,other.width,other.height].every(Number.isFinite))continue
+            xTargets.push(other.x,other.x+other.width/2,other.x+other.width)
+            yTargets.push(other.y,other.y+other.height/2,other.y+other.height)
+          }
+          const pointsX=[handle.x,handle.x+handle.width/2,handle.x+handle.width]
+          const pointsY=[handle.y,handle.y+handle.height/2,handle.y+handle.height]
+          let bestX=toleranceX,bestY=toleranceY
+          for(const point of pointsX)for(const target of xTargets) {
+            const distance=target-(point+deltaX)
+            if(Math.abs(distance)<bestX) {bestX=Math.abs(distance);guideX=target;deltaX+=distance}
+          }
+          for(const point of pointsY)for(const target of yTargets) {
+            const distance=target-(point+deltaY)
+            if(Math.abs(distance)<bestY) {bestY=Math.abs(distance);guideY=target;deltaY+=distance}
+          }
+        }
+        return {dx:deltaX,dy:deltaY,guideX,guideY}
+      }
       function startDrag(event,handle,mode='move') {
         if(event.button!==0 || busy || reloadRequired || canvasTool!=='select' || spaceHeld) return
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
@@ -304,7 +356,8 @@ window.__ModuleLoader__.load({
         if(!drag || drag.pointerId!==event.pointerId || !artboard) return
         const dx=(event.clientX-drag.startX)*artboard.width/drag.width
         const dy=(event.clientY-drag.startY)*artboard.height/drag.height
-        setDragDelta({id:drag.id,dx,dy,mode:drag.mode,corner:drag.corner,lockAspect:!!event.shiftKey})
+        const snapped=snapDrag(drag,dx,dy,!!event.shiftKey)
+        setDragDelta({id:drag.id,...snapped,mode:drag.mode,corner:drag.corner,lockAspect:!!event.shiftKey})
       }
       function finishDrag(event,cancel=false) {
         const drag=dragRef.current
@@ -312,8 +365,9 @@ window.__ModuleLoader__.load({
         dragRef.current=null
         setDragDelta(null)
         if(cancel || !artboard || busy) return
-        const dx=(event.clientX-drag.startX)*artboard.width/drag.width
-        const dy=(event.clientY-drag.startY)*artboard.height/drag.height
+        const unsnappedX=(event.clientX-drag.startX)*artboard.width/drag.width
+        const unsnappedY=(event.clientY-drag.startY)*artboard.height/drag.height
+        const {dx,dy}=snapDrag(drag,unsnappedX,unsnappedY,!!event.shiftKey)
         const pixelMovement=Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)
         if(pixelMovement<3) return
         const number=value=>String(Math.round(value*1000)/1000)
