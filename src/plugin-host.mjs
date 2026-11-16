@@ -3,6 +3,7 @@ import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
+import { svgElementPatch } from './svg-elements.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -75,7 +76,12 @@ export function createRouteHandler(ctx) {
         const doc=await store.read(params.file)
         if (doc.hash !== params.baseHash) return reply(res,409,{ok:false,error:'stale-revision',message:'File changed; reopen before editing'})
         let patches; let createdId=null
-        if (params.kind === 'svg-add-shape') {
+        if (params.kind === 'svg-layer') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          const operation = svgElementPatch(doc.source,{id:params.id,operation:params.operation})
+          patches=[operation.patch]
+          createdId=operation.selectedId
+        } else if (params.kind === 'svg-add-shape') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           const created=svgShapeInsertPatch(doc.source,params.shape)
           patches=[created.patch];createdId=created.id
