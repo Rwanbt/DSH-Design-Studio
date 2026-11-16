@@ -210,3 +210,57 @@ test('GET /files rejects access outside active conversation session',()=>fixture
   assert.equal(response.status,400)
   assert.equal(response.json.error,'no-session')
 }))
+
+
+test('native Bézier anchor/control editing is reversible and preserves all unrelated bytes',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 200 100">\n'+
+    ' <path id="curve" d="M 10,20 C 30,40 50,60 70,80 Z" stroke="#765432" fill="none"/>\n</svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=await invoke('GET',url)
+  assert.equal(opened.status,200)
+  const pathModel=opened.json.pathNodes.find(path=>path.id==='curve')
+  assert.equal(pathModel.editable,true)
+  assert.equal(pathModel.points.length,4)
+  assert.equal(pathModel.points[2].role,'cubic-out')
+  assert.deepEqual(pathModel.points[2].link,{x:70,y:80})
+  const edited=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:opened.json.document.hash,
+    kind:'svg-path-point',id:'curve',index:2,x:54.5,y:57.25
+  })
+  assert.equal(edited.status,200)
+  assert.equal(edited.json.patches.length,2)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original.replace('50,60','54.5,57.25'))
+  const revert=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:edited.json.result.hash,
+    kind:'patches',patches:edited.json.result.inverse
+  })
+  assert.equal(revert.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('unsupported relative path cannot be edited and source is preserved',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="rel" d="m10 10 c5 5 10 15 20 20"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const current=await invoke('GET',url)
+  assert.equal(current.status,200)
+  assert.equal(current.json.pathNodes[0].editable,false)
+  const refused=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:current.json.document.hash,
+    kind:'svg-path-point',id:'rel',index:0,x:15,y:10
+  })
+  assert.equal(refused.status,400)
+  assert.equal(refused.json.error,'unsupported-path')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('stale path edit is rejected after external SVG modification',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="p" d="M10 20 L30 40"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=(await invoke('GET',url)).json.document
+  const concurrent=original.replace('L30 40','L35 40')
+  await writeFile(path.join(root,'icon.svg'),concurrent)
+  const refused=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,
+    kind:'svg-path-point',id:'p',index:1,x:38,y:45
+  })
+  assert.equal(refused.status,409)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),concurrent)
+}))
