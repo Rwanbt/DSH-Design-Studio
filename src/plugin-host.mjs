@@ -6,6 +6,7 @@ import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
+import { listHtmlVisualElements, htmlVisualStylePatch } from './html-visual.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -75,7 +76,7 @@ export function createRouteHandler(ctx) {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             nodes=listEditableSvgNodes(document.source)
@@ -85,7 +86,11 @@ export function createRouteHandler(ctx) {
             if(geometry.warning) warning=geometry.warning
           } catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,geometry,warning})
+        if(document.format==='html'||document.format==='htm') {
+          htmlElements=listHtmlVisualElements(document.source)
+          if(document.source.length>512*1024) warning='HTML visual mapping limited to documents under 512 KiB'
+        }
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
@@ -99,7 +104,10 @@ export function createRouteHandler(ctx) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
         }
         let patches; let createdId=null
-        if (params.kind === 'svg-layer') {
+        if (params.kind === 'html-style') {
+          if(!['html','htm'].includes(doc.format))return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[htmlVisualStylePatch(doc.source,{id:params.id,property:params.property,value:params.value})]
+        } else if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           const operation = svgElementPatch(doc.source,{id:params.id,operation:params.operation})
           patches=[operation.patch]
