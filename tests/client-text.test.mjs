@@ -31,7 +31,7 @@ async function mockClient() {
     }
   }
   const fetch=async (url,options={})=>{
-    assert.ok(String(url).includes('design-studio-native/'),'Manual editing must not use LLM routes')
+    assert.ok(new URL(String(url)).pathname.startsWith('/design-studio-native/'),'Manual editing must target native root routes, never LLM')
     if(options.method==='POST'){
       writes.push(JSON.parse(options.body))
       return {ok:true,json:async()=>({ok:true,result:{changed:true,inverse:[]},patches:[]})}
@@ -44,7 +44,7 @@ async function mockClient() {
     })}
   }
   runInNewContext(await readFile(new URL('../client.js',import.meta.url),'utf8'),{
-    window:{__ModuleLoader__:{load:d=>plugin=d}},URL,fetch,document:{baseURI:'https://dsh.example/'}
+    window:{__ModuleLoader__:{load:d=>plugin=d}},URL,fetch,document:{baseURI:'https://dsh.example/workspaces/conversation/session/'}
   })
   const p=plugin.factory(name=>{assert.equal(name,'react');return React})
   p.apply({slots:{inject:(_,fn)=>fn(),register:(_,c)=>{component=c}}})
