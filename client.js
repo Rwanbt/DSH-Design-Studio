@@ -205,16 +205,25 @@ window.__ModuleLoader__.load({
         }
         void save({kind:'svg-attributes',edits})
       }
-      return h('section',{onKeyDown:onEditorKeyDown,style:{...pane,height:'min(80vh,860px)',overflow:'auto',display:'flex',flexDirection:'column',gap:12,fontFamily:'system-ui,sans-serif',fontSize:13}},
-        h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
-          h('strong',{style:{fontSize:16}},'Design Studio · Manual'),
-          h('span',{style:{fontSize:11,opacity:0.7}},'SVG / HTML / CSS · No AI needed'),
+      return h('section',{className:'dsh-studio-workbench',onKeyDown:onEditorKeyDown,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
+        h('style',null,[
+          '.dsh-studio-workbench *{box-sizing:border-box}',
+          '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid #bca58c;outline-offset:1px}',
+          '.dsh-studio-workbench button:not(:disabled):hover{filter:brightness(1.12)}',
+          '.dsh-studio-layout{min-height:0;flex:1;overflow:auto}',
+          '.dsh-studio-canvas{background-color:#191a1d;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
+          '@media(max-width:1020px){.dsh-studio-layout{grid-template-columns:160px minmax(250px,1fr) 210px!important}}',
+          '@media(max-width:650px){.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:200px}.dsh-studio-canvas{min-height:240px}}'
+        ].join('')),
+        h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'#1e2023',minHeight:46}},
+          h('strong',{style:{fontSize:14,letterSpacing:'.01em'}},'DSH · Design Studio'),
+          h('span',{style:{fontSize:11,opacity:0.7}},'Édition native · sans IA'),
           h('button',{style:button,disabled:busy||!undoStack.length||source!==doc?.source,onClick:()=>void undo(),'aria-label':'Undo saved edit'},'↶ Undo'),
           h('button',{style:button,disabled:busy||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷ Redo')),
-        h('div',{style:{display:'flex',gap:8}},
-          h('input',{style:{...field,flex:1},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
+        h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'#232529'}},
+          h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open')),
-        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:8,flexWrap:'wrap'},'aria-label':'SVG creation tools'},
+        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
           ['rect','circle','ellipse','text'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
             disabled:busy||source!==doc.source,
@@ -222,13 +231,13 @@ window.__ModuleLoader__.load({
           },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':'Text')))),
         error&&h('div',{role:'alert',style:{color:'#ff8585'}},error),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
-        doc&&h('div',{style:{display:'grid',gridTemplateColumns:'minmax(130px,1fr) minmax(240px,3fr) minmax(170px,1.3fr)',gap:12,minHeight:380}},
-          h('aside',{style:{...pane,overflow:'auto'}},
-            h('strong',null,'Layers'),h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
+        doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
+          h('aside',{className:'dsh-studio-sidebar',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
+            h('strong',null,'Calques'),h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
               nodes.length?nodes.map(n=>h('button',{key:n.id,style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},onClick:()=>select(n.id)},n.tag+' #'+n.id)):
               h('small',null,'No addressable SVG nodes (unique id attributes required).'))),
-          h('div',{style:{...pane,overflow:'auto'}},
-            h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:6}},h('strong',null,'Preview'),h('small',null,doc.format.toUpperCase())),
+          h('div',{className:'dsh-studio-canvas',style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:12}},h('strong',null,'Canevas'),h('small',null,doc.format.toUpperCase())),
             doc.format==='css'?h('p',null,'CSS file · use source editor below'):
               artboard && doc.format==='svg'?
                 h('div',{style:{position:'relative',width:'100%',aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',overflow:'hidden',borderRadius:6}},
@@ -307,8 +316,8 @@ window.__ModuleLoader__.load({
                   )
                 ):
                 h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
-          h('aside',{style:{...pane,overflow:'auto'}},
-            h('strong',null,'Properties'),selected?
+          h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
+            h('strong',null,'Design · Propriétés'),selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
                 h('div',null,selected.tag+' #'+selected.id),
                 selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
@@ -332,9 +341,8 @@ window.__ModuleLoader__.load({
                             disabled:busy||!selected.attributes[key],
                             onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
                             (key==='font-weight'?['normal','400','500','600','700','bold']:key==='font-style'?['normal','italic','oblique']:['start','middle','end']).map(value=>h('option',{key:value,value},value))):
-                          h('input',{style:field,type:'number',step:1,value:selected.attributes[key]||'',
+                          h('input',{style:field,type:'number',step:1,key:key+':'+selected.attributes[key],defaultValue:selected.attributes[key]||'',
                             disabled:busy||!selected.attributes[key],
-                            onChange:e=>setValue(e.target.value),
                             onBlur:e=>{if(e.target.value&&e.target.value!==selected.attributes[key])void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})}})
                       ))
                   ),
@@ -343,12 +351,12 @@ window.__ModuleLoader__.load({
                 attribute&&h('label',null,'Value',h('input',{style:field,value,onChange:e=>setValue(e.target.value)})),
                 h('button',{style:button,disabled:busy||!attribute,onClick:()=>save({kind:'svg-attribute',id:active,attribute,value})},'Apply without AI')):
               h('p',{style:{opacity:0.65}},'Select an SVG layer to edit existing attributes.'))),
-        doc&&h('details',null,h('summary',{style:{cursor:'pointer'}},'Manual source editor (advanced)'),
+        doc&&h('details',{style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'#222427'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
           h('textarea',{spellCheck:false,value:source,onChange:e=>setSource(e.target.value),style:{...field,minHeight:220,font:'12px monospace',marginTop:8}}),
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65}},'Experimental editor. SVG primitives move with pointer or arrow keys; rectangles/ellipses resize from four corners (Shift: lock ratio). Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Experimental editor. SVG primitives move with pointer or arrow keys; rectangles/ellipses resize from four corners (Shift: lock ratio). Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
       )
     }
     return {
