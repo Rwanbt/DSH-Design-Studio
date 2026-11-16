@@ -1,10 +1,11 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.15` on a draft source branch (not released). GitHub Actions [run 43978912726](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43978912726), tested SHA `2f079676eaa0af4cc5bcbdc1eb89d678f11b1238`: **215 PASS, 0 FAIL, 0 SKIP**. Native writes now **require** both `baseHash` and `baseIdentity` (older clients receive HTTP 428). A first HTML inline-style visual inspector is implemented. DSH real installation remains **NOT_RUN**. See [alpha.15 evidence](ALPHA15-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.16` on draft PR #8 (not released). GitHub Actions [run 43982069590](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43982069590), tested SHA `29fd25d881069574cea56154f135a20e5da7a0c5`: **230 PASS, 0 FAIL, 0 SKIP**. Standalone CSS rule visual inspection/editing is added. A real DSH installation is **NOT_RUN**; universal filesystem CAS **NOT_IMPLEMENTED**. See [alpha.16 evidence](ALPHA16-EVIDENCE.md) and [delivery gates](../roadmap/DELIVERY-GATES-2026-11-17.md).
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
+- **Inspecteur de règles CSS externes expérimental** : ouvrir un fichier `.css`, sélectionner une règle simple `#id` ou `.classe` unique, inspecter les déclarations, modifier une valeur autorisée ou en ajouter une, avec patch exact, Undo/Redo et contrôle d'identité. Les règles complexes restent en lecture seule ; la cascade HTML↔CSS n'est pas encore raccordée.
 - **Inspecteur HTML expérimental** : identifier les éléments par un `id` unique, les sélectionner dans la liste, les surligner dans un aperçu sandboxé et modifier des propriétés CSS inline simples par patches natifs exacts et annulables. Ne gère pas encore la cascade externe, les sélecteurs complexes ni le clic direct dans la page.
 - **Protection obligatoire des révisions** : chaque requête native d'écriture doit inclure `baseIdentity` et `baseHash`; un ancien client sans jeton d'identité reçoit HTTP 428 et doit rouvrir le fichier avec un client actuel.
 - **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
