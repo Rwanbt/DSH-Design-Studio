@@ -1,6 +1,7 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
+import { svgShapeInsertPatch } from './svg-shapes.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -71,8 +72,12 @@ export function createRouteHandler(ctx) {
         const store=await storeFor(ctx,params.sessionId)
         const doc=await store.read(params.file)
         if (doc.hash !== params.baseHash) return reply(res,409,{ok:false,error:'stale-revision',message:'File changed; reopen before editing'})
-        let patches
-        if (params.kind === 'svg-attribute') {
+        let patches; let createdId=null
+        if (params.kind === 'svg-add-shape') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          const created=svgShapeInsertPatch(doc.source,params.shape)
+          patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-attribute') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgAttributePatch(doc.source,{id:params.id,attribute:params.attribute,value:params.value})]
         } else if (params.kind === 'svg-attributes') {
@@ -95,7 +100,7 @@ export function createRouteHandler(ctx) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
         const result=await store.apply(params.file,{baseHash:params.baseHash,patches})
-        return reply(res,200,{ok:true,result,patches})
+        return reply(res,200,{ok:true,result,patches,createdId})
       }
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
