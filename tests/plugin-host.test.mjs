@@ -120,3 +120,21 @@ test('undo refuses stale file after external edit and does not overwrite it',()=
   assert.equal(undo.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),external)
 }))
+
+test('manual Add rectangle route inserts shape and supports exact undo',()=>fixture(async(invoke,root)=>{
+  const initial='<svg viewBox="0 0 200 100">\n  <rect id="box" x="5" y="7" width="10" height="20"/>\n</svg>'
+  await writeFile(path.join(root,'icon.svg'),initial)
+  const current=(await invoke('GET',url)).json.document
+  const created=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:current.hash,kind:'svg-add-shape',shape:'rect'
+  })
+  assert.equal(created.status,200)
+  assert.equal(created.json.createdId,'shape-1')
+  const newDoc=(await invoke('GET',url)).json.document
+  assert.ok(newDoc.source.includes('<rect id="shape-1"'))
+  const undone=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:newDoc.hash,kind:'patches',patches:created.json.result.inverse
+  })
+  assert.equal(undone.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),initial)
+}))
