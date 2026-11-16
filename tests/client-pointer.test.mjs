@@ -655,3 +655,21 @@ test('one-axis grid snap keeps the untouched Bézier coordinate stable',async()=
   assert.equal(h.writes()[0].x,10)
   assert.equal(h.writes()[0].y,4)
 })
+
+
+test('Escape cancels an in-progress Bézier edit without committing the SVG',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  control.props.onPointerDown({button:0,pointerId:19,clientX:0,clientY:0,currentTarget:target,stopPropagation(){},preventDefault(){}})
+  control.props.onPointerMove({pointerId:19,clientX:20,clientY:20})
+  let prevented=false
+  h.render().props.onKeyDown({key:'Escape',target:{tagName:'BUTTON'},preventDefault(){prevented=true}})
+  control.props.onPointerUp({pointerId:19,clientX:20,clientY:20})
+  await new Promise(resolve=>setTimeout(resolve,15))
+  assert.equal(prevented,true)
+  assert.equal(h.writes().length,0)
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay')?.children[0]?.props?.d,'M1 2 C3 4 5 6 7 8')
+})
