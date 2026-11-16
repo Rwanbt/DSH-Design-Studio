@@ -4,6 +4,7 @@ import { svgGeometry } from './svg-geometry.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
+import { listWorkspaceDocuments } from './workspace-files.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -41,6 +42,15 @@ async function bodyJson(req) {
   return result
 }
 
+async function workspaceFor(ctx, sessionId) {
+  if (typeof sessionId !== 'string' || !sessionId) {
+    const e=new Error('Select an active session');e.code='no-session';throw e
+  }
+  const session=ctx.agents.get(sessionId)
+  if(!session){const e=new Error('Session is unavailable');e.code='no-session';throw e}
+  return ctx.workingDirectory.ensure(session)
+}
+
 async function storeFor(ctx, sessionId) {
   if (typeof sessionId !== 'string' || !sessionId) { const e=new Error('Select an active session'); e.code='no-session'; throw e }
   const session = ctx.agents.get(sessionId)
@@ -55,6 +65,11 @@ export function createRouteHandler(ctx) {
       const url = new URL(req.url || '/', 'http://dsh.local')
       const endpoint = url.pathname.slice(PREFIX.length).replace(/\/+$/, '')
       if (req.method === 'GET' && endpoint === '/health') return reply(res,200,{ok:true,editor:'native-prototype',version:1})
+      if (req.method === 'GET' && endpoint === '/files') {
+        const root = await workspaceFor(ctx,url.searchParams.get('sessionId'))
+        const result = await listWorkspaceDocuments(root)
+        return reply(res,200,{ok:true,...result})
+      }
       if (req.method === 'GET' && endpoint === '/document') {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
