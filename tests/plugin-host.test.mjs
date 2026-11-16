@@ -264,3 +264,39 @@ test('stale path edit is rejected after external SVG modification',()=>fixture(a
   assert.equal(refused.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),concurrent)
 }))
+
+
+test('create native cubic Bézier then edit its control point, keeping exact Undo history',()=>fixture(async(invoke,root)=>{
+  const initial='<svg viewBox="0 0 200 100"><rect id="box" x="2" y="3" width="10" height="20"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),initial)
+  const open=(await invoke('GET',url)).json.document
+  const created=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:open.hash,kind:'svg-add-shape',shape:'path'
+  })
+  assert.equal(created.status,200)
+  assert.equal(created.json.createdId,'shape-1')
+  const afterCreate=(await invoke('GET',url)).json
+  const editable=afterCreate.pathNodes.find(p=>p.id==='shape-1')
+  assert.ok(editable)
+  assert.equal(editable.editable,true)
+  assert.deepEqual(editable.points.map(p=>p.role),['anchor','cubic-in','cubic-out','anchor'])
+  const changed=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:afterCreate.document.hash,
+    kind:'svg-path-point',id:'shape-1',index:1,x:73,y:42
+  })
+  assert.equal(changed.status,200)
+  const afterEdit=(await invoke('GET',url)).json.document
+  assert.ok(afterEdit.source.includes('73 42'))
+  const undoEdit=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:afterEdit.hash,
+    kind:'patches',patches:changed.json.result.inverse
+  })
+  assert.equal(undoEdit.status,200)
+  const afterUndo=(await invoke('GET',url)).json.document
+  const undoCreate=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:afterUndo.hash,
+    kind:'patches',patches:created.json.result.inverse
+  })
+  assert.equal(undoCreate.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),initial)
+}))
