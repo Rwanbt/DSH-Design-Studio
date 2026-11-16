@@ -503,11 +503,11 @@ window.__ModuleLoader__.load({
           workspaceFiles.length===0&&h('small',{style:{color:'#aaa9a5'}},'Aucun fichier SVG, HTML ou CSS détecté.')
         ),
         doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
-          ['rect','circle','ellipse','text'].map(shape=>h('button',{
+          ['rect','circle','ellipse','text','path'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
             disabled:busy||reloadRequired||source!==doc.source,
             onClick:()=>void save({kind:'svg-add-shape',shape})
-          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':'Text')))),
+          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':shape==='text'?'Text':'Tracé')))),
         error&&h('div',{role:'alert',style:{color:'#ff8585',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
           h('span',null,error),
           reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
