@@ -84,3 +84,39 @@ test('SVG batch rejects duplicate and invalid edit without modifying file',()=>f
   assert.equal(result.json.error,'overlap')
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),doc.source)
 }))
+
+test('native edit, undo and redo round trip preserves exact SVG bytes',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100">\n <rect id="box" x="5" y="7" width="10" height="20" fill="red"/>\n</svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const url='/design-studio-native/document?sessionId=known&file=icon.svg'
+  const endpoint='/design-studio-native/apply'
+  const first=(await invoke('GET',url)).json.document
+  const move=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:first.hash,kind:'svg-attributes',
+    edits:[{id:'box',attribute:'x',value:'15'},{id:'box',attribute:'y',value:'27'}]})
+  assert.equal(move.status,200)
+  assert.equal(move.json.patches.length,2)
+  assert.equal(move.json.result.inverse.length,2)
+  const changed=(await invoke('GET',url)).json.document
+  assert.notEqual(changed.source,original)
+  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',
+    patches:move.json.result.inverse})
+  assert.equal(undo.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+  const reverted=(await invoke('GET',url)).json.document
+  const redo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:reverted.hash,kind:'patches',
+    patches:move.json.patches})
+  assert.equal(redo.status,200)
+  assert.equal((await invoke('GET',url)).json.document.source,changed.source)
+}))
+test('undo refuses stale file after external edit and does not overwrite it',()=>fixture(async(invoke,root)=>{
+  const endpoint='/design-studio-native/apply'
+  const initial=(await invoke('GET',url)).json.document
+  const first=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:initial.hash,kind:'svg-attribute',id:'box',attribute:'fill',value:'blue'})
+  assert.equal(first.status,200)
+  const expected=(await invoke('GET',url)).json.document
+  const external='<svg><rect id="box" fill="green" width="10"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),external)
+  const undo=await invoke('POST',endpoint,{sessionId:'known',file:'icon.svg',baseHash:expected.hash,kind:'patches',patches:first.json.result.inverse})
+  assert.equal(undo.status,409)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),external)
+}))
