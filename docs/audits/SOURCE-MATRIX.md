@@ -32,3 +32,9 @@ This is a **documentation/manifest-level preliminary review** based on live GitH
 ## Preliminary hypothesis (not a final selection)
 
 Sal7one's workbench may make the best DSH shell; Design Canvas can inform a shared command/document engine; Web Design can inform HTML targeted write-back; OpenPencil can inform SVG workflow. Keep two distinct canonical source adapters (HTML/CSS and SVG) to avoid lossy serialization.
+
+## Vérification de l'implémentation interne (17 novembre 2026)
+
+Le tableau des dépôts amont ci-dessus reste un inventaire **préliminaire**, sans transfert de code. La branche expérimentale locale contient désormais des modules natifs écrits pour ce plugin, dont `src/native-file-store.mjs`, `src/html-visual.mjs`, `src/svg-paths.mjs` et `src/css-visual.mjs`. L'alpha.16 dispose d'une **preuve de tests internes**, et non d'une preuve d'intégration DSH : [run 43982069590](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43982069590), source SHA `29fd25d881069574cea56154f135a20e5da7a0c5`, commande `npm run check` (Node 22), **230 PASS / 0 FAIL / 0 SKIP**.
+
+**Périmètre vérifié :** patches natifs ciblés SVG/HTML/CSS, édition manuelle, tests Host avec dossiers temporaires et React simulé. **Non vérifié :** licence de chaque dépendance amont par fichier, copie d'assets externes (aucune copie revendiquée ici), DSH réel, compatibilité cross-platform, sécurité filesystem contre éditeurs externes. La feuille de route consolidée avec gates de sortie et tickets est [DELIVERY-GATES-2026-11-17.md](../roadmap/DELIVERY-GATES-2026-11-17.md).
