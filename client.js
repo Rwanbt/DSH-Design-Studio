@@ -329,11 +329,14 @@ window.__ModuleLoader__.load({
         event.stopPropagation();event.preventDefault()
       }
       function pathPosition(event,gesture) {
-        let x=gesture.x+(event.clientX-gesture.startX)*artboard.width/gesture.width
-        let y=gesture.y+(event.clientY-gesture.startY)*artboard.height/gesture.height
+        const movementX=event.clientX-gesture.startX
+        const movementY=event.clientY-gesture.startY
+        let x=gesture.x+movementX*artboard.width/gesture.width
+        let y=gesture.y+movementY*artboard.height/gesture.height
         if(snapToGrid && !event.altKey && gridStep>0) {
-          x=snapAxis(x,artboard.x,gridStep)
-          y=snapAxis(y,artboard.y,gridStep)
+          // A horizontal gesture must not jump a non-grid-aligned Y coordinate.
+          if(Math.abs(movementX)>0.001)x=snapAxis(x,artboard.x,gridStep)
+          if(Math.abs(movementY)>0.001)y=snapAxis(y,artboard.y,gridStep)
         }
         return {id:gesture.id,index:gesture.index,x,y}
       }
