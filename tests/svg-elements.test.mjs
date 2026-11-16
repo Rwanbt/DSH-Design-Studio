@@ -56,3 +56,14 @@ test('refuses unsupported operations and unaddressable layers',()=>{
   assert.throws(()=>svgElementPatch(original,{id:'card',operation:'rename'}),{code:'invalid-target'})
   assert.throws(()=>svgElementPatch(original,{id:'missing',operation:'duplicate'}),{code:'unknown-node'})
 })
+
+test('rejects executable SVG nodes or event handler attributes before layer mutation',()=>{
+  const bad=[
+    '<svg><rect id="x"/><script>alert(1)</script></svg>',
+    '<svg><rect id="x" onload="evil()"/></svg>',
+    '<svg><rect id="x"/><foreignObject><div>HTML</div></foreignObject></svg>',
+  ]
+  for(const source of bad) {
+    assert.throws(()=>svgElementPatch(source,{id:'x',operation:'duplicate'}),{code:'unsupported-svg'})
+  }
+})
