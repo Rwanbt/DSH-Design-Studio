@@ -80,6 +80,10 @@ window.__ModuleLoader__.load({
           return true
         }catch(e){setError(String(e.message));return false}finally{setBusy(false)}
       }
+      async function layerAction(operation) {
+        if(!active || busy || !doc || doc.format!=='svg' || source!==doc.source)return false
+        return save({kind:'svg-layer',id:active,operation})
+      }
       async function undo() {
         if(busy || source!==doc?.source || !undoStack.length)return
         const entry=undoStack[undoStack.length-1]
@@ -106,10 +110,17 @@ window.__ModuleLoader__.load({
             if(event.shiftKey)void redo();else void undo()
           }else if(event.key?.toLowerCase()==='y'){
             event.preventDefault();void redo()
+          }else if(event.key?.toLowerCase()==='d' && active && doc?.format==='svg' && !busy){
+            event.preventDefault();void layerAction('duplicate')
           }
           return
         }
         if(command || event.altKey || busy || !active || !doc || source!==doc.source)return
+        if((event.key==='Delete' || event.key==='Backspace') && doc.format==='svg') {
+          event.preventDefault()
+          void layerAction('delete')
+          return
+        }
         const direction={ArrowLeft:['x',-1],ArrowRight:['x',1],ArrowUp:['y',-1],ArrowDown:['y',1]}[event.key]
         if(!direction)return
         const item=geometry.handles.find(handle=>handle.id===active)
@@ -320,6 +331,13 @@ window.__ModuleLoader__.load({
             h('strong',null,'Design · Propriétés'),selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
                 h('div',null,selected.tag+' #'+selected.id),
+                h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+                  h('button',{style:button,'aria-label':'Duplicate selected layer',disabled:busy||source!==doc.source,
+                    onClick:()=>void layerAction('duplicate'),title:'Dupliquer le calque · Ctrl+D'},'⧉ Dupliquer'),
+                  h('button',{style:{...button,color:'#e7b2a8'},'aria-label':'Delete selected layer',
+                    disabled:busy||source!==doc.source,
+                    onClick:()=>void layerAction('delete'),title:'Supprimer le calque · Delete (annulable)'},'⌫ Supprimer')
+                ),
                 selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
                   h('strong',{style:{fontSize:12,color:ACCENT}},'Text / Typography'),
                   h('textarea',{style:{...field,minHeight:80,resize:'vertical'},value:textDraft,
