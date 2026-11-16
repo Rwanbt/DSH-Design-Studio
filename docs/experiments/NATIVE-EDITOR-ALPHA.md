@@ -1,11 +1,12 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** `0.1.0-alpha.1`, experimental and **not production-ready**. Last automated validation: [GitHub Actions run 43922834817](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43922834817) on head `20b49e91fd8a124383fa551a212c484c6d799213`: **39 PASS, 0 FAIL, 0 SKIP** from `npm run check`. This run validates Node modules, mocked host routes and mocked client registration — **NOT** a real DSH installation.
+**Status:** `0.1.0-alpha.2`, experimental and **not production-ready**. Latest verified GitHub Actions run: [43925281368](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43925281368) at commit `0ed0c5dc9bb329556b3bf667fd45506c5221c80f`: **54 PASS, 0 FAIL, 0 SKIP** from `npm run check`. These are Node tests and mocked Host/Client interactions, **not** a real DSH installation.
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
+- For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
 - Show SVG node IDs in a layer list and manually edit an **existing** attribute (`fill`, `stroke`, `x`, `y`, `width`, `height`, `d`, etc.), provided the node has a **unique** `id`.
 - Expand *Manual source editor* to edit and save native SVG/HTML/CSS text directly.
 - Save native source with SHA-256 revision precondition; detect stale writes, reject invalid/ambiguous patches, keep inverse edits at API level. File writes use temporary-file replacement and source validation.
@@ -21,7 +22,7 @@ npm run check
 
 Native DSH bundle metadata is in `package.json` and `cordis.patch.yml`. The entrypoints are `src/plugin-host.mjs` and `client.js`. **Real DSH installation remains NOT_RUN**; install as a local bundle in a *disposable/test* Harness profile only, using that version's supported plugin manager. Do not replace or shadow another installed `dsh-design-studio` plugin until the name conflict and lifecycle are verified.
 
-For a simple local manual test, place `examples/design.svg` inside the active session workspace, type the relative path in the plugin view and click **Open**. Select `rect #card`, choose `fill`, adjust its value and click **Apply without AI**. Reopen the source file outside DSH and compare the changed bytes.
+For a simple local manual test, place `examples/design.svg` inside the active session workspace, type the relative path in the plugin view and click **Open**. Select `rect #card`, choose `fill`, adjust its value and click **Apply without AI**. For a drag exercise, drag the `card` outline on the preview, release the pointer, and check that only `x` and `y` changed in the original SVG. Reopen the source file outside DSH and compare the changed bytes.
 
 ## Architecture
 
@@ -34,13 +35,14 @@ DSH Host plugin (src/plugin-host.mjs)
 Native store (src/native-file-store.mjs)
     ↓ source hash + source-span precondition
 SVG span selector (src/svg-attributes.mjs)
+SVG geometry/drag constraints (src/svg-geometry.mjs)
 Native patch engine (src/native-patch.mjs)
     ↓ existing SVG/HTML/CSS workspace file
 ```
 
 ## Limits and blockers
 
-- **No drag-to-move, free drawing, multi-select, Bézier handle editor, guides, snapping, or full responsive property editor yet.** Initial SVG layers are selected by list, not by clicking the preview.
+- **Pointer drag of basic SVG rectangles/circles/ellipses is experimental**: no resizing handles, free drawing, multi-select, Bézier-node editor, groups, transforms, guides, snapping or full responsive property editor. The overlay uses rectangular hit areas, not exact painted-path hit testing. Some SVGs intentionally disable drag when geometries cannot be mapped safely. Tests simulate pointer events; real DSH browser gestures remain unverified.
 - SVG inspector only edits existing attributes of uniquely identified nodes. No XML DOM / general SVG parser; `<script>` and `<!DOCTYPE>` SVGs are rejected for inspector editing.
 - HTML is previewed and source-editable, but **not yet visually selectable** with mapped CSS/DOM source edits.
 - No persisted undo/redo UI. Patch engine exposes inverse spans, which is not the same as a durable editor history.
@@ -56,10 +58,12 @@ Native patch engine (src/native-patch.mjs)
 | Core patch tests | PASS (GitHub Actions) |
 | Native store round-trip tests | PASS (GitHub Actions) |
 | SVG targeted source-edit tests | PASS (GitHub Actions) |
-| Mocked Host routes and client registration | PASS (GitHub Actions) |
+| Mocked Host routes, client registration and pointer events | PASS (GitHub Actions) |
 | Actual DSH UI opening and selection | NOT_RUN |
 | Runtime security isolation | NOT_RUN |
-| Freehand/vector mouse interactions | NOT_IMPLEMENTED |
+| SVG rectangle/circle/ellipse pointer drag (mocked) | PASS (GitHub Actions unit simulation) |
+| Real DSH browser pointer interaction | NOT_RUN |
+| Freehand vector drawing / Bézier handles | NOT_IMPLEMENTED |
 | Real HTML visual source mapping | NOT_IMPLEMENTED |
 | CI on multiple operating systems | NOT_RUN |
 
