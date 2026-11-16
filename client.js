@@ -653,10 +653,14 @@ window.__ModuleLoader__.load({
                       h('path',{d:previewPathData(selectedPath),fill:'none',
                         stroke:'#bca991',strokeWidth:Math.max(0.4,1.5*artboard.width/(viewportRef.current?.clientWidth||600)),
                         opacity:.85,strokeDasharray:'4 3'}),
-                      selectedPath.points.filter(p=>p.linkIndex!==null).map(p=>{
-                        const a=previewPoint(p),b=previewPoint(selectedPath.points[p.linkIndex])
-                        return h('line',{key:'path-connector-'+p.index,x1:a.x,y1:a.y,x2:b.x,y2:b.y,
-                          stroke:'#bca991',strokeWidth:Math.max(.3,artboard.width/700),opacity:.8})
+                      selectedPath.points.flatMap(p=>{
+                        const targets=[p.linkIndex,p.linkIndex2].filter(index=>Number.isInteger(index))
+                        return targets.map((index,side)=>{
+                          const a=previewPoint(p),b=previewPoint(selectedPath.points[index])
+                          return h('line',{key:'path-connector-'+p.index+(side?'b':''),
+                            x1:a.x,y1:a.y,x2:b.x,y2:b.y,
+                            stroke:'#bca991',strokeWidth:Math.max(.3,artboard.width/700),opacity:.8})
+                        })
                       })
                     ),
                     selectedPath?.editable&&selectedPath.points.map(point=>{
