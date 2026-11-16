@@ -138,3 +138,50 @@ test('manual Add rectangle route inserts shape and supports exact undo',()=>fixt
   assert.equal(undone.status,200)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),initial)
 }))
+
+test('native layer duplication is atomic and reversible with same source hash',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 150 100">\n<rect id="block" x="10" y="20" width="40" height="30"/>\n</svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=(await invoke('GET',url)).json.document
+  const copied=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-layer',id:'block',operation:'duplicate'
+  })
+  assert.equal(copied.status,200)
+  assert.equal(copied.json.createdId,'block-copy')
+  assert.equal(copied.json.patches.length,1)
+  const changed=(await invoke('GET',url)).json.document
+  assert.equal(changed.source.includes('id="block-copy"'),true)
+  const undo=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',patches:copied.json.result.inverse
+  })
+  assert.equal(undo.status,200)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('delete SVG text layer and undo; refuse stale file instead of overwriting',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 150 100"><text id="title" x="5" y="15">Hello</text></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=(await invoke('GET',url)).json.document
+  const del=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-layer',id:'title',operation:'delete'
+  })
+  assert.equal(del.status,200)
+  assert.equal((await readFile(path.join(root,'icon.svg'),'utf8')).includes('<text'),false)
+  const changed=(await invoke('GET',url)).json.document
+  await writeFile(path.join(root,'icon.svg'),'<svg viewBox="0 0 150 100"></svg>')
+  const stale=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:changed.hash,kind:'patches',patches:del.json.result.inverse
+  })
+  assert.equal(stale.status,409)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 150 100"></svg>')
+}))
+test('nested SVG layers cannot be deleted by incomplete source mapper',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><g><rect id="child" x="2" y="2" width="3" height="3"/></g></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const doc=(await invoke('GET',url)).json.document
+  const result=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-layer',id:'child',operation:'delete'
+  })
+  assert.equal(result.status,400)
+  assert.equal(result.json.error,'unsupported-svg')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
