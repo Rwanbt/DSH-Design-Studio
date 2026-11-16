@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
-import { mkdtemp, mkdir, symlink, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rmdir, symlink, writeFile, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createRouteHandler } from '../src/plugin-host.mjs'
@@ -419,4 +419,26 @@ test('external changes during pen gesture cause stale revision, not source overw
   })
   assert.equal(stale.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original.replace('L10 10','L11 10'))
+}))
+
+
+test('held cross-process lock returns HTTP 423 without writing any source',()=>fixture(async(invoke,root)=>{
+  const original=await readFile(path.join(root,'icon.svg'),'utf8')
+  const doc=(await invoke('GET',url)).json.document
+  const lockPath=path.join(root,'.icon.svg.dsh-native.lock')
+  await mkdir(lockPath)
+  const result=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attribute',
+    id:'box',attribute:'fill',value:'#bada55'
+  })
+  assert.equal(result.status,423)
+  assert.equal(result.json.error,'file-busy')
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+  await rmdir(lockPath)
+  const retried=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:doc.hash,kind:'svg-attribute',
+    id:'box',attribute:'fill',value:'#bada55'
+  })
+  assert.equal(retried.status,200)
+  assert.ok((await readFile(path.join(root,'icon.svg'),'utf8')).includes('fill="#bada55"'))
 }))
