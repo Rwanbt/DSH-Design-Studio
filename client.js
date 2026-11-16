@@ -17,7 +17,12 @@ window.__ModuleLoader__.load({
     async function request(endpoint, options) {
       const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})
       const result = await response.json()
-      if (!response.ok || !result.ok) throw new Error(result.message || result.error || 'Request failed')
+      if (!response.ok || !result.ok) {
+        const failure=new Error(result.message || result.error || 'Request failed')
+        failure.code=result.error
+        failure.status=response.status
+        throw failure
+      }
       return result
     }
     function Studio(props) {
@@ -39,6 +44,7 @@ window.__ModuleLoader__.load({
       const [error,setError] = React.useState('')
       const [warning,setWarning] = React.useState('')
       const [busy,setBusy] = React.useState(false)
+      const [reloadRequired,setReloadRequired]=React.useState(false)
       const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
       const [dragDelta,setDragDelta] = React.useState(null)
       const dragRef=React.useRef(null)
@@ -50,8 +56,8 @@ window.__ModuleLoader__.load({
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
       async function load(force=false, targetFile=file, retainSelection='') {
-        if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return}
-        if(!sessionId) {setError('Open a conversation first');return}
+        if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
+        if(!sessionId) {setError('Open a conversation first');return false}
         setBusy(true);setError('')
         try {
           const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
@@ -63,6 +69,7 @@ window.__ModuleLoader__.load({
           }
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
+          setReloadRequired(false)
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
           setGeometry(data.geometry||{artboard:null,handles:[]})
@@ -94,11 +101,18 @@ window.__ModuleLoader__.load({
       }
       async function save(payload, historyMode='record') {
         if(!doc || busy)return false
+        if(reloadRequired){setError('Document state uncertain. Reload the file before making further changes.');return false}
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
         setBusy(true);setError('')
         try {
           const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,...payload})})
-          await load(true,doc.file,response.createdId||active)
+          const reloaded=await load(true,doc.file,response.createdId||active)
+          if(!reloaded) {
+            setReloadRequired(true)
+            setUndoStack([]);setRedoStack([])
+            setError('The file may have been saved, but could not be reloaded. Reload before editing; history has been cleared.')
+            return false
+          }
           if(response.result?.changed) {
             if(historyMode==='record') {
               const entry={undo:response.result.inverse,redo:response.patches}
@@ -110,14 +124,22 @@ window.__ModuleLoader__.load({
             }
           }
           return true
-        }catch(e){setError(String(e.message));return false}finally{setBusy(false)}
+        }catch(e){
+          const uncertain=!Number.isInteger(e.status) || e.status>=500 || e.status===409
+          if(uncertain) {
+            setReloadRequired(true)
+            setUndoStack([]);setRedoStack([])
+          }
+          setError(String(e.message)+(uncertain?' · Reload the file before editing.':''))
+          return false
+        }finally{setBusy(false)}
       }
       async function layerAction(operation) {
-        if(!active || busy || !doc || doc.format!=='svg' || source!==doc.source)return false
+        if(!active || busy || reloadRequired || !doc || doc.format!=='svg' || source!==doc.source)return false
         return save({kind:'svg-layer',id:active,operation})
       }
       async function undo() {
-        if(busy || source!==doc?.source || !undoStack.length)return
+        if(busy || reloadRequired || source!==doc?.source || !undoStack.length)return
         const entry=undoStack[undoStack.length-1]
         if(await save({kind:'patches',patches:entry.undo},'replay')) {
           setUndoStack(previous=>previous.slice(0,-1))
@@ -125,7 +147,7 @@ window.__ModuleLoader__.load({
         }
       }
       async function redo() {
-        if(busy || source!==doc?.source || !redoStack.length)return
+        if(busy || reloadRequired || source!==doc?.source || !redoStack.length)return
         const entry=redoStack[redoStack.length-1]
         if(await save({kind:'patches',patches:entry.redo},'replay')) {
           setRedoStack(previous=>previous.slice(0,-1))
@@ -219,7 +241,7 @@ window.__ModuleLoader__.load({
           }
           return
         }
-        if(command || event.altKey || busy || !active || !doc || source!==doc.source)return
+        if(command || event.altKey || busy || reloadRequired || !active || !doc || source!==doc.source)return
         if((event.key==='Delete' || event.key==='Backspace') && doc.format==='svg') {
           event.preventDefault()
           void layerAction('delete')
@@ -267,7 +289,7 @@ window.__ModuleLoader__.load({
       }
       const {artboard,handles=[]}=geometry
       function startDrag(event,handle,mode='move') {
-        if(event.button!==0 || busy || canvasTool!=='select' || spaceHeld) return
+        if(event.button!==0 || busy || reloadRequired || canvasTool!=='select' || spaceHeld) return
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
@@ -336,8 +358,8 @@ window.__ModuleLoader__.load({
         h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'#1e2023',minHeight:46}},
           h('strong',{style:{fontSize:14,letterSpacing:'.01em'}},'DSH · Design Studio'),
           h('span',{style:{fontSize:11,opacity:0.7}},'Édition native · sans IA'),
-          h('button',{style:button,disabled:busy||!undoStack.length||source!==doc?.source,onClick:()=>void undo(),'aria-label':'Undo saved edit'},'↶ Undo'),
-          h('button',{style:button,disabled:busy||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷ Redo')),
+          h('button',{style:button,disabled:busy||reloadRequired||!undoStack.length||source!==doc?.source,onClick:()=>void undo(),'aria-label':'Undo saved edit'},'↶ Undo'),
+          h('button',{style:button,disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷ Redo')),
         h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'#232529'}},
           h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open'),
@@ -366,10 +388,13 @@ window.__ModuleLoader__.load({
         doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
           ['rect','circle','ellipse','text'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
-            disabled:busy||source!==doc.source,
+            disabled:busy||reloadRequired||source!==doc.source,
             onClick:()=>void save({kind:'svg-add-shape',shape})
           },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':'Text')))),
-        error&&h('div',{role:'alert',style:{color:'#ff8585'}},error),
+        error&&h('div',{role:'alert',style:{color:'#ff8585',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          h('span',null,error),
+          reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
+            disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
           h('aside',{className:'dsh-studio-sidebar',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
@@ -534,7 +559,7 @@ window.__ModuleLoader__.load({
         doc&&h('details',{style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'#222427'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
           h('textarea',{spellCheck:false,value:source,onChange:e=>setSource(e.target.value),style:{...field,minHeight:220,font:'12px monospace',marginTop:8}}),
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
-            h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
+            h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
         h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Canevas SVG: V sélection, H main, Espace+glisser/clic milieu déplacement, Ctrl+molette zoom, molette/pavé tactile panoramique, 0 recentrer. Modifications natives avec Undo/Redo de session. Installation DSH réelle non validée.')
       )
