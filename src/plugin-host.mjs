@@ -151,7 +151,8 @@ export function createRouteHandler(ctx) {
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
       const code=e.code || 'internal-error'
-      const status=code==='stale-revision'?409:code==='too-large'?413:code==='internal-error'?500:400
+      const status=code==='stale-revision'?409:code==='file-busy'?423:code==='too-large'?413:
+        ['internal-error','lock-release-failed','lock-changed'].includes(code)?500:400
       return reply(res,status,{ok:false,error:code,message:code==='internal-error'?'Request failed':String(e.message).slice(0,220)})
     }
   }
