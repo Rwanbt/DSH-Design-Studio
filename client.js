@@ -46,6 +46,9 @@ window.__ModuleLoader__.load({
       const [busy,setBusy] = React.useState(false)
       const [reloadRequired,setReloadRequired]=React.useState(false)
       const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
+      const [pathNodes,setPathNodes] = React.useState([])
+      const [pathDrag,setPathDrag] = React.useState(null)
+      const pathDragRef=React.useRef(null)
       const [dragDelta,setDragDelta] = React.useState(null)
       const dragRef=React.useRef(null)
       const panRef=React.useRef(null)
@@ -77,6 +80,8 @@ window.__ModuleLoader__.load({
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
           setGeometry(data.geometry||{artboard:null,handles:[]})
+          setPathNodes(data.pathNodes||[])
+          setPathDrag(null);pathDragRef.current=null
           setDragDelta(null);dragRef.current=null
           if(!force || (doc && doc.file!==targetFile)) {setUndoStack([]);setRedoStack([])}
           setWarning(data.warning||'')
@@ -275,6 +280,7 @@ window.__ModuleLoader__.load({
       }
       const selected=nodes.find(n=>n.id===active)
       const selectedText=textNodes.find(node=>node.id===active)
+      const selectedPath=pathNodes.find(node=>node.id===active)
       function startTextEditing(nodeId) {
         const node=textNodes.find(item=>item.id===nodeId)
         if(!node || !node.editable) {setError('Complex SVG text cannot be edited visually without risking its source');return}
@@ -292,6 +298,61 @@ window.__ModuleLoader__.load({
         return ok
       }
       const {artboard,handles=[]}=geometry
+      function previewPoint(point) {
+        if(pathDrag?.id===active && pathDrag.index===point.index) {
+          return {...point,x:pathDrag.x,y:pathDrag.y}
+        }
+        return point
+      }
+      function previewPathData(path) {
+        if(!path || !pathDrag || pathDrag.id!==path.id)return path?.d||''
+        const point=path.points[pathDrag.index]
+        if(!point)return path.d
+        const updates=[
+          {start:point.xSpan.start,end:point.xSpan.end,after:String(Math.round(pathDrag.x*1000)/1000)},
+          {start:point.ySpan.start,end:point.ySpan.end,after:String(Math.round(pathDrag.y*1000)/1000)}
+        ].sort((a,b)=>b.start-a.start)
+        let d=path.d
+        for(const edit of updates)d=d.slice(0,edit.start)+edit.after+d.slice(edit.end)
+        return d
+      }
+      function startPathDrag(event,point) {
+        if(event.button!==0 || canvasTool!=='select' || spaceHeld || busy || reloadRequired ||
+          !selectedPath?.editable || source!==doc?.source || !artboard)return
+        const rect=event.currentTarget.parentElement.getBoundingClientRect()
+        if(!rect.width||!rect.height)return
+        pathDragRef.current={id:selectedPath.id,index:point.index,pointerId:event.pointerId,
+          x:point.x,y:point.y,startX:event.clientX,startY:event.clientY,
+          width:rect.width,height:rect.height}
+        setPathDrag(null)
+        try{event.currentTarget.setPointerCapture(event.pointerId)}catch(_){}
+        event.stopPropagation();event.preventDefault()
+      }
+      function pathPosition(event,gesture) {
+        let x=gesture.x+(event.clientX-gesture.startX)*artboard.width/gesture.width
+        let y=gesture.y+(event.clientY-gesture.startY)*artboard.height/gesture.height
+        if(snapToGrid && !event.altKey && gridStep>0) {
+          x=snapAxis(x,artboard.x,gridStep)
+          y=snapAxis(y,artboard.y,gridStep)
+        }
+        return {id:gesture.id,index:gesture.index,x,y}
+      }
+      function movePathDrag(event) {
+        const gesture=pathDragRef.current
+        if(!gesture || gesture.pointerId!==event.pointerId || !artboard)return
+        setPathDrag(pathPosition(event,gesture))
+      }
+      function finishPathDrag(event,cancel=false) {
+        const gesture=pathDragRef.current
+        if(!gesture || gesture.pointerId!==event.pointerId)return
+        pathDragRef.current=null
+        setPathDrag(null)
+        if(cancel || busy || reloadRequired || !artboard)return
+        if(Math.hypot(event.clientX-gesture.startX,event.clientY-gesture.startY)<3)return
+        const next=pathPosition(event,gesture)
+        if(next.x===gesture.x && next.y===gesture.y)return
+        void save({kind:'svg-path-point',...next})
+      }
       function snapAxis(value, origin, step) {
         if (!Number.isFinite(value) || !Number.isFinite(origin) || !Number.isFinite(step) || step<=0) return value
         return origin+Math.round((value-origin)/step)*step
@@ -580,6 +641,41 @@ window.__ModuleLoader__.load({
                         left:0,right:0,borderTop:'1px solid #a47c56',boxShadow:'0 0 1px #fff'
                       }
                     }),
+                    selectedPath?.editable&&h('svg',{
+                      className:'dsh-studio-path-overlay','aria-hidden':true,
+                      viewBox:artboard.x+' '+artboard.y+' '+artboard.width+' '+artboard.height,
+                      preserveAspectRatio:'none',
+                      style:{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',zIndex:9}
+                    },
+                      h('path',{d:previewPathData(selectedPath),fill:'none',
+                        stroke:'#bca991',strokeWidth:Math.max(0.4,1.5*artboard.width/(viewportRef.current?.clientWidth||600)),
+                        opacity:.85,strokeDasharray:'4 3'}),
+                      selectedPath.points.filter(p=>p.linkIndex!==null).map(p=>{
+                        const a=previewPoint(p),b=previewPoint(selectedPath.points[p.linkIndex])
+                        return h('line',{key:'path-connector-'+p.index,x1:a.x,y1:a.y,x2:b.x,y2:b.y,
+                          stroke:'#bca991',strokeWidth:Math.max(.3,artboard.width/700),opacity:.8})
+                      })
+                    ),
+                    selectedPath?.editable&&selectedPath.points.map(point=>{
+                      const current=previewPoint(point),control=point.role!=='anchor'
+                      return h('button',{key:'path-point-'+point.index,type:'button',
+                        'aria-label':'Move path point '+point.index+' of '+selectedPath.id,
+                        title:(control?'Poignée Bézier':'Ancre')+' · point '+point.index+' · Alt : libre',
+                        style:{position:'absolute',left:((current.x-artboard.x)/artboard.width*100)+'%',
+                          top:((current.y-artboard.y)/artboard.height*100)+'%',
+                          width:control?12:14,height:control?12:14,padding:0,
+                          transform:'translate(-50%, -50%)',zIndex:10,
+                          cursor:canvasTool==='select'&&!spaceHeld?'crosshair':'grab',
+                          touchAction:'none',
+                          border:'2px solid '+(control?'#bca991':'#292a2d'),
+                          borderRadius:control?'50%':'3px',
+                          background:control?'#292a2d':'#e4c3a2'},
+                        onPointerDown:e=>startPathDrag(e,point),
+                        onPointerMove:movePathDrag,
+                        onPointerUp:e=>finishPathDrag(e),
+                        onPointerCancel:e=>finishPathDrag(e,true)
+                      })
+                    }),
                     editingText&&(()=> {
                       const item=handles.find(h=>h.id===editingText)
                       if(!item)return null
@@ -614,6 +710,14 @@ window.__ModuleLoader__.load({
                   h('button',{style:{...button,color:'#e7b2a8'},'aria-label':'Delete selected layer',
                     disabled:busy||source!==doc.source,
                     onClick:()=>void layerAction('delete'),title:'Supprimer le calque · Delete (annulable)'},'⌫ Supprimer')
+                ),
+                selected.tag==='path'&&h('div',{style:{display:'grid',gap:6,padding:'10px 0'}},
+                  h('strong',{style:{color:ACCENT}},'Tracé vectoriel · Nœuds'),
+                  selectedPath?.editable?
+                    h('small',{style:{color:'#aaa9a5'}},selectedPath.points.length+
+                      ' points · ancres carrées, poignées Bézier rondes. Déplacer une poignée pour modifier uniquement ses coordonnées SVG.'):
+                    h('small',{style:{color:'#e7b2a8'}},'Tracé non pris en charge en édition visuelle ('+
+                      (selectedPath?.reason||'unsupported-path')+'). Utiliser le code source sans conversion forcée.')
                 ),
                 selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
                   h('strong',{style:{fontSize:12,color:ACCENT}},'Text / Typography'),
