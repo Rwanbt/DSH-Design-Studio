@@ -360,3 +360,63 @@ test('topology operations reject stale external writes and unsafe curve removal'
   assert.equal(stale.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),concurrent)
 }))
+
+
+test('pen workflow starts, appends straight and cubic commands, closes, and undoes all source writes',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><rect id="box" x="5" y="5" width="10" height="10"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  let current=(await invoke('GET',url)).json.document
+  const operations=[
+    {kind:'svg-pen',operation:'start',x:10,y:10},
+    {kind:'svg-pen',operation:'append',id:'shape-1',x:20,y:20},
+    {kind:'svg-pen',operation:'append',id:'shape-1',x:60,y:40,c1:{x:30,y:15},c2:{x:50,y:35}},
+    {kind:'svg-pen',operation:'close',id:'shape-1'},
+  ]
+  const inverse=[]
+  for(const operation of operations){
+    const result=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'icon.svg',baseHash:current.hash,...operation,
+    })
+    assert.equal(result.status,200,JSON.stringify(result.json))
+    if(operation.operation==='start')assert.equal(result.json.createdId,'shape-1')
+    inverse.push(result.json.result.inverse)
+    current=(await invoke('GET',url)).json.document
+  }
+  assert.ok(current.source.includes('d="M 10 10 L 20 20 C 30 15 50 35 60 40 Z"'))
+  for(const patches of inverse.reverse()){
+    const reverted=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'icon.svg',baseHash:current.hash,kind:'patches',patches
+    })
+    assert.equal(reverted.status,200)
+    current=(await invoke('GET',url)).json.document
+  }
+  assert.equal(current.source,original)
+}))
+test('pen refuses early closure and malformed tangent requests without touching SVG',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="p" d="M0 0 L10 10"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=(await invoke('GET',url)).json.document
+  for(const request of [
+    {operation:'close',id:'p'},
+    {operation:'append',id:'p',x:20,y:30,c1:{x:5,y:1}},
+    {operation:'append',id:'p',x:20,y:30,c1:{x:NaN,y:0},c2:{x:7,y:8}}
+  ]){
+    const result=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-pen',...request
+    })
+    assert.equal(result.status,400)
+  }
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+}))
+test('external changes during pen gesture cause stale revision, not source overwrite',()=>fixture(async(invoke,root)=>{
+  const original='<svg viewBox="0 0 100 100"><path id="p" d="M0 0 L10 10"/></svg>'
+  await writeFile(path.join(root,'icon.svg'),original)
+  const opened=(await invoke('GET',url)).json.document
+  await writeFile(path.join(root,'icon.svg'),original.replace('L10 10','L11 10'))
+  const stale=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:opened.hash,kind:'svg-pen',
+    operation:'append',id:'p',x:20,y:30
+  })
+  assert.equal(stale.status,409)
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original.replace('L10 10','L11 10'))
+}))
