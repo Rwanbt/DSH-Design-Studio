@@ -210,3 +210,43 @@ export function svgPathTopologyPatch(source,{id,operation,commandIndex}) {
   parseEditablePath(next)
   return {start:from,end,before,after}
 }
+
+
+/**
+ * The pen tool appends explicit path commands at the END of an existing open
+ * single-subpath path. It never normalizes the user's original path syntax.
+ */
+export function svgPenContinuePatch(source,{id,operation,x,y,c1,c2}) {
+  if(!['append','close'].includes(operation))fail('invalid-target','Unknown pen operation')
+  const {points,commands,attribute}=model(source,id)
+  if(!commands.length || commands[0].type!=='M' ||
+     commands.filter(command=>command.type==='M').length!==1 ||
+     commands.some(command=>command.type==='Z')) {
+    fail('unsupported-path','Pen requires a single open SVG path')
+  }
+  const last=commands.at(-1)
+  if(!last || !['M','L','Q','C'].includes(last.type))fail('unsupported-path','Pen requires a drawable path endpoint')
+  let after
+  if(operation==='close') {
+    if(commands.length<3 || points.filter(point=>point.role==='anchor').length<3) {
+      fail('unsupported-path','Closing requires at least three anchors')
+    }
+    after=' Z'
+  }else{
+    if(typeof x!=='number'||typeof y!=='number')fail('invalid-target','Pen requires finite coordinates')
+    const target={x,y}
+    const endpoint=commands.at(-1).to
+    if(target.x===endpoint.x&&target.y===endpoint.y)fail('invalid-target','Pen endpoint must differ from the previous point')
+    if((c1===undefined)!==(c2===undefined))fail('invalid-target','Both Bézier control points must be provided')
+    if(c1===undefined){
+      after=' L '+coordinates(target)
+    }else{
+      if(!c1 || !c2 || typeof c1.x!=='number'||typeof c1.y!=='number'||
+         typeof c2.x!=='number'||typeof c2.y!=='number')fail('invalid-target','Invalid Bézier controls')
+      after=' C '+coordinates(c1)+' '+coordinates(c2)+' '+coordinates(target)
+    }
+  }
+  if(attribute.before.length+after.length>8192)fail('unsupported-path','Pen path has reached the source length limit')
+  parseEditablePath(attribute.before+after) // enforce limits before persistence
+  return {start:attribute.end,end:attribute.end,before:'',after}
+}
