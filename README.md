@@ -2,7 +2,7 @@
 
 Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML and CSS** files manually, with AI, or in a hybrid workflow.
 
-> Status: **P0/P1 — experimental alpha on `feat/native-file-persistence`**. A first native DSH plugin shell, SVG attribute inspector and source editor are implemented. Their mocked API and registration tests pass; actual DSH installation, mouse editing and production readiness remain **unverified**.
+> Status: **P0/P1 — experimental alpha.5 on `feat/native-file-persistence`**. A native DSH Host/Client prototype supports SVG primitive creation, moving, resizing, properties, simple native SVG text editing and manual SVG/HTML/CSS source editing. Simulated host/client tests pass; **real DSH installation, visual UX and production readiness remain unverified**.
 
 ## Non-negotiable principles
 
@@ -27,7 +27,7 @@ Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML a
 - `dev`: integration branch.
 - Feature work on `feat/*` branches with tests and review.
 
-Read `docs/roadmap/IMPLEMENTATION-PLAN.md` and `docs/audits/SOURCE-MATRIX.md` on `dev`. See [`docs/experiments/NATIVE-EDITOR-ALPHA.md`](docs/experiments/NATIVE-EDITOR-ALPHA.md) for the current manual editor prototype and its limitations.
+Read `docs/roadmap/IMPLEMENTATION-PLAN.md` and `docs/audits/SOURCE-MATRIX.md` on `dev`. See [`docs/experiments/NATIVE-EDITOR-ALPHA.md`](docs/experiments/NATIVE-EDITOR-ALPHA.md) for test evidence and limitations, plus [`docs/design/INTERFACE-V3-GRAPHITE.md`](docs/design/INTERFACE-V3-GRAPHITE.md) for the approved but unfinished UI direction (graphite, not pervasive blue).
 
 ### Experimental alpha
 
