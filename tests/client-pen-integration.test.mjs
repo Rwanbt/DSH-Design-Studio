@@ -130,3 +130,30 @@ test('Pen start requires active tool, source synchrony and a point inside artboa
   assert.equal(app.calls().filter(c=>c.method==='POST').length,0)
   assert.equal(await readFile(file,'utf8'),initial)
 }))
+
+test('Pen resumes an existing selected open path rather than silently making another shape',()=>withPenClient(async app=>{
+  const {render,file}=app
+  find(render(),n=>n.props?.['aria-label']==='Activate Pen tool').props.onClick()
+  gesture(render,{x:30,y:30,id:1})
+  await settle()
+  find(render(),n=>n.props?.['aria-label']==='Select canvas tool').props.onClick()
+  const resume=find(render(),n=>n.props?.['aria-label']==='Resume selected path with pen tool')
+  assert.ok(resume)
+  resume.props.onClick()
+  gesture(render,{x:90,y:100,id:2})
+  await settle()
+  const text=await readFile(file,'utf8')
+  assert.equal((text.match(/<path /g)||[]).length,1)
+  assert.ok(text.includes('d="M 15 15 L 45 50"'),text)
+}))
+test('closed SVG paths are not offered as resumable pen strokes',()=>withPenClient(async app=>{
+  const {render}=app
+  find(render(),n=>n.props?.['aria-label']==='Activate Pen tool').props.onClick()
+  gesture(render,{x:20,y:20,id:1});await settle()
+  gesture(render,{x:40,y:40,id:2});await settle()
+  gesture(render,{x:90,y:70,id:3});await settle()
+  find(render(),n=>n.props?.['aria-label']==='Close current pen path').props.onClick()
+  await settle()
+  find(render(),n=>n.props?.['aria-label']==='Select canvas tool').props.onClick()
+  assert.equal(find(render(),n=>n.props?.['aria-label']==='Resume selected path with pen tool'),null)
+}))
