@@ -60,7 +60,7 @@ window.__ModuleLoader__.load({
         setBusy(true);setError('')
         try {
           const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,...payload})})
-          await load(true,doc.file,active)
+          await load(true,doc.file,response.createdId||active)
           if(response.result?.changed) {
             if(historyMode==='record') {
               const entry={undo:response.result.inverse,redo:response.patches}
@@ -189,6 +189,12 @@ window.__ModuleLoader__.load({
         h('div',{style:{display:'flex',gap:8}},
           h('input',{style:{...field,flex:1},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open')),
+        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:8,flexWrap:'wrap'},'aria-label':'SVG creation tools'},
+          ['rect','circle','ellipse'].map(shape=>h('button',{
+            key:shape,type:'button',style:button,'aria-label':'Add '+shape,
+            disabled:busy||source!==doc.source,
+            onClick:()=>void save({kind:'svg-add-shape',shape})
+          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':'Ellipse')))),
         error&&h('div',{role:'alert',style:{color:'#ff8585'}},error),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{style:{display:'grid',gridTemplateColumns:'minmax(130px,1fr) minmax(240px,3fr) minmax(170px,1.3fr)',gap:12,minHeight:380}},
