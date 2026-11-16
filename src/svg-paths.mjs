@@ -135,6 +135,7 @@ export function listSvgPathModels(source) {
     try {
       const {points,commands}=model(source,node.id)
       return {id:node.id,editable:true,d:node.attributes.d,
+        penExtendable:commands.filter(item=>item.type==='M').length===1 && !commands.some(item=>item.type==='Z'),
         segments:commands.filter(item=>['L','Q','C'].includes(item.type)).map(item=>({
           commandIndex:item.commandIndex,type:item.type,midpoint:segmentCenter(item),
           removable:item.type==='L',endIndex:item.to.index
