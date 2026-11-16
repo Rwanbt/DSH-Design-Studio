@@ -95,7 +95,7 @@ export function createRouteHandler(ctx) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
         const result=await store.apply(params.file,{baseHash:params.baseHash,patches})
-        return reply(res,200,{ok:true,result})
+        return reply(res,200,{ok:true,result,patches})
       }
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
