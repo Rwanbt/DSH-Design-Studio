@@ -47,3 +47,18 @@ test('manual path creation generates editable explicit cubic coordinates and can
   assert.equal(output.source.replace(created.patch.after,''),base)
   assert.equal(applyNativePatches({source:output.source,format:'svg',baseHash:output.hash,patches:output.inverse}).source,base)
 })
+
+test('Pen starts a native M-only path at the explicit location, reversible byte for byte',()=>{
+  const result=svgShapeInsertPatch(base,'pen',{x:12.25,y:34})
+  assert.equal(result.id,'shape-1')
+  const appliedDoc=applyNativePatches({source:base,format:'svg',baseHash:sourceHash(base),patches:[result.patch]})
+  assert.equal(appliedDoc.ok,true)
+  assert.ok(appliedDoc.source.includes('id="shape-1" d="M 12.25 34"'))
+  assert.equal(applyNativePatches({source:appliedDoc.source,format:'svg',baseHash:appliedDoc.hash,
+    patches:appliedDoc.inverse}).source,base)
+})
+test('Pen refuses empty, string and unsafe coordinates',()=>{
+  for(const pos of [null,{x:'10',y:20},{x:Infinity,y:20},{x:5,y:1e8}]) {
+    assert.throws(()=>svgShapeInsertPatch(base,'pen',pos),{code:'invalid-geometry'})
+  }
+})
