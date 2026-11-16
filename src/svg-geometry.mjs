@@ -49,7 +49,7 @@ export function svgGeometry(source) {
       move = { x: 'cx', y: 'cy', initialX: cx, initialY: cy }
     }
     if (width <= 0 || height <= 0) continue
-    handles.push({ id: node.id, tag: node.tag, x, y, width, height, move })
+    handles.push({ id: node.id, tag: node.tag, x, y, width, height, move, resizable: node.tag === 'rect' || node.tag === 'ellipse' })
   }
   return { artboard, handles, warning: null }
 }
@@ -68,5 +68,34 @@ export function svgMoveEdits(handle, deltaX, deltaY) {
   return [
     { id: handle.id, attribute: x, value: rounded(initialX + deltaX) },
     { id: handle.id, attribute: y, value: rounded(initialY + deltaY) }
+  ]
+}
+
+/** South-east handle resize in SVG user units. Opposite corner stays fixed.
+ * Rect updates width/height; ellipse updates cx/cy/rx/ry. Circles are not
+ * resized until an aspect-ratio constrained interaction is implemented.
+ */
+export function svgResizeEdits(handle, deltaX, deltaY) {
+  if (!handle || handle.resizable !== true || !['rect','ellipse'].includes(handle.tag) ||
+      !Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+    throw new TypeError('Unsupported SVG resize')
+  }
+  if (![handle.x,handle.y,handle.width,handle.height].every(Number.isFinite) ||
+      handle.width <= 0 || handle.height <= 0) {
+    throw new TypeError('Invalid SVG dimensions')
+  }
+  const width = Math.max(1, handle.width + deltaX)
+  const height = Math.max(1, handle.height + deltaY)
+  if (handle.tag === 'rect') {
+    return [
+      { id: handle.id, attribute: 'width', value: rounded(width) },
+      { id: handle.id, attribute: 'height', value: rounded(height) },
+    ]
+  }
+  return [
+    { id: handle.id, attribute: 'cx', value: rounded(handle.x + width / 2) },
+    { id: handle.id, attribute: 'cy', value: rounded(handle.y + height / 2) },
+    { id: handle.id, attribute: 'rx', value: rounded(width / 2) },
+    { id: handle.id, attribute: 'ry', value: rounded(height / 2) },
   ]
 }
