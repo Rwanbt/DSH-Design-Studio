@@ -533,3 +533,48 @@ test('HTML visual editor refuses CSS injection and a stale file identity',()=>fi
   assert.equal(rejected.status,409)
   assert.equal(await readFile(path.join(root,'page.html'),'utf8'),input)
 }))
+
+
+test('CSS source rule edit and native Undo preserve all unrelated stylesheet bytes',()=>fixture(async(invoke,root)=>{
+  const source='#app { color: red; display: block; }\n.card { gap: 8px; }\n'
+  await writeFile(path.join(root,'theme.css'),source)
+  const opened=await invoke('GET','/design-studio-native/document?sessionId=known&file=theme.css')
+  assert.equal(opened.status,200)
+  assert.deepEqual(opened.json.cssRules.map(x=>x.selector),['#app','.card'])
+  const doc=opened.json.document
+  const edited=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'theme.css',baseHash:doc.hash,baseIdentity:doc.identity,
+    kind:'css-rule',selector:'#app',property:'color',value:'#bda991'
+  })
+  assert.equal(edited.status,200,JSON.stringify(edited.json))
+  const updated=source.replace('color: red','color: #bda991')
+  assert.equal(await readFile(path.join(root,'theme.css'),'utf8'),updated)
+  const fresh=(await invoke('GET','/design-studio-native/document?sessionId=known&file=theme.css')).json.document
+  const undone=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'theme.css',baseHash:fresh.hash,baseIdentity:fresh.identity,
+    kind:'patches',patches:edited.json.result.inverse
+  })
+  assert.equal(undone.status,200)
+  assert.equal(await readFile(path.join(root,'theme.css'),'utf8'),source)
+}))
+test('CSS visual edit rejects ambiguous selectors, untrusted values and stale identity',()=>fixture(async(invoke,root)=>{
+  const original='#app { color: red; } #app { color: blue; }'
+  const filepath=path.join(root,'theme.css')
+  await writeFile(filepath,original)
+  const doc=(await invoke('GET','/design-studio-native/document?sessionId=known&file=theme.css')).json.document
+  for(const value of ['red;position:fixed', 'url(https://evil.test)','blue']){
+    const refused=await invoke('POST','/design-studio-native/apply',{
+      sessionId:'known',file:'theme.css',baseHash:doc.hash,baseIdentity:doc.identity,
+      kind:'css-rule',selector:'#app',property:'color',value
+    })
+    assert.equal(refused.status,400)
+  }
+  assert.equal(await readFile(filepath,'utf8'),original)
+  await writeFile(path.join(root,'replacement.css'),original)
+  await rename(path.join(root,'replacement.css'),filepath)
+  const stale=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'theme.css',baseHash:doc.hash,baseIdentity:doc.identity,
+    kind:'css-rule',selector:'#app',property:'color',value:'green'
+  })
+  assert.equal(stale.status,409)
+}))
