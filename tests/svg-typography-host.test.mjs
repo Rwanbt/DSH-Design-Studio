@@ -37,13 +37,13 @@ test('host exposes recognized native SVG text nodes without generating an agent 
 test('editing text via host preserves geometry and SVG original bytes outside content',()=>harness(async({call,url,file,root,initial})=>{
   const doc=(await call('GET',url)).document
   const response=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:doc.hash,kind:'svg-text',id:'title',value:'Hello & <friends>'
+    sessionId:'session',file,baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-text',id:'title',value:'Hello & <friends>'
   })
   assert.equal(response.status,200)
   const edited=await readFile(path.join(root,file),'utf8')
   assert.equal(edited,initial.replace('>Hello</text>','>Hello &amp; &lt;friends&gt;</text>'))
   const undo=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:response.result.hash,kind:'patches',patches:response.result.inverse
+    sessionId:'session',file,baseHash:response.result.hash,baseIdentity:response.result.identity,kind:'patches',patches:response.result.inverse
   })
   assert.equal(undo.status,200)
   assert.equal(await readFile(path.join(root,file),'utf8'),initial)
@@ -51,12 +51,12 @@ test('editing text via host preserves geometry and SVG original bytes outside co
 test('native typographic properties are restricted and editable',()=>harness(async({call,url,file,root})=>{
   const doc=(await call('GET',url)).document
   const changed=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:doc.hash,kind:'svg-attribute',id:'title',attribute:'font-size',value:'40'
+    sessionId:'session',file,baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-attribute',id:'title',attribute:'font-size',value:'40'
   })
   assert.equal(changed.status,200)
   assert.ok((await readFile(path.join(root,file),'utf8')).includes('font-size="40"'))
   const denied=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:changed.result.hash,kind:'svg-attribute',id:'title',attribute:'font-family',value:'url(javascript:evil)'
+    sessionId:'session',file,baseHash:changed.result.hash,baseIdentity:changed.result.identity,kind:'svg-attribute',id:'title',attribute:'font-family',value:'url(javascript:evil)'
   })
   assert.equal(denied.status,400)
   assert.equal(denied.error,'invalid-value')
@@ -64,14 +64,14 @@ test('native typographic properties are restricted and editable',()=>harness(asy
 test('text object creation is reversible and becomes editable',()=>harness(async({call,url,file,root,initial})=>{
   const doc=(await call('GET',url)).document
   const result=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:doc.hash,kind:'svg-add-shape',shape:'text'
+    sessionId:'session',file,baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-add-shape',shape:'text'
   })
   assert.equal(result.status,200)
   const next=(await call('GET',url)).document
   assert.ok(next.source.includes('<text id="shape-1"'))
   assert.equal(listSvgTextNodes(next.source).find(n=>n.id==='shape-1').text,'Double-click to edit')
   await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:next.hash,kind:'patches',patches:result.result.inverse
+    sessionId:'session',file,baseHash:next.hash,baseIdentity:next.identity,kind:'patches',patches:result.result.inverse
   })
   assert.equal(await readFile(path.join(root,file),'utf8'),initial)
 }))
@@ -79,7 +79,7 @@ test('external file edit conflicts with an in-progress native text edit',()=>har
   const old=(await call('GET',url)).document
   await writeFile(path.join(root,file),old.source.replace('>Hello</text>','>Different</text>'))
   const response=await call('POST','/design-studio-native/apply',{
-    sessionId:'session',file,baseHash:old.hash,kind:'svg-text',id:'title',value:'My draft'
+    sessionId:'session',file,baseHash:old.hash,baseIdentity:old.identity,kind:'svg-text',id:'title',value:'My draft'
   })
   assert.equal(response.status,409)
   assert.equal((await readFile(path.join(root,file),'utf8')).includes('>Different</text>'),true)
