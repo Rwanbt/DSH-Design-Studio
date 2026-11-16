@@ -89,10 +89,13 @@ export function createRouteHandler(ctx) {
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
+        if (typeof params.baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
+          return reply(res,428,{ok:false,error:'missing-revision',
+            message:'Reopen document in a current Design Studio client before saving'})
+        }
         const store=await storeFor(ctx,params.sessionId)
         const doc=await store.read(params.file)
-        if (doc.hash !== params.baseHash ||
-            (params.baseIdentity !== undefined && doc.identity !== params.baseIdentity)) {
+        if (doc.hash !== params.baseHash || doc.identity !== params.baseIdentity) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
         }
         let patches; let createdId=null
