@@ -15,6 +15,7 @@ test('parses explicit M, L, Q, C and Z with stable point indices and control lin
   assert.deepEqual(points[1].link,{x:10,y:20})
   assert.deepEqual(points[2].link,{x:70,y:80})
   assert.deepEqual(points[4].link,{x:100,y:90})
+  assert.equal(points[4].linkIndex2,3,'Quadratic control is connected to the preceding anchor')
 })
 test('supports signed/decimal/exponent syntax without rewriting unaffected bytes',()=>{
   const text='M-1.2e1 +.5 L .25,-4.50e-1'
