@@ -102,6 +102,8 @@ test('Pen UI creates, extends and closes source-accurate SVG path through real n
   const writes=app.calls().filter(call=>call.method==='POST')
   assert.deepEqual(writes.slice(0,4).map(call=>call.params.operation),
     ['start','append','append','close'])
+  assert.ok(writes.every(call=>/^[a-f0-9]{64}$/.test(call.params.baseIdentity)),
+    'Every native write and Undo must send the current file identity token')
 }))
 test('Pen drag tangent preview and Escape cancel do not persist source',()=>withPenClient(async app=>{
   const {render,file,initial}=app
