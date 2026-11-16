@@ -20,7 +20,7 @@ test('reads and no-op saves exact BOM and CRLF bytes', () => workspace(async (ro
   await writeFile(path.join(root, 'icon.svg'), bytes)
   const doc = await store.read('icon.svg')
   assert.ok(doc.source.startsWith('\ufeff'))
-  const saved = await store.apply('icon.svg', {baseHash:doc.hash,patches:[]})
+  const saved = await store.apply('icon.svg', {baseHash:doc.hash,baseIdentity:doc.identity,patches:[]})
   assert.equal(saved.changed,false)
   assert.deepEqual(await readFile(path.join(root,'icon.svg')),bytes)
 }))
@@ -29,19 +29,19 @@ test('precise edit saves and can be reopened and undone', () => workspace(async 
   await writeFile(path.join(root,'icon.svg'),source)
   const doc=await store.read('icon.svg')
   const index=source.lastIndexOf('red')
-  const saved=await store.apply('icon.svg',{baseHash:doc.hash,patches:[{start:index,end:index+3,before:'red',after:'blue'}]})
+  const saved=await store.apply('icon.svg',{baseHash:doc.hash,baseIdentity:doc.identity,patches:[{start:index,end:index+3,before:'red',after:'blue'}]})
   assert.equal(saved.changed,true)
   const edited=await store.read('icon.svg')
   assert.equal(edited.source,'<svg><rect fill="red"/><rect fill="blue"/></svg>')
   assert.equal(edited.hash,saved.hash)
-  await store.apply('icon.svg',{baseHash:edited.hash,patches:saved.inverse})
+  await store.apply('icon.svg',{baseHash:edited.hash,baseIdentity:edited.identity,patches:saved.inverse})
   assert.equal((await store.read('icon.svg')).source,source)
 }))
 test('stale external edit is rejected without overwrite', () => workspace(async(root,store)=>{
   await writeFile(path.join(root,'page.html'),'<p>old</p>')
   const doc=await store.read('page.html')
   await writeFile(path.join(root,'page.html'),'<p>new</p>')
-  await assert.rejects(store.apply('page.html',{baseHash:doc.hash,patches:patchFor(doc.source,'old','OK')}),{code:'stale-revision'})
+  await assert.rejects(store.apply('page.html',{baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(doc.source,'old','OK')}),{code:'stale-revision'})
   assert.equal(await readFile(path.join(root,'page.html'),'utf8'),'<p>new</p>')
 }))
 test('two saves from one revision cannot both succeed', () => workspace(async(root,store)=>{
@@ -49,8 +49,8 @@ test('two saves from one revision cannot both succeed', () => workspace(async(ro
   const doc=await store.read('page.html')
   const p=patchFor(doc.source,'old','one')
   const results=await Promise.allSettled([
-    store.apply('page.html',{baseHash:doc.hash,patches:p}),
-    store.apply('page.html',{baseHash:doc.hash,patches:patchFor(doc.source,'old','two')})
+    store.apply('page.html',{baseHash:doc.hash,baseIdentity:doc.identity,patches:p}),
+    store.apply('page.html',{baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(doc.source,'old','two')})
   ])
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1)
   assert.equal(results.filter(r=>r.status==='rejected'&&r.reason.code==='stale-revision').length,1)
@@ -85,13 +85,13 @@ test('preserves file permissions during a save',()=>workspace(async(root,store)=
   await writeFile(path.join(root,'x.css'),'a{color:red}')
   await chmod(path.join(root,'x.css'),0o640)
   const doc=await store.read('x.css')
-  await store.apply('x.css',{baseHash:doc.hash,patches:patchFor(doc.source,'red','blue')})
+  await store.apply('x.css',{baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(doc.source,'red','blue')})
   assert.equal((await stat(path.join(root,'x.css'))).mode&0o777,0o640)
 }))
 test('rejects malformed edits without modifying source',()=>workspace(async(root,store)=>{
   await writeFile(path.join(root,'x.svg'),'<svg/>')
   const doc=await store.read('x.svg')
-  await assert.rejects(store.apply('x.svg',{baseHash:doc.hash,patches:[{start:0,end:1,before:'X',after:'a'}]}),{code:'precondition-failed'})
+  await assert.rejects(store.apply('x.svg',{baseHash:doc.hash,baseIdentity:doc.identity,patches:[{start:0,end:1,before:'X',after:'a'}]}),{code:'precondition-failed'})
   assert.equal(await readFile(path.join(root,'x.svg'),'utf8'),doc.source)
 }))
 
