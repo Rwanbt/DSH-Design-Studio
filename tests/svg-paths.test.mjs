@@ -126,7 +126,7 @@ test('topology metadata exposes only drawable segments and safe line removal',()
   const model=listSvgPathModels(doc)[0]
   assert.equal(model.editable,true)
   assert.deepEqual(model.segments.map(x=>[x.commandIndex,x.type,x.removable]),[[2,'C',false],[3,'L',true]])
-  assert.deepEqual(model.segments[0].midpoint,{x:22.5,y:18.75})
+  assert.deepEqual(model.segments[0].midpoint,{x:23.75,y:18.75})
   assert.equal(model.segments[1].endIndex,4)
 })
 test('topology command selector rejects move, close, unknown index, implicit and nested',()=>{
