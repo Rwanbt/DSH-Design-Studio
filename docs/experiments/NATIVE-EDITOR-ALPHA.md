@@ -1,13 +1,14 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.3` (source branch, no release). Validated at commit `d2f37ab9cd83e4d56e4a0d63ef48d3345facf509`: [GitHub Actions run 43928519053](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43928519053), **62 PASS, 0 FAIL, 0 SKIP**. These are Node tests and mocked Host/Client interactions; **real DSH installation is NOT_RUN**.
+**Status:** experimental `0.1.0-alpha.4` (source branch; **no release**). Verified on commit `4eca802a6d8d4fb019d7da05eae403dd9e8977ce`: [GitHub Actions run 43930240559](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43930240559), **74 PASS, 0 FAIL, 0 SKIP**. Tests use mocked Host/Client interactions; **real DSH install remains NOT_RUN**.
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
-- **Resize** selected rectangles and ellipses using a south-east corner handle (the opposite corner remains anchored). Circle resizing is not yet supported.
+- **Resize** rectangles/ellipses from any of four corners, anchoring the opposite corner. Hold **Shift** to preserve their aspect ratio. Circle resizing is not yet supported.
+- **Create** rectangles, circles and ellipses with manual toolbar buttons. The editor inserts a new native SVG element with a unique generated `shape-N` ID, without rewriting existing elements. Requires simple untransformed SVG with a root `viewBox` and an explicit closing `</svg>` tag.
 - **Nudge** a selected SVG shape with arrow keys by one SVG unit, or ten units with Shift.
 - **Undo/Redo** recorded manual saves via validated source inverse/forward patches. History is **in-memory per current browser editor session**, bounded to 30 entries and 2 MiB per entry; it is not persisted across DSH restart. External modifications must be reloaded and never silently overwritten.
 - Show SVG node IDs in a layer list and manually edit an **existing** attribute (`fill`, `stroke`, `x`, `y`, `width`, `height`, `d`, etc.), provided the node has a **unique** `id`.
@@ -45,7 +46,8 @@ Native patch engine (src/native-patch.mjs)
 
 ## Limits and blockers
 
-- **Pointer drag of basic SVG rectangles/circles/ellipses is experimental**: one corner resize handle for rectangles/ellipses; no multi-corner resize, free drawing, multi-select, Bézier-node editor, groups, transforms, guides, snapping or full responsive property editor. The overlay uses rectangular hit areas, not exact painted-path hit testing. Some SVGs intentionally disable drag when geometries cannot be mapped safely. Tests simulate pointer events; real DSH browser gestures remain unverified.
+- **Pointer drag of basic SVG rectangles/circles/ellipses is experimental**: four corner resize handles for rectangles/ellipses; no edge handles, freehand drawing, multi-select, Bézier-node editor, groups, transforms, guides, snapping or full responsive property editor. The overlay uses rectangular hit areas, not exact painted-path hit testing. Some SVGs intentionally disable drag when geometries cannot be mapped safely. Tests simulate pointer events; real DSH browser gestures remain unverified.
+- Shape creation is deliberately conservative: malformed, ambiguous, transformed, grouped or script-bearing SVG files are rejected rather than silently modified. The ID allocator is workspace-local, deterministic and does not yet support changing ID names through the GUI.
 - SVG inspector only edits existing attributes of uniquely identified nodes. No XML DOM / general SVG parser; `<script>` and `<!DOCTYPE>` SVGs are rejected for inspector editing.
 - HTML is previewed and source-editable, but **not yet visually selectable** with mapped CSS/DOM source edits.
 - Undo/Redo toolbar is implemented for recent successful saves within the mounted UI; **persistent history across reload/restart is not implemented**.
@@ -65,7 +67,8 @@ Native patch engine (src/native-patch.mjs)
 | Actual DSH UI opening and selection | NOT_RUN |
 | Runtime security isolation | NOT_RUN |
 | SVG rectangle/circle/ellipse pointer drag (mocked) | PASS (GitHub Actions simulation) |
-| Rectangle/ellipse resize, keyboard nudge, in-memory undo/redo | PASS (GitHub Actions unit simulations) |
+| Four-corner rectangle/ellipse resize with Shift, keyboard nudge, in-memory undo/redo | PASS (GitHub Actions unit simulations) |
+| Manual SVG shape creation and native undo | PASS (GitHub Actions file/API tests) |
 | Undo/redo native source round-trip and conflict rejection | PASS (GitHub Actions file/API integration tests) |
 | Real DSH browser pointer interaction | NOT_RUN |
 | Freehand vector drawing / Bézier handles | NOT_IMPLEMENTED |
