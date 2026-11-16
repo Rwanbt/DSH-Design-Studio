@@ -296,8 +296,8 @@ window.__ModuleLoader__.load({
         if (!Number.isFinite(value) || !Number.isFinite(origin) || !Number.isFinite(step) || step<=0) return value
         return origin+Math.round((value-origin)/step)*step
       }
-      function snapDrag(drag,dx,dy,shiftKey=false) {
-        if(!artboard || !drag) return {dx,dy,guideX:null,guideY:null}
+      function snapDrag(drag,dx,dy,shiftKey=false,bypass=false) {
+        if(!artboard || !drag || bypass) return {dx,dy,guideX:null,guideY:null}
         const handle=drag.handle
         const resize=drag.mode==='resize'
         const corner=drag.corner||'se'
@@ -358,7 +358,7 @@ window.__ModuleLoader__.load({
         if(!drag || drag.pointerId!==event.pointerId || !artboard) return
         const dx=(event.clientX-drag.startX)*artboard.width/drag.width
         const dy=(event.clientY-drag.startY)*artboard.height/drag.height
-        const snapped=snapDrag(drag,dx,dy,!!event.shiftKey)
+        const snapped=snapDrag(drag,dx,dy,!!event.shiftKey,!!event.altKey)
         setDragDelta({id:drag.id,...snapped,mode:drag.mode,corner:drag.corner,lockAspect:!!event.shiftKey})
       }
       function finishDrag(event,cancel=false) {
@@ -369,7 +369,7 @@ window.__ModuleLoader__.load({
         if(cancel || !artboard || busy) return
         const unsnappedX=(event.clientX-drag.startX)*artboard.width/drag.width
         const unsnappedY=(event.clientY-drag.startY)*artboard.height/drag.height
-        const {dx,dy}=snapDrag(drag,unsnappedX,unsnappedY,!!event.shiftKey)
+        const {dx,dy}=snapDrag(drag,unsnappedX,unsnappedY,!!event.shiftKey,!!event.altKey)
         const pixelMovement=Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)
         if(pixelMovement<3) return
         const number=value=>String(Math.round(value*1000)/1000)
@@ -479,14 +479,14 @@ window.__ModuleLoader__.load({
                   onClick:()=>setGridVisible(v=>!v)},'Grille'),
                 h('button',{type:'button',style:{...button,background:snapToGrid?'#51483d':button.background},
                   'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,
-                  onClick:()=>setSnapToGrid(v=>!v),title:'Magnétisme sur la grille'},'Aimant'),
+                  onClick:()=>setSnapToGrid(v=>!v),title:'Magnétisme sur la grille · Alt désactive temporairement'},'Aimant'),
                 h('select',{style:{...field,width:68,padding:'5px 6px'},'aria-label':'Grid spacing',
                   value:gridStep,onChange:e=>setGridStep(Number(e.target.value)),
                   title:'Pas de grille en unités SVG'},
                   [2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
                 h('button',{type:'button',style:{...button,background:smartGuides?'#51483d':button.background},
                   'aria-label':'Toggle smart alignment guides','aria-pressed':smartGuides,
-                  onClick:()=>setSmartGuides(v=>!v),title:'Aligner automatiquement les bords et centres'},'Repères')
+                  onClick:()=>setSmartGuides(v=>!v),title:'Aligner automatiquement les bords et centres · Alt désactive temporairement'},'Repères')
               )),
 
             doc.format==='css'?h('p',null,'CSS file · use source editor below'):
@@ -651,7 +651,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables. V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
       )
     }
     return {
