@@ -42,6 +42,10 @@ window.__ModuleLoader__.load({
       const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
       const [dragDelta,setDragDelta] = React.useState(null)
       const dragRef=React.useRef(null)
+      const panRef=React.useRef(null)
+      const viewportRef=React.useRef(null)
+      const [canvasTool,setCanvasTool]=React.useState('select')
+      const [camera,setCamera]=React.useState({zoom:1,offsetX:0,offsetY:0})
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
       async function load(force=false, targetFile=file, retainSelection='') {
@@ -51,6 +55,11 @@ window.__ModuleLoader__.load({
         try {
           const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
+          if(doc?.file!==targetFile) {
+            setCamera({zoom:1,offsetX:0,offsetY:0})
+            setCanvasTool('select')
+            panRef.current=null
+          }
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setTextNodes(data.textNodes||[]);setEditingText('')
@@ -122,10 +131,77 @@ window.__ModuleLoader__.load({
           setUndoStack(previous=>[...previous,entry])
         }
       }
+      function changeZoom(factor, anchor) {
+        if(!artboard || !Number.isFinite(factor) || factor<=0)return
+        const rect=viewportRef.current?.getBoundingClientRect?.()
+        setCamera(previous=>{
+          const next=Math.min(8,Math.max(0.125,previous.zoom*factor))
+          const ratio=next/previous.zoom
+          const relativeX=rect && anchor ? anchor.x-rect.left-rect.width/2 : 0
+          const relativeY=rect && anchor ? anchor.y-rect.top-rect.height/2 : 0
+          return {
+            zoom:next,
+            offsetX:previous.offsetX+(1-ratio)*(relativeX-previous.offsetX),
+            offsetY:previous.offsetY+(1-ratio)*(relativeY-previous.offsetY),
+          }
+        })
+      }
+      function resetView() {
+        const node=viewportRef.current
+        const rect=node?.getBoundingClientRect?.()
+        if(!rect || !artboard || rect.width<=0 || rect.height<=0) {
+          setCamera({zoom:1,offsetX:0,offsetY:0});return
+        }
+        const fit=Math.min(1,Math.max(0.125,(rect.height-28)/(rect.width*artboard.height/artboard.width)))
+        setCamera({zoom:fit,offsetX:0,offsetY:0})
+      }
+      function onCanvasWheel(event) {
+        if(['textarea','input','select'].includes(String(event.target?.tagName||'').toLowerCase()))return
+        event.preventDefault()
+        if(event.ctrlKey || event.metaKey) {
+          changeZoom(Math.exp(-event.deltaY*0.002),{x:event.clientX,y:event.clientY})
+        } else {
+          setCamera(previous=>({
+            ...previous,
+            offsetX:previous.offsetX-(event.shiftKey && !event.deltaX?event.deltaY:event.deltaX),
+            offsetY:previous.offsetY-(event.shiftKey?0:event.deltaY),
+          }))
+        }
+      }
+      function startPan(event) {
+        if(event.button!==1 && !(canvasTool==='hand' && event.button===0))return
+        const rect=event.currentTarget.getBoundingClientRect()
+        if(rect.width<=0 || rect.height<=0)return
+        panRef.current={pointerId:event.pointerId,startX:event.clientX,startY:event.clientY}
+        try {event.currentTarget.setPointerCapture(event.pointerId)}catch(_){}
+        event.preventDefault()
+      }
+      function movePan(event) {
+        const gesture=panRef.current
+        if(!gesture || gesture.pointerId!==event.pointerId)return
+        const dx=event.clientX-gesture.startX,dy=event.clientY-gesture.startY
+        panRef.current={...gesture,startX:event.clientX,startY:event.clientY}
+        setCamera(previous=>({...previous,offsetX:previous.offsetX+dx,offsetY:previous.offsetY+dy}))
+      }
+      function endPan(event) {
+        if(panRef.current?.pointerId!==event.pointerId)return
+        panRef.current=null
+      }
       function onEditorKeyDown(event) {
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
         const command=event.ctrlKey || event.metaKey
+        if(!command && !event.altKey && !event.shiftKey && (event.key==='v' || event.key==='h')) {
+          event.preventDefault()
+          setCanvasTool(event.key==='h'?'hand':'select')
+          return
+        }
+        if(!command && !event.altKey && artboard && ['+','=','-','0'].includes(event.key)) {
+          event.preventDefault()
+          if(event.key==='0')resetView()
+          else changeZoom(event.key==='-'?1/1.25:1.25)
+          return
+        }
         if(command && !event.altKey) {
           if(event.key?.toLowerCase()==='z') {
             event.preventDefault()
@@ -182,7 +258,7 @@ window.__ModuleLoader__.load({
       }
       const {artboard,handles=[]}=geometry
       function startDrag(event,handle,mode='move') {
-        if(event.button!==0 || busy) return
+        if(event.button!==0 || busy || canvasTool!=='select') return
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
@@ -323,7 +399,7 @@ window.__ModuleLoader__.load({
                           borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
                           background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
-                        onDoubleClick:handle.text?()=>startTextEditing(handle.id):undefined,
+                        onDoubleClick:handle.text&&canvasTool==='select'?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
                         onPointerUp:event=>finishDrag(event),
                         onPointerCancel:event=>finishDrag(event,true)
