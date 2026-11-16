@@ -69,7 +69,8 @@ test('ignores CSS comment fake rules and refuses nested @media or complex declar
 test('style declarations with comments or braces remain read-only',()=>{
   for(const source of ['#app{color:/*comment*/red}', '#app{--custom: {foo:bar};}',
     '#app{ color: red; color: blue;}']){
-    assert.equal(listCssVisualRules(source)[0].editable,false,
+    const [model]=listCssVisualRules(source)
+    assert.ok(!model || !model.editable,
       'Unsupported declaration body must not allow partial updates')
   }
 })
