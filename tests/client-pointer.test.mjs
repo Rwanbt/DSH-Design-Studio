@@ -208,3 +208,14 @@ test('Shift corner resize preserves original aspect ratio',async()=>{
     {id:'box',attribute:'height',value:'53.333'}
   ])
 })
+
+test('Add Rectangle toolbar submits a native SVG shape creation without AI',async()=>{
+  const harness=createHarness();await harness.init()
+  await find(harness.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  const add=find(harness.render(),node=>node.props?.['aria-label']==='Add rect')
+  assert.ok(add,'A manual shape button should exist in the SVG editor')
+  await add.props.onClick()
+  assert.equal(harness.writes().length,1)
+  assert.equal(harness.writes()[0].kind,'svg-add-shape')
+  assert.equal(harness.writes()[0].shape,'rect')
+})
