@@ -53,3 +53,14 @@ test('supports nonzero viewBox offsets', () => {
   assert.deepEqual(result.artboard,{x:-50,y:-100,width:200,height:100})
   assert.equal(result.handles[0].y,-55)
 })
+
+test('ignores fake SVG root inside comment when deriving viewBox',()=>{
+  const input='<!-- <svg viewBox="0 0 999 999"> --><svg viewBox="0 0 200 100"><rect id="a" x="5" y="6" width="7" height="8"/></svg>'
+  const geometry=svgGeometry(input)
+  assert.deepEqual(geometry.artboard,{x:0,y:0,width:200,height:100})
+  assert.deepEqual(geometry.handles.map(h=>h.id),['a'])
+})
+test('refuses duplicate roots and foreignObject content',()=>{
+  assert.equal(svgGeometry('<svg viewBox="0 0 20 20"/><svg viewBox="0 0 30 30"/>').artboard,null)
+  assert.equal(svgGeometry('<svg viewBox="0 0 20 20"><foreignObject><rect id="r" x="0" y="0" width="2" height="2"/></foreignObject></svg>').handles.length,0)
+})
