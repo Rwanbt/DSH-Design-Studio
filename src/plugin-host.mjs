@@ -1,7 +1,7 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
-import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch } from './svg-paths.mjs'
+import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -102,6 +102,16 @@ export function createRouteHandler(ctx) {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           const created=svgShapeInsertPatch(doc.source,params.shape)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-pen') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          if(params.operation==='start') {
+            const created=svgShapeInsertPatch(doc.source,'pen',{x:params.x,y:params.y})
+            patches=[created.patch];createdId=created.id
+          }else{
+            patches=[svgPenContinuePatch(doc.source,{
+              id:params.id,operation:params.operation,x:params.x,y:params.y,c1:params.c1,c2:params.c2
+            })]
+          }
         } else if (params.kind === 'svg-path-topology') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgPathTopologyPatch(doc.source,{
