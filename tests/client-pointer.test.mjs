@@ -397,3 +397,120 @@ test('Space hand mode lets pan gestures pass through resize handles',async()=>{
   assert.equal(stopped,false,'Temporary hand tool must allow pointer events to bubble to viewport')
   assert.equal(h.writes().length,0)
 })
+
+
+test('grid toggles and spacing change only the document overlay, not its SVG source',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-document-grid'),null)
+  const toggle=find(h.render(),n=>n.props?.['aria-label']==='Toggle canvas grid')
+  assert.equal(toggle.props['aria-pressed'],false)
+  toggle.props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-document-grid').props.style.backgroundSize,'10% 10%')
+  assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Toggle canvas grid').props['aria-pressed'],true)
+  find(h.render(),n=>n.props?.['aria-label']==='Grid spacing').props.onChange({target:{value:'20'}})
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-document-grid').props.style.backgroundSize,'20% 20%')
+  toggle.props.onClick()
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-document-grid'),null)
+  assert.equal(h.writes().length,0)
+})
+test('grid snap commits SVG coordinates at chosen step without AI',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle smart alignment guides').props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  shape.props.onPointerDown({button:0,pointerId:10,clientX:0,clientY:0,currentTarget:target,preventDefault(){}})
+  shape.props.onPointerMove({pointerId:10,clientX:13,clientY:0})
+  const preview=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  assert.equal(preview.props.style.left,'20%')
+  assert.equal(h.writes().length,0,'Grid previews must not save before gesture release')
+  shape.props.onPointerUp({pointerId:10,clientX:13,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes().length,1)
+  assert.deepEqual(h.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'20'},
+    {id:'box',attribute:'y',value:'20'}
+  ])
+})
+test('changing snap step to 5 units snaps to nearest user-space coordinate',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle smart alignment guides').props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Grid spacing').props.onChange({target:{value:'5'}})
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:20,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerUp({pointerId:20,clientX:14,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes()[0].edits[0].value,'15')
+  assert.equal(h.writes()[0].edits[1].value,'20')
+})
+test('smart alignment shows a warm guide and aligns the moved right edge to canvas center',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:30,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerMove({pointerId:30,clientX:16,clientY:0})
+  const guide=find(h.render(),n=>n.props?.className==='dsh-studio-guide-x')
+  assert.ok(guide,'Center alignment should show a visible vertical guide')
+  assert.equal(guide.props.style.left,'50%')
+  assert.equal(h.writes().length,0)
+  shape.props.onPointerUp({pointerId:30,clientX:16,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes()[0].edits[0].value,'20')
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x'),null)
+})
+test('disabling smart guides leaves unaligned user-space movement unchanged',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle smart alignment guides').props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:40,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerMove({pointerId:40,clientX:16,clientY:0})
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x'),null)
+  shape.props.onPointerUp({pointerId:40,clientX:16,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.equal(h.writes()[0].edits[0].value,'18')
+})
+test('resizing a corner snaps its moving endpoint to grid and keeps opposite corner',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const select=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
+  select.props.onPointerDown({button:0,pointerId:1,clientX:0,clientY:0,currentTarget:target,preventDefault(){}})
+  select.props.onPointerUp({pointerId:1,clientX:0,clientY:0})
+  const resize=find(h.render(),n=>n.props?.['aria-label']==='Resize rect box')
+  resize.props.onPointerDown({button:0,pointerId:50,clientX:0,clientY:0,currentTarget:{...target,dataset:{corner:'se'}},stopPropagation(){},preventDefault(){}})
+  resize.props.onPointerMove({pointerId:50,clientX:13,clientY:0})
+  resize.props.onPointerUp({pointerId:50,clientX:13,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,16))
+  assert.deepEqual(h.writes()[0].edits,[
+    {id:'box',attribute:'x',value:'10'},
+    {id:'box',attribute:'y',value:'20'},
+    {id:'box',attribute:'width',value:'40'},
+    {id:'box',attribute:'height',value:'40'}
+  ])
+})
+test('cancelled grid-snap gestures never save source changes',async()=>{
+  const h=createHarness();await h.init()
+  await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
+  find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
+  const shape=find(h.render(),n=>n.props?.['aria-label']==='Drag rect box')
+  shape.props.onPointerDown({button:0,pointerId:88,clientX:0,clientY:0,currentTarget:{
+    parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}
+  },preventDefault(){}})
+  shape.props.onPointerMove({pointerId:88,clientX:34,clientY:0})
+  shape.props.onPointerCancel({pointerId:88,clientX:34,clientY:0})
+  await new Promise(resolve=>setTimeout(resolve,12))
+  assert.equal(h.writes().length,0)
+  assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-guide-x'),null)
+})
