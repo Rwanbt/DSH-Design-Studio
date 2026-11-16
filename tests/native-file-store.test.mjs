@@ -149,6 +149,9 @@ test('replacing a parent directory while a write waits for lock never writes to 
     baseHash:doc.hash,baseIdentity:doc.identity,
     patches:patchFor(doc.source,'old','new')
   })
+  // Attach the rejection handler immediately: a directory swap may terminate
+  // the pending operation before the scheduled assertion runs.
+  void pending.catch(()=>{})
   await new Promise(resolve=>setTimeout(resolve,90))
   await rename(sub,path.join(root,'pages-original'))
   await mkdir(sub)
