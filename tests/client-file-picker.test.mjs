@@ -22,6 +22,8 @@ function findAll(node,match,output=[]) {
   return output
 }
 
+const settle=()=>new Promise(resolve=>setTimeout(resolve,12))
+
 async function harness() {
   const state=[];let index=0,definition,component
   const requests=[]
@@ -78,16 +80,16 @@ test('Browse button obtains only session-local native files and renders file lis
   const app=await harness()
   const browse=find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files')
   assert.ok(browse)
-  await browse.props.onClick()
+  await browse.props.onClick();await settle()
   assert.deepEqual(app.requests.map(x=>x.pathname),['/design-studio-native/files'])
   assert.ok(app.requests[0].search.includes('sessionId=known'))
   const shown=findAll(app.render(),n=>n.props?.['aria-label']?.startsWith('Open file ')).map(n=>n.props['aria-label'])
-  assert.deepEqual(shown,['Open file assets/icon.svg','Open file pages/layout.html'],JSON.stringify({requests:app.requests,buttons:findAll(app.render(),n=>n.type==='button').map(n=>n.props['aria-label']||n.children),alerts:findAll(app.render(),n=>n.props?.role==='alert').map(n=>n.children)}))
+  assert.deepEqual(shown,['Open file assets/icon.svg','Open file pages/layout.html'])
 })
 test('selecting listed HTML opens native source without typing relative path',async()=>{
   const app=await harness()
-  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()
-  await find(app.render(),n=>n.props?.['aria-label']==='Open file pages/layout.html').props.onClick()
+  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick();await settle()
+  await find(app.render(),n=>n.props?.['aria-label']==='Open file pages/layout.html').props.onClick();await settle()
   const value=find(app.render(),n=>n.props?.['aria-label']==='Workspace file')
   assert.equal(value.props.value,'pages/layout.html')
   const source=find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
@@ -97,7 +99,7 @@ test('selecting listed HTML opens native source without typing relative path',as
 })
 test('file picker filter limits visible list without mutating files',async()=>{
   const app=await harness()
-  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()
+  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick();await settle()
   find(app.render(),n=>n.props?.['aria-label']==='Filter design files').props.onChange({target:{value:'layout'}})
   assert.deepEqual(findAll(app.render(),n=>n.props?.['aria-label']?.startsWith('Open file ')).map(n=>n.props['aria-label']),['Open file pages/layout.html'])
 })
@@ -107,8 +109,8 @@ test('unsaved source changes prevent switching files through picker',async()=>{
   await open.props.onClick()
   const source=find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
   source.props.onChange({target:{value:'<svg id="edited"/>'}})
-  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()
-  await find(app.render(),n=>n.props?.['aria-label']==='Open file pages/layout.html').props.onClick()
+  await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick();await settle()
+  await find(app.render(),n=>n.props?.['aria-label']==='Open file pages/layout.html').props.onClick();await settle()
   assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/document').length,1)
   assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Workspace file').props.value,'design.svg')
   assert.ok(find(app.render(),n=>n.props.role==='alert'),'Unsaved source changes need a visible error')
