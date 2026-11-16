@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { svgGeometry, svgMoveEdits } from '../src/svg-geometry.mjs'
+import { svgGeometry, svgMoveEdits, svgResizeEdits } from '../src/svg-geometry.mjs'
 import { svgAttributePatch } from '../src/svg-attributes.mjs'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 
@@ -63,4 +63,27 @@ test('ignores fake SVG root inside comment when deriving viewBox',()=>{
 test('refuses duplicate roots and foreignObject content',()=>{
   assert.equal(svgGeometry('<svg viewBox="0 0 20 20"/><svg viewBox="0 0 30 30"/>').artboard,null)
   assert.equal(svgGeometry('<svg viewBox="0 0 20 20"><foreignObject><rect id="r" x="0" y="0" width="2" height="2"/></foreignObject></svg>').handles.length,0)
+})
+
+test('south-east resize of rectangle edits only width and height', () => {
+  const item = svgGeometry(source).handles[0]
+  assert.deepEqual(svgResizeEdits(item,20,-30), [
+    { id:'card', attribute:'width', value:'480' },
+    { id:'card', attribute:'height', value:'210' },
+  ])
+})
+test('south-east ellipse resize preserves top-left anchor', () => {
+  const item = svgGeometry(source).handles[2]
+  assert.deepEqual(svgResizeEdits(item,10,20), [
+    {id:'oval',attribute:'cx',value:'305'},
+    {id:'oval',attribute:'cy',value:'160'},
+    {id:'oval',attribute:'rx',value:'30'},
+    {id:'oval',attribute:'ry',value:'20'},
+  ])
+})
+test('resize clamps to positive dimensions and rejects circle/NaN', () => {
+  const rectangle=svgGeometry(source).handles[0]
+  assert.deepEqual(svgResizeEdits(rectangle,-10000,-10000).map(x=>x.value),['1','1'])
+  assert.throws(()=>svgResizeEdits(svgGeometry(source).handles[1],2,2),TypeError)
+  assert.throws(()=>svgResizeEdits(rectangle,Infinity,2),TypeError)
 })
