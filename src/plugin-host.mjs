@@ -7,6 +7,7 @@ import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
 import { listHtmlVisualElements, htmlVisualStylePatch } from './html-visual.mjs'
+import { listCssVisualRules, cssVisualRulePatch } from './css-visual.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -76,7 +77,7 @@ export function createRouteHandler(ctx) {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             nodes=listEditableSvgNodes(document.source)
@@ -90,7 +91,11 @@ export function createRouteHandler(ctx) {
           htmlElements=listHtmlVisualElements(document.source)
           if(document.source.length>512*1024) warning='HTML visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,geometry,warning})
+        if(document.format==='css') {
+          cssRules=listCssVisualRules(document.source)
+          if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
+        }
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
@@ -104,7 +109,10 @@ export function createRouteHandler(ctx) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
         }
         let patches; let createdId=null
-        if (params.kind === 'html-style') {
+        if (params.kind === 'css-rule') {
+          if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[cssVisualRulePatch(doc.source,{selector:params.selector,property:params.property,value:params.value})]
+        } else if (params.kind === 'html-style') {
           if(!['html','htm'].includes(doc.format))return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[htmlVisualStylePatch(doc.source,{id:params.id,property:params.property,value:params.value})]
         } else if (params.kind === 'svg-layer') {
