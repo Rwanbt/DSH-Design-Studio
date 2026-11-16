@@ -1,7 +1,7 @@
 /** Conservative SVG source-span inspector; never serializes the XML tree. */
 const TAGS = new Set(['svg','g','rect','circle','ellipse','line','polyline','polygon','path','text','use'])
-const PROPS = new Set(['fill','stroke','stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform'])
-const NUMERIC = new Set(['stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2'])
+const PROPS = new Set(['fill','stroke','stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
+const NUMERIC = new Set(['stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','font-size','letter-spacing'])
 function fail(code, message) { const error = new Error(message); error.code = code; throw error }
 function nameChar(c) { return /[\w.:\-]/.test(c ?? '') }
 
@@ -96,9 +96,19 @@ function validatedValue(attribute,value) {
     if(!/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim())) fail('invalid-value','Expected a finite numeric value')
     if(!Number.isFinite(Number(value))) fail('invalid-value','Number not finite')
     if(['width','height','r','rx','ry','stroke-width'].includes(attribute) && Number(value)<0) fail('invalid-value','Nonnegative value required')
+    if(attribute==='font-size' && (Number(value)<1 || Number(value)>500)) fail('invalid-value','Font size must be 1..500')
+    if(attribute==='letter-spacing' && Math.abs(Number(value))>100) fail('invalid-value','Letter spacing out of range')
     if(attribute==='opacity' && (Number(value)<0 || Number(value)>1)) fail('invalid-value','Opacity must be within 0..1')
   } else if(['fill','stroke'].includes(attribute)) {
     if(!/^(?:none|transparent|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]+|url\(#[A-Za-z_][\w.:-]*\))$/.test(value)) fail('invalid-value','Unsupported or unsafe paint value')
+  } else if(attribute==='font-family') {
+    if(!/^[\\p{L}\\p{N} ,._-]{1,120}$/u.test(value)) fail('invalid-value','Unsupported font family name')
+  } else if(attribute==='font-weight') {
+    if(!/^(?:normal|bold|[1-9]00)$/.test(value)) fail('invalid-value','Unsupported font weight')
+  } else if(attribute==='font-style') {
+    if(!/^(?:normal|italic|oblique)$/.test(value)) fail('invalid-value','Unsupported font style')
+  } else if(attribute==='text-anchor') {
+    if(!/^(?:start|middle|end)$/.test(value)) fail('invalid-value','Unsupported text alignment')
   } else if(attribute==='d') {
     if(!/^[MmZzLlHhVvCcSsQqTtAaEe0-9+\-.,\s]*$/.test(value)) fail('invalid-value','Invalid path data characters')
   } else if(attribute==='transform') {
