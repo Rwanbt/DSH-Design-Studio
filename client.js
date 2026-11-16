@@ -604,6 +604,23 @@ window.__ModuleLoader__.load({
           workspaceFiles.length===0&&h('small',{style:{color:'#aaa9a5'}},'Aucun fichier SVG, HTML ou CSS détecté.')
         ),
         doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
+          h('button',{type:'button',
+            'aria-label':'Activate Pen tool',
+            style:{...button,background:canvasTool==='pen'?'#51483d':button.background},
+            disabled:busy||reloadRequired||source!==doc.source,
+            onClick:()=>{setCanvasTool('pen');setPenPathId('');setPenOutgoing(null)}
+          },'✒ Plume · P'),
+          canvasTool==='pen'&&h('button',{type:'button',
+            'aria-label':'Start new pen path',
+            style:button,disabled:busy||reloadRequired,
+            onClick:()=>{setPenPathId('');setPenOutgoing(null)}
+          },'Nouveau'),
+          canvasTool==='pen'&&penPathId&&h('button',{type:'button',
+            'aria-label':'Close current pen path',style:{...button,borderColor:ACCENT},
+            disabled:busy||reloadRequired||
+              (pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,
+            onClick:()=>void closePenPath()
+          },'Fermer le tracé'),
           ['rect','circle','ellipse','text','path'].map(shape=>h('button',{
             key:shape,type:'button',style:button,'aria-label':'Add '+shape,
             disabled:busy||reloadRequired||source!==doc.source,
@@ -662,7 +679,7 @@ window.__ModuleLoader__.load({
                   onPointerCancel:endPan,
                   style:{position:'relative',width:'100%',height:'100%',minHeight:340,flex:'1 1 auto',
                     overflow:'hidden',touchAction:'none',borderRadius:6,
-                    cursor:panRef.current?'grabbing':canvasTool==='hand'||spaceHeld?'grab':'default',
+                    cursor:panRef.current?'grabbing':canvasTool==='pen'?'crosshair':canvasTool==='hand'||spaceHeld?'grab':'default',
                     background:'transparent'}},
                   h('div',{className:'dsh-studio-artboard',
                     style:{position:'absolute',left:'50%',top:'50%',width:'100%',
@@ -797,6 +814,27 @@ window.__ModuleLoader__.load({
                         onPointerCancel:e=>finishPathDrag(e,true)
                       })
                     }),
+                    canvasTool==='pen'&&h('div',{
+                      className:'dsh-studio-pen-surface',
+                      'aria-label':'Pen drawing surface',
+                      style:{position:'absolute',inset:0,zIndex:15,cursor:'crosshair',
+                        touchAction:'none',background:'transparent'},
+                      onPointerDown:startPenGesture,
+                      onPointerMove:movePenGesture,
+                      onPointerUp:event=>void finishPenGesture(event),
+                      onPointerCancel:event=>void finishPenGesture(event,true)
+                    },
+                      penPreview&&h('svg',{viewBox:artboard.x+' '+artboard.y+' '+artboard.width+' '+artboard.height,
+                        'aria-hidden':true,preserveAspectRatio:'none',style:{
+                          position:'absolute',width:'100%',height:'100%',inset:0,pointerEvents:'none'
+                        }},
+                        penPreview.control&&h('line',{x1:penPreview.anchor.x,y1:penPreview.anchor.y,
+                          x2:penPreview.control.x,y2:penPreview.control.y,
+                          stroke:'#bda991',strokeWidth:artboard.width/600}),
+                        h('circle',{cx:penPreview.anchor.x,cy:penPreview.anchor.y,
+                          r:Math.max(1,artboard.width/180),
+                          fill:'#bda991',stroke:'#262626',strokeWidth:artboard.width/500}))
+                    ),
                     editingText&&(()=> {
                       const item=handles.find(h=>h.id===editingText)
                       if(!item)return null
