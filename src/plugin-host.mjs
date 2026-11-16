@@ -1,5 +1,6 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
+import { svgGeometry } from './svg-geometry.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -55,12 +56,15 @@ export function createRouteHandler(ctx) {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
         const document=await store.read(file)
-        let nodes=[]; let warning=null
+        let nodes=[]; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
-          try { nodes=listEditableSvgNodes(document.source) }
-          catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
+          try {
+            nodes=listEditableSvgNodes(document.source)
+            geometry=svgGeometry(document.source)
+            if(geometry.warning) warning=geometry.warning
+          } catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
         }
-        return reply(res,200,{ok:true,document,nodes,warning})
+        return reply(res,200,{ok:true,document,nodes,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
@@ -71,6 +75,20 @@ export function createRouteHandler(ctx) {
         if (params.kind === 'svg-attribute') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgAttributePatch(doc.source,{id:params.id,attribute:params.attribute,value:params.value})]
+        } else if (params.kind === 'svg-attributes') {
+          if (doc.format !== 'svg' || !Array.isArray(params.edits) || params.edits.length < 1 || params.edits.length > 16) {
+            return reply(res,400,{ok:false,error:'bad-svg-edit-batch'})
+          }
+          const unique=new Set()
+          patches=params.edits.map(edit => {
+            if (!edit || typeof edit.id !== 'string' || typeof edit.attribute !== 'string') {
+              const e=new Error('Invalid SVG edit');e.code='invalid-target';throw e
+            }
+            const key=edit.id+'\0'+edit.attribute
+            if(unique.has(key)){const e=new Error('Duplicate SVG attribute edit');e.code='overlap';throw e}
+            unique.add(key)
+            return svgAttributePatch(doc.source,edit)
+          })
         } else if (params.kind === 'replace-source' && typeof params.source==='string') {
           patches=[{start:0,end:doc.source.length,before:doc.source,after:params.source}]
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {
