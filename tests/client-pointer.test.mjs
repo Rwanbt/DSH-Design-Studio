@@ -558,6 +558,7 @@ function samplePath() {
   const span=(token)=>{const start=d.indexOf(token);return {start,end:start+token.length}}
   return {
     id:'curve',editable:true,d,
+    segments:[{commandIndex:2,type:'C',midpoint:{x:4,y:5},removable:false,endIndex:3}],
     points:[
       {index:0,role:'anchor',x:1,y:2,xSpan:span('1'),ySpan:span('2'),linkIndex:null},
       {index:1,role:'cubic-in',x:3,y:4,xSpan:span('3'),ySpan:span('4'),linkIndex:0},
@@ -672,4 +673,42 @@ test('Escape cancels an in-progress Bézier edit without committing the SVG',asy
   assert.equal(prevented,true)
   assert.equal(h.writes().length,0)
   assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay')?.children[0]?.props?.d,'M1 2 C3 4 5 6 7 8')
+})
+
+
+test('canvas midpoint + button commits a native curve subdivision without changing source on render',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  const midpoint=find(h.render(),node=>node.props?.['aria-label']==='Insert path point on segment 2 of curve')
+  assert.ok(midpoint)
+  assert.equal(h.writes().length,0)
+  midpoint.props.onClick()
+  await new Promise(resolve=>setTimeout(resolve,18))
+  assert.equal(h.writes().length,1)
+  assert.deepEqual({kind:h.writes()[0].kind,id:h.writes()[0].id,operation:h.writes()[0].operation,
+    commandIndex:h.writes()[0].commandIndex},
+    {kind:'svg-path-topology',id:'curve',operation:'insert',commandIndex:2})
+})
+test('curve inspector permits insertion but does not expose destructive Bézier removal',async()=>{
+  const h=createHarness([],[samplePath()]);await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  assert.ok(find(h.render(),node=>node.props?.['aria-label']==='Insert midpoint segment 2'))
+  assert.equal(find(h.render(),node=>node.props?.['aria-label']==='Remove line point segment 2'),null)
+})
+test('inspector removes only a selected supported line endpoint with one native operation',async()=>{
+  const path={id:'line',editable:true,d:'M1 1 L5 5',
+    segments:[{commandIndex:2,type:'L',midpoint:{x:3,y:3},removable:true,endIndex:1}],
+    points:[{index:0,role:'anchor',x:1,y:1},{index:1,role:'anchor',x:5,y:5}]}
+  const h=createHarness([],[path]);await h.init()
+  await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #line')).props.onClick()
+  const remove=find(h.render(),node=>node.props?.['aria-label']==='Remove line point segment 2')
+  assert.ok(remove)
+  remove.props.onClick()
+  await new Promise(resolve=>setTimeout(resolve,18))
+  assert.equal(h.writes().length,1)
+  assert.deepEqual([h.writes()[0].kind,h.writes()[0].operation,h.writes()[0].commandIndex],
+    ['svg-path-topology','remove',2])
 })
