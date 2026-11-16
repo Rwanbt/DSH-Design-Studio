@@ -91,15 +91,29 @@ window.__ModuleLoader__.load({
         }
       }
       function onEditorKeyDown(event) {
-        if(!(event.ctrlKey || event.metaKey) || event.altKey)return
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
-        if(event.key?.toLowerCase()==='z') {
-          event.preventDefault()
-          if(event.shiftKey)void redo();else void undo()
-        }else if(event.key?.toLowerCase()==='y'){
-          event.preventDefault();void redo()
+        const command=event.ctrlKey || event.metaKey
+        if(command && !event.altKey) {
+          if(event.key?.toLowerCase()==='z') {
+            event.preventDefault()
+            if(event.shiftKey)void redo();else void undo()
+          }else if(event.key?.toLowerCase()==='y'){
+            event.preventDefault();void redo()
+          }
+          return
         }
+        if(command || event.altKey || busy || !active || !doc || source!==doc.source)return
+        const direction={ArrowLeft:['x',-1],ArrowRight:['x',1],ArrowUp:['y',-1],ArrowDown:['y',1]}[event.key]
+        if(!direction)return
+        const item=geometry.handles.find(handle=>handle.id===active)
+        if(!item || !item.move)return
+        event.preventDefault()
+        const [axis,sign]=direction
+        const property=item.move[axis]
+        const amount=sign*(event.shiftKey?10:1)
+        const previous=item.move[axis==='x'?'initialX':'initialY']
+        void save({kind:'svg-attribute',id:item.id,attribute:property,value:String(Math.round((previous+amount)*1000)/1000)})
       }
       function select(nodeId) {
         setActive(nodeId)
@@ -223,7 +237,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65}},'Experimental editor. SVG primitives can be moved, rectangles/ellipses resized; Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
+        h('small',{style:{opacity:0.65}},'Experimental editor. SVG primitives can be moved with pointer or arrow keys (Shift: 10 units); rectangles/ellipses resized. Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
       )
     }
     return {
