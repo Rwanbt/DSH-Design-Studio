@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
-import { mkdtemp, mkdir, rmdir, symlink, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rmdir, symlink, writeFile, readFile, rename, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createRouteHandler } from '../src/plugin-host.mjs'
@@ -441,4 +441,29 @@ test('held cross-process lock returns HTTP 423 without writing any source',()=>f
   })
   assert.equal(retried.status,200)
   assert.ok((await readFile(path.join(root,'icon.svg'),'utf8')).includes('fill="#bada55"'))
+}))
+
+
+test('Host API identity token prevents same-byte external file replacement',()=>fixture(async(invoke,root)=>{
+  const file=path.join(root,'icon.svg')
+  const initial=(await invoke('GET',url)).json.document
+  assert.match(initial.identity,/^[a-f0-9]{64}$/)
+  await writeFile(path.join(root,'replacement.svg'),initial.source)
+  await rename(path.join(root,'replacement.svg'),file)
+  const changed=(await invoke('GET',url)).json.document
+  assert.equal(initial.hash,changed.hash,'Source hash is deliberately unchanged')
+  assert.notEqual(initial.identity,changed.identity)
+  const refused=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:initial.hash,baseIdentity:initial.identity,
+    kind:'svg-attribute',id:'box',attribute:'fill',value:'#cc0000'
+  })
+  assert.equal(refused.status,409)
+  assert.equal(refused.json.error,'stale-revision')
+  assert.equal(await readFile(file,'utf8'),initial.source)
+  const accepted=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:changed.hash,baseIdentity:changed.identity,
+    kind:'svg-attribute',id:'box',attribute:'fill',value:'#cc0000'
+  })
+  assert.equal(accepted.status,200)
+  assert.ok((await readFile(file,'utf8')).includes('fill="#cc0000"'))
 }))
