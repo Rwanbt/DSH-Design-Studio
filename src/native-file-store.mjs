@@ -3,6 +3,7 @@ import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { applyNativePatches, sourceHash } from './native-patch.mjs'
+import { withNativeWriteLock } from './native-write-lock.mjs'
 
 const MAX_BYTES = 8 * 1024 * 1024
 const FORMATS = new Set(['svg', 'html', 'htm', 'css'])
@@ -101,7 +102,9 @@ export function createNativeFileStore(workspace) {
     },
     async apply(file, { baseHash, patches }) {
       const target = await ensureSafeFile(workspace, file)
-      return lock(target.absolute, async () => {
+      return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
+        const checked = await ensureSafeFile(workspace, file)
+        if (checked.absolute !== target.absolute) throw error('invalid-path','Workspace target changed while acquiring lock')
         const current = await readChecked(target.absolute)
         if (current.rawHash !== baseHash) throw error('stale-revision', 'On-disk file changed; reload before saving')
         const result = applyNativePatches({source: current.source, format: target.format, baseHash: sourceHash(current.source), patches})
@@ -116,7 +119,8 @@ export function createNativeFileStore(workspace) {
           created = true
           try { await h.writeFile(output); await h.chmod(current.mode); await h.sync() }
           finally { await h.close() }
-          // Optimistic check, not cross-process atomic compare-and-swap.
+          // Check immediately before replacing: cooperating Design Studio processes also hold the lock.
+          // NOTE: external editors do not honor it; this is not a universal filesystem CAS.
           await ensureSafeFile(workspace, file)
           const latest = await readChecked(target.absolute)
           if (latest.rawHash !== baseHash) throw error('stale-revision', 'On-disk file changed during edit; save aborted')
@@ -127,7 +131,7 @@ export function createNativeFileStore(workspace) {
         } finally {
           if (created) await unlink(temp).catch(() => {})
         }
-      })
+      }))
     },
   }
 }
