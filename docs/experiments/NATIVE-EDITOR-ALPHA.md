@@ -1,6 +1,6 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.5` (source branch; **not released**). Last verified code/CI run: [GitHub Actions 43946872717](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43946872717), commit `ef2459e302760566f28ce9dc5b55b7a8c1ffdda0`: **89 PASS, 0 FAIL, 0 SKIP**. These are Node tests and simulated host/client interactions. **Real DSH Desktop/Web install is NOT_RUN.**
+**Status:** experimental `0.1.0-alpha.6` (source branch, not released). New alpha.6 layer ops and DSH URL integration are in review. CI evidence for this head is recorded in `docs/experiments/ALPHA6-EVIDENCE.md` when completed. Earlier alpha.5 validation: GitHub Actions run `43947189260` with 89 PASS, 0 FAIL, 0 SKIP. Real DSH installation is **NOT_RUN**.
 
 ## What it can do
 
@@ -8,6 +8,7 @@
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
 - **Resize** rectangles/ellipses from any of four corners, anchoring the opposite corner. Hold **Shift** to preserve their aspect ratio. Circle resizing is not yet supported.
+- **Duplicate/Delete selected SVG layers** through checked source-span operations, with generated unique IDs, keyboard shortcuts Ctrl+D / Delete and in-session Undo/Redo. The experimental mapper currently supports direct children of the SVG root without nested graphics; unsupported cases fail rather than rewriting unknown markup. Executable SVG nodes are rejected.
 - **Create** rectangles, circles, ellipses and **editable native SVG text objects** with manual toolbar buttons. The editor inserts a new native SVG element with a unique generated `shape-N` ID, without rewriting existing elements. Requires simple untransformed SVG with a root `viewBox` and an explicit closing `</svg>` tag.
 - **Edit simple SVG text directly** by double-clicking its approximate selection area or using an inspectable text field. Supports simple text and the plugin's generated multiline `<tspan>` structure; rich nested text remains uneditable. Font family, size, weight, style, letter spacing and alignment may be edited only where corresponding SVG attributes already exist. User content is escaped for XML.
 - **Nudge** a selected SVG shape with arrow keys by one SVG unit, or ten units with Shift.
@@ -56,6 +57,7 @@ Native patch engine (src/native-patch.mjs)
 - Source editor replaces whole document content on explicit save; only semantic SVG attribute modifications use minimal source spans. A file hash guards saves but source editor is not a syntax validator.
 - The native file store has *process-local* write serialization and a last-minute on-disk recheck; it **does not provide an atomic compare-and-swap across independent processes**, and directory symlink/rename races require a stronger isolation design before release.
 - No external imagery or scripts in preview; HTML depending on external CSS/JS will not render identically to production.
+- Native API fetch URLs are now origin-root (`/design-studio-native`) so they resolve correctly under nested conversation routes. This is covered by mocked client tests, **not** live DSH.
 - No DSH Desktop or Web smoke test, no packaging/install success claim, no UI screenshot validation, no security review, no accessibility check and no Windows integration test yet.
 
 ## Gates
