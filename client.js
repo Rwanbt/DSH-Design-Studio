@@ -368,10 +368,42 @@ window.__ModuleLoader__.load({
               nodes.length?nodes.map(n=>h('button',{key:n.id,style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},onClick:()=>select(n.id)},n.tag+' #'+n.id)):
               h('small',null,'No addressable SVG nodes (unique id attributes required).'))),
           h('div',{className:'dsh-studio-canvas',style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
-            h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:12}},h('strong',null,'Canevas'),h('small',null,doc.format.toUpperCase())),
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}},
+              h('strong',null,'Canevas · '+doc.format.toUpperCase()),
+              artboard&&doc.format==='svg'&&h('div',{role:'toolbar','aria-label':'Canvas navigation',style:{display:'flex',gap:5,alignItems:'center'}},
+                h('button',{type:'button',style:{...button,background:canvasTool==='select'?'#51483d':button.background},
+                  'aria-label':'Select canvas tool',onClick:()=>setCanvasTool('select'),title:'Sélection · V'},'↖'),
+                h('button',{type:'button',style:{...button,background:canvasTool==='hand'?'#51483d':button.background},
+                  'aria-label':'Pan canvas tool',onClick:()=>setCanvasTool('hand'),title:'Main · H / clic milieu'},'✋'),
+                h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
+                  onClick:()=>changeZoom(1/1.25)},'−'),
+                h('output',{'aria-label':'Canvas zoom level',style:{fontVariantNumeric:'tabular-nums',minWidth:48,textAlign:'center',color:ACCENT}},
+                  Math.round(camera.zoom*100)+'%'),
+                h('button',{type:'button',style:button,'aria-label':'Zoom in canvas',
+                  onClick:()=>changeZoom(1.25)},'+'),
+                h('button',{type:'button',style:button,'aria-label':'Fit canvas view',
+                  onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit')
+              )),
+
             doc.format==='css'?h('p',null,'CSS file · use source editor below'):
               artboard && doc.format==='svg'?
-                h('div',{style:{position:'relative',width:'100%',aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',overflow:'hidden',borderRadius:6}},
+                h('div',{className:'dsh-studio-viewport',ref:viewportRef,
+                  'aria-label':'Canvas viewport',
+                  onWheel:onCanvasWheel,
+                  onPointerDown:startPan,
+                  onPointerMove:movePan,
+                  onPointerUp:endPan,
+                  onPointerCancel:endPan,
+                  style:{position:'relative',width:'100%',height:'100%',minHeight:340,flex:'1 1 auto',
+                    overflow:'hidden',touchAction:'none',borderRadius:6,
+                    cursor:panRef.current?'grabbing':canvasTool==='hand'?'grab':'default',
+                    background:'transparent'}},
+                  h('div',{className:'dsh-studio-artboard',
+                    style:{position:'absolute',left:'50%',top:'50%',width:'100%',
+                      aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',
+                      transform:'translate(-50%, -50%) translate('+camera.offsetX+'px, '+camera.offsetY+'px) scale('+camera.zoom+')',
+                      transformOrigin:'center center',
+                      boxShadow:'0 10px 42px #0009'}},
                   h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
                   h('div',{style:{position:'absolute',inset:0,touchAction:'none'},'aria-label':'Direct manipulation overlay'},
                     handles.flatMap(handle=>{
@@ -397,7 +429,7 @@ window.__ModuleLoader__.load({
                           width:(width/artboard.width*100)+'%',height:(height/artboard.height*100)+'%',
                           minWidth:5,minHeight:5,border:active===handle.id?'2px solid #c8ab87':'1px dashed #8b847c',
                           borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
-                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':'move',touchAction:'none',padding:0},
+                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'?'grab':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
                         onDoubleClick:handle.text&&canvasTool==='select'?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
@@ -444,6 +476,7 @@ window.__ModuleLoader__.load({
                           h('button',{style:{...button,borderColor:ACCENT},onClick:()=>void commitText(),disabled:busy},'Apply text'))
                       )
                     })()
+                  )
                   )
                 ):
                 h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
@@ -494,7 +527,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Experimental editor. SVG primitives move with pointer or arrow keys; rectangles/ellipses resize from four corners (Shift: lock ratio). Undo/Redo applies to saved actions in this session. HTML source editing remains manual. DSH live UI not verified.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Canevas SVG: V sélection, H main, clic milieu déplacement, Ctrl+molette zoom, molette/pavé tactile panoramique, 0 recentrer. Modifications natives avec Undo/Redo de session. Installation DSH réelle non validée.')
       )
     }
     return {
