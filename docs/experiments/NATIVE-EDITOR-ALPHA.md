@@ -1,12 +1,13 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.9` (source branch, not released). GitHub Actions [run 43959981523](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43959981523), commit `9f5cc9e2f62c8f3b242ebba128d34f11311de5f2`: **141 PASS, 0 FAIL, 0 SKIP** (Node 22, mocked DSH client). Real DSH Desktop/Web installation remains **NOT_RUN**. See [alpha.9 evidence](ALPHA9-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.10` (source branch, not released). GitHub Actions [run 43964684414](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43964684414), source commit `582ed6c7d60a546fe57172fe0c0183c7eb8ba286`: **163 PASS, 0 FAIL, 0 SKIP** (Node 22, simulated DSH client). Real DSH Desktop/Web installation is **NOT_RUN**. See [alpha.10 evidence](ALPHA10-EVIDENCE.md).
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
 - **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
+- **Tracés SVG natifs et poignées Bézier** : création d'une courbe cubique par le bouton **Tracé**, édition des ancres et des contrôles de chemins `M/L/Q/C/Z` absolus explicites, aperçu à l'écran pendant le glissement, écriture ciblée de deux nombres du chemin au relâchement, Annuler/Rétablir et annulation par Échap. Les chemins relatifs, arcs et structures complexes demeurent en lecture seule.
 - **Grille et magnétisme** : affichage réglable, pas de 2 à 100 unités SVG, accrochage activable pour les déplacements/redimensionnements, et **repères intelligents** (centres/bords d'autres éléments ou du document) pour les déplacements. **Alt** désactive temporairement l'accrochage pour un placement libre. Ce sont des outils manuels : aucun token IA et aucune écriture tant que le pointeur n'est pas relâché.
 - **Navigate the SVG canvas** without touching source: Select / Hand, drag pan (hand, middle-button or temporary Space), Ctrl/Cmd+wheel pointer-anchored zoom, wheel/trackpad pan, +/- zoom and Fit to recenter. Keyboard shortcuts V, H and 0. Zoom range 12.5%–800%; no tokens are needed.
 - For simple SVGs with a `viewBox`, **directly click and drag** rectangles, circles and ellipses using an overlay. The drag gesture generates one atomic pair of native coordinate edits (`x`/`y` or `cx`/`cy`). Movement is shown by an outline while dragging and the SVG preview refreshes after save.
@@ -76,6 +77,8 @@ Native patch engine (src/native-patch.mjs)
 | Session workspace file discovery and mocked selection UI | PASS (GitHub Actions) |
 | Zoom, pan, Fit, Space/middle-button navigation; post-zoom SVG drag | PASS (GitHub Actions event simulation) |
 | Grid overlay, snapping, sibling alignment guides and Alt bypass | PASS (GitHub Actions client simulations) |
+| Native SVG path parser, Bézier edit + creation and exact source undo | PASS (GitHub Actions unit/API tests) |
+| Path node handles, live preview and Escape cancellation | PASS (GitHub Actions simulated client events) |
 | Save/reload failure and stale revision UI recovery | PASS (GitHub Actions event simulation) |
 | Actual DSH UI opening and selection | NOT_RUN |
 | Runtime security isolation | NOT_RUN |
