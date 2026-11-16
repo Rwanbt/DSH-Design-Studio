@@ -1,6 +1,6 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.13` on a draft source branch (not released). GitHub Actions [run 43973328639](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43973328639), tested source SHA `deb959be98d1807ef2ea0741a42d7c5356d48b54`: **195 PASS, 0 FAIL, 0 SKIP**. Interprocess writes now use a cooperating native lock; real DSH Desktop/Web installation and universal atomic CAS remain **NOT_RUN/NOT_IMPLEMENTED**. See [alpha.13 evidence](ALPHA13-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.14` on a draft source branch (not released). GitHub Actions [run 43975858834](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43975858834), tested source SHA `733e7573f1a303aec621e706df63705840cda8f6`: **199 PASS, 0 FAIL, 0 SKIP**. Manual writes now pass an opaque filesystem revision identity as well as the source SHA, with parent-directory identity checks and cooperative cross-process locking. Real DSH installation is **NOT_RUN** and universal atomic filesystem CAS is **NOT_IMPLEMENTED**. See [alpha.14 evidence](ALPHA14-EVIDENCE.md).
 
 ## What it can do
 
@@ -63,6 +63,7 @@ Native patch engine (src/native-patch.mjs)
 - HTML is previewed and source-editable, but **not yet visually selectable** with mapped CSS/DOM source edits.
 - Undo/Redo toolbar is implemented for recent successful saves within the mounted UI; **persistent history across reload/restart is not implemented**.
 - Source editor replaces whole document content on explicit save; only semantic SVG attribute modifications use minimal source spans. A file hash guards saves but source editor is not a syntax validator.
+- The alpha.14 client sends **`baseIdentity`** alongside the content SHA. The identity fingerprint detects same-byte replacement and metadata changes between opening and saving; the store checks file and parent-directory inode identities before committing. Older API clients omitting `baseIdentity` retain weaker legacy behavior and are not certified for untrusted concurrent editing.
 - Native edits use **both process-local serialization and an atomic directory lock shared between cooperating processes**, plus SHA preconditions and a last-minute on-disk recheck. **External editors do not honor the lock**, so true universal compare-and-swap is not guaranteed. A hard crash can leave a stale lock that must only be manually removed after confirming no active writer. Directory symlink/rename races require an isolation review before release.
 - No external imagery or scripts in preview; HTML depending on external CSS/JS will not render identically to production.
 - Native API fetch URLs are now origin-root (`/design-studio-native`) so they resolve correctly under nested conversation routes. This is covered by mocked client tests, **not** live DSH.
