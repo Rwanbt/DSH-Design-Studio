@@ -1,0 +1,55 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { svgGeometry, svgMoveEdits } from '../src/svg-geometry.mjs'
+import { svgAttributePatch } from '../src/svg-attributes.mjs'
+import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
+
+const source = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect id="card" x="90" y="60" width="460" height="240" fill="#fff"/><circle id="dot" cx="150" cy="150" r="40"/><ellipse id="oval" cx="300" cy="150" rx="25" ry="10"/></svg>'
+
+test('extracts geometries with correct SVG user coordinates', () => {
+  const { artboard, handles, warning } = svgGeometry(source)
+  assert.equal(warning, null)
+  assert.deepEqual(artboard, {x:0,y:0,width:640,height:360})
+  assert.deepEqual(handles.map(h => h.id), ['card','dot','oval'])
+  assert.deepEqual(handles[0].move, {x:'x',y:'y',initialX:90,initialY:60})
+  assert.deepEqual(handles[1].move, {x:'cx',y:'cy',initialX:150,initialY:150})
+  assert.deepEqual([handles[2].x,handles[2].y,handles[2].width,handles[2].height],[275,140,50,20])
+})
+test('moves rectangle by mapping x and y into source spans', () => {
+  const handle = svgGeometry(source).handles[0]
+  const patches = svgMoveEdits(handle,15.5,-8).map(edit=>svgAttributePatch(source,edit))
+  const result = applyNativePatches({source,format:'svg',baseHash:sourceHash(source),patches})
+  assert.equal(result.ok,true)
+  assert.ok(result.source.includes('id="card" x="105.5" y="52"'))
+  assert.equal(applyNativePatches({source:result.source,format:'svg',baseHash:result.hash,patches:result.inverse}).source,source)
+})
+test('moves circle center instead of bounding-box origin', () => {
+  const handle=svgGeometry(source).handles[1]
+  assert.deepEqual(svgMoveEdits(handle,5,7),[
+    {id:'dot',attribute:'cx',value:'155'},
+    {id:'dot',attribute:'cy',value:'157'}
+  ])
+})
+test('refuses moving SVGs with groups or transforms', () => {
+  assert.equal(svgGeometry('<svg viewBox="0 0 20 20"><g><rect id="r" x="1" y="1" width="2" height="2"/></g></svg>').handles.length,0)
+  assert.equal(svgGeometry('<svg viewBox="0 0 20 20"><rect id="r" transform="scale(2)" x="1" y="1" width="2" height="2"/></svg>').handles.length,0)
+})
+test('requires valid viewBox; no silent incorrect pixel conversion', () => {
+  assert.equal(svgGeometry('<svg><rect id="r" x="1" y="1" width="2" height="2"/></svg>').artboard,null)
+  assert.equal(svgGeometry('<svg viewBox="0 0 0 20"></svg>').artboard,null)
+  assert.equal(svgGeometry('<svg viewBox="0 0 20 20" preserveAspectRatio="none"></svg>').artboard,null)
+})
+test('requires explicit coordinate attributes, skips impossible handles', () => {
+  const noX='<svg viewBox="0 0 100 100"><rect id="r" width="5" height="5"/></svg>'
+  assert.equal(svgGeometry(noX).handles.length,0)
+})
+test('rejects malformed move delta', () => {
+  const handle=svgGeometry(source).handles[0]
+  assert.throws(()=>svgMoveEdits(handle,Number.NaN,3),TypeError)
+  assert.throws(()=>svgMoveEdits(handle,Infinity,3),TypeError)
+})
+test('supports nonzero viewBox offsets', () => {
+  const result=svgGeometry('<svg viewBox="-50 -100 200 100"><circle id="x" cx="0" cy="-50" r="5"/></svg>')
+  assert.deepEqual(result.artboard,{x:-50,y:-100,width:200,height:100})
+  assert.equal(result.handles[0].y,-55)
+})
