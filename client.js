@@ -41,6 +41,10 @@ window.__ModuleLoader__.load({
       const [htmlActive,setHtmlActive] = React.useState('')
       const [htmlProperty,setHtmlProperty] = React.useState('background-color')
       const [htmlValue,setHtmlValue] = React.useState('')
+      const [cssRules,setCssRules] = React.useState([])
+      const [cssActive,setCssActive] = React.useState('')
+      const [cssProperty,setCssProperty] = React.useState('color')
+      const [cssValue,setCssValue] = React.useState('')
       const [textNodes,setTextNodes] = React.useState([])
       const [editingText,setEditingText] = React.useState('')
       const [textDraft,setTextDraft] = React.useState('')
@@ -90,7 +94,14 @@ window.__ModuleLoader__.load({
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setHtmlElements(data.htmlElements||[])
-          if(doc?.file!==targetFile){setHtmlActive('');setHtmlValue('')}
+          setCssRules(data.cssRules||[])
+          if(doc?.file!==targetFile){
+            setHtmlActive('');setHtmlValue('')
+            setCssActive('');setCssValue('')
+          } else if(data.cssRules?.length && cssActive){
+            const retained=data.cssRules.find(rule=>rule.selector===cssActive)
+            setCssValue(retained?.declarations?.find(d=>d.property===cssProperty)?.value||'')
+          }
           setReloadRequired(false)
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
@@ -304,9 +315,20 @@ window.__ModuleLoader__.load({
       }
       const selected=nodes.find(n=>n.id===active)
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
+      const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
       const htmlProps=['color','background-color','display','width','height','padding','margin',
         'gap','font-size','border-radius','font-weight','text-align','flex-direction',
         'justify-content','align-items','opacity']
+      function chooseCssRule(selector) {
+        setCssActive(selector)
+        const rule=cssRules.find(item=>item.selector===selector)
+        setCssValue(rule?.declarations?.find(item=>item.property===cssProperty)?.value||'')
+      }
+      function chooseCssProperty(property) {
+        setCssProperty(property)
+        const rule=cssRules.find(item=>item.selector===cssActive)
+        setCssValue(rule?.declarations?.find(item=>item.property===property)?.value||'')
+      }
       function chooseHtmlElement(id) {
         setHtmlActive(id)
         const item=htmlElements.find(node=>node.id===id)
@@ -658,8 +680,15 @@ window.__ModuleLoader__.load({
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
         doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
           h('aside',{className:'dsh-studio-sidebar',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
-            h('strong',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':'Calques'),
+            h('strong',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':doc.format==='css'?'Règles CSS':'Calques'),
             h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
+              doc.format==='css'?
+                (cssRules.length?cssRules.map(rule=>h('button',{
+                  key:rule.selector,type:'button','aria-label':'Select CSS rule '+rule.selector,
+                  style:{...button,textAlign:'left',background:cssActive===rule.selector?'#494034':'transparent'},
+                  onClick:()=>chooseCssRule(rule.selector)},
+                  rule.selector+(rule.editable?'':' · lecture seule'))):
+                  h('small',null,'Règles simples #id ou .classe uniquement.')):
               (doc.format==='html'||doc.format==='htm')?
                 (htmlElements.length?htmlElements.map(n=>h('button',{key:n.id,type:'button',
                   'aria-label':'Select HTML element '+n.id,
@@ -892,9 +921,48 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format,htmlActive),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+                doc.format==='css'?
+                  h('div',{className:'dsh-studio-css-rule-preview',
+                    style:{background:'#24262a',border:'1px solid #414142',borderRadius:8,
+                      padding:18,minHeight:240,display:'grid',alignContent:'start',gap:12}},
+                    h('strong',{style:{color:ACCENT}},selectedCss?.selector||'Feuille de style native'),
+                    h('small',{style:{color:'#bbb9b4'}},
+                      'Sélectionne une règle simple à gauche. Les changements ciblent le fichier .css ouvert.'),
+                    selectedCss?.declarations?.map(declaration=>h('div',{key:declaration.property,
+                      style:{display:'flex',gap:8,justifyContent:'space-between'}},
+                      h('code',{style:{color:'#ccc'}},declaration.property),
+                      h('code',{style:{color:'#e8cdb1'}},declaration.value))
+                    )
+                  ):
+                  h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format,htmlActive),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
-            h('strong',null,'Design · Propriétés'),selectedHtml?
+            h('strong',null,'Design · Propriétés'),selectedCss?
+              h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
+                h('strong',{style:{color:ACCENT}},selectedCss.selector),
+                h('small',{style:{color:'#a9a6a1'}},
+                  'Édition ciblée d’une règle dans le fichier CSS natif. Les @media et sélecteurs complexes restent en lecture seule.'),
+                !selectedCss.editable?h('small',{style:{color:'#e7b2a8'}},
+                  'Lecture seule : '+(selectedCss.reason||'sélecteur complexe')):
+                  h('div',{style:{display:'grid',gap:8}},
+                    h('label',null,'Propriété',
+                      h('select',{style:field,'aria-label':'CSS rule property',
+                        value:cssProperty,onChange:e=>chooseCssProperty(e.target.value)},
+                        htmlProps.map(property=>h('option',{key:property,value:property},property)))),
+                    h('label',null,'Valeur',
+                      h('input',{style:field,'aria-label':'CSS rule value',
+                        value:cssValue,placeholder:'ex : 12px, flex, #bda991',
+                        onChange:e=>setCssValue(e.target.value)})),
+                    h('button',{style:{...button,borderColor:ACCENT},
+                      'aria-label':'Apply CSS rule style',
+                      disabled:busy||reloadRequired||source!==doc.source||!cssValue,
+                      onClick:()=>void save({kind:'css-rule',selector:cssActive,
+                        property:cssProperty,value:cssValue})
+                    },'Appliquer à la règle · sans IA'),
+                    h('small',{style:{opacity:.7}},
+                      'Un seul changement de déclaration CSS par opération ; Undo/Redo natif.')
+                  )
+              ):
+              selectedHtml?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedHtml.tag+' #'+selectedHtml.id),
                 h('small',{style:{color:'#a9a6a1'}},'HTML natif : propriétés inline ciblées. La prévisualisation surligne l’élément sélectionné.'),
