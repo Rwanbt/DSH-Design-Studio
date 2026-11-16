@@ -45,13 +45,34 @@ function validateRelativePath(file) {
   return { parts, format }
 }
 
+function nodeKey(info) {
+  return String(info.dev) + ':' + String(info.ino)
+}
+
+function sameTree(left, right) {
+  return left.root === right.root && left.absolute === right.absolute &&
+    left.entries.length === right.entries.length &&
+    left.entries.every((entry,index) => entry.path === right.entries[index].path &&
+      entry.key === right.entries[index].key)
+}
+
+function assertSameTree(before, after) {
+  if (!sameTree(before, after)) {
+    throw error('stale-revision','Workspace file or directory identity changed; reload before saving')
+  }
+}
+
 async function ensureSafeFile(workspace, file) {
   const { parts, format } = validateRelativePath(file)
   const root = await realpath(workspace)
+  const rootInfo = await lstat(root,{bigint:true})
+  if (!rootInfo.isDirectory()) throw error('invalid-path','Workspace root is not a directory')
+  const entries = [{path:root,key:nodeKey(rootInfo)}]
   let current = root
   for (let i = 0; i < parts.length; i += 1) {
     current = path.join(current, parts[i])
-    const info = await lstat(current)
+    const info = await lstat(current,{bigint:true})
+    entries.push({path:current,key:nodeKey(info)})
     if (info.isSymbolicLink()) throw error('symlink-forbidden', 'Symlinks inside the workspace are not editable')
     if (i < parts.length - 1 && !info.isDirectory()) throw error('invalid-path', 'Parent is not a directory')
     if (i === parts.length - 1 && (!info.isFile() || info.nlink !== 1)) {
@@ -62,7 +83,16 @@ async function ensureSafeFile(workspace, file) {
   if (parent !== root && !parent.startsWith(root + path.sep)) {
     throw error('invalid-path', 'File escapes workspace')
   }
-  return { absolute: current, format }
+  return { absolute: current, format, root, entries }
+}
+function revisionIdentity(info,rawHash) {
+  const fields=[info.dev,info.ino,info.ctimeNs??info.ctimeMs,
+    info.mtimeNs??info.mtimeMs,info.size,rawHash]
+  return createHash('sha256').update(fields.map(String).join(':')).digest('hex')
+}
+function sameReadStat(a,b) {
+  return nodeKey(a)===nodeKey(b) && a.size===b.size &&
+    a.ctimeNs===b.ctimeNs && a.mtimeNs===b.mtimeNs
 }
 
 function decodeUtf8(bytes) {
@@ -74,9 +104,9 @@ function decodeUtf8(bytes) {
 async function readChecked(absolute) {
   const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
-    const info = await handle.stat()
-    if (!info.isFile() || info.nlink !== 1) throw error('invalid-file', 'File must be regular and not hardlinked')
-    if (info.size > MAX_BYTES) throw error('too-large', 'File exceeds 8 MiB')
+    const info = await handle.stat({bigint:true})
+    if (!info.isFile() || info.nlink !== 1n) throw error('invalid-file', 'File must be regular and not hardlinked')
+    if (info.size > BigInt(MAX_BYTES)) throw error('too-large', 'File exceeds 8 MiB')
     const chunks = []
     const buffer = Buffer.alloc(Math.min(64 * 1024, MAX_BYTES + 1))
     let count = 0
@@ -88,7 +118,14 @@ async function readChecked(absolute) {
       chunks.push(Buffer.from(buffer.subarray(0, bytesRead)))
     }
     const bytes = Buffer.concat(chunks)
-    return { source: decodeUtf8(bytes), rawHash: createHash('sha256').update(bytes).digest('hex'), mode: info.mode & 0o777 }
+    const finalInfo = await handle.stat({bigint:true})
+    if (!sameReadStat(info,finalInfo)) {
+      throw error('stale-revision','File was modified while being read; retry')
+    }
+    const rawHash = createHash('sha256').update(bytes).digest('hex')
+    return { source: decodeUtf8(bytes), rawHash,
+      identity: revisionIdentity(info,rawHash), key: nodeKey(info),
+      mode: Number(info.mode & 0o777n) }
   } finally { await handle.close() }
 }
 
@@ -105,36 +142,64 @@ export function createNativeFileStore(workspace) {
     async read(file) {
       const target = await ensureSafeFile(workspace, file)
       const current = await readChecked(target.absolute)
-      return { file, format: target.format, source: current.source, hash: current.rawHash }
+      const verified = await ensureSafeFile(workspace,file)
+      assertSameTree(target,verified)
+      if (current.key !== verified.entries.at(-1).key) {
+        throw error('stale-revision','Workspace file changed during read')
+      }
+      return { file, format: target.format, source: current.source, hash: current.rawHash,
+        identity: current.identity }
     },
-    async apply(file, { baseHash, patches }) {
+    async apply(file, { baseHash, baseIdentity, patches }) {
       const target = await ensureSafeFile(workspace, file)
       return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
         const checked = await ensureSafeFile(workspace, file)
-        if (checked.absolute !== target.absolute) throw error('invalid-path','Workspace target changed while acquiring lock')
+        assertSameTree(target,checked)
         const current = await readChecked(target.absolute)
-        if (current.rawHash !== baseHash) throw error('stale-revision', 'On-disk file changed; reload before saving')
+        if (current.key !== checked.entries.at(-1).key ||
+            current.rawHash !== baseHash ||
+            (baseIdentity !== undefined && current.identity !== baseIdentity)) {
+          throw error('stale-revision','On-disk file identity or revision changed; reload before saving')
+        }
         const result = applyNativePatches({source: current.source, format: target.format, baseHash: sourceHash(current.source), patches})
         if (!result.ok) throw error(result.code, result.message)
-        if (!result.changed) return { file, hash: current.rawHash, changed: false, inverse: result.inverse }
+        if (!result.changed) return { file, hash: current.rawHash, identity:current.identity,
+          changed: false, inverse: result.inverse }
         const output = Buffer.from(result.source, 'utf8')
         if (output.length > MAX_BYTES) throw error('too-large', 'Edited file exceeds 8 MiB')
         const temp = path.join(path.dirname(target.absolute), '.' + path.basename(target.absolute) + '.' + randomUUID() + '.tmp')
         let created = false
+        let tempKey
         try {
           const h = await open(temp, 'wx', current.mode)
           created = true
-          try { await h.writeFile(output); await h.chmod(current.mode); await h.sync() }
-          finally { await h.close() }
+          try {
+            await h.writeFile(output); await h.chmod(current.mode); await h.sync()
+            tempKey=nodeKey(await h.stat({bigint:true}))
+          } finally { await h.close() }
           // Check immediately before replacing: cooperating Design Studio processes also hold the lock.
           // NOTE: external editors do not honor it; this is not a universal filesystem CAS.
-          await ensureSafeFile(workspace, file)
+          const checkedAgain = await ensureSafeFile(workspace, file)
+          assertSameTree(checked,checkedAgain)
           const latest = await readChecked(target.absolute)
-          if (latest.rawHash !== baseHash) throw error('stale-revision', 'On-disk file changed during edit; save aborted')
+          if (latest.key !== current.key || latest.identity !== current.identity ||
+              latest.rawHash !== baseHash) {
+            throw error('stale-revision','On-disk file identity or revision changed during edit; save aborted')
+          }
+          const tempInfo=await lstat(temp,{bigint:true})
+          if (!tempInfo.isFile() || tempInfo.nlink!==1n || nodeKey(tempInfo)!==tempKey) {
+            throw error('stale-revision','Temporary output file changed before commit')
+          }
           await rename(temp, target.absolute)
           created = false
           await fsyncDirectory(path.dirname(target.absolute))
-          return { file, hash: createHash('sha256').update(output).digest('hex'), changed: true, inverse: result.inverse }
+          const written = await readChecked(target.absolute)
+          if (written.key !== tempKey ||
+              written.rawHash !== createHash('sha256').update(output).digest('hex')) {
+            throw error('stale-revision','Post-commit file validation failed; reload document')
+          }
+          return { file, hash: written.rawHash, identity:written.identity,
+            changed: true, inverse: result.inverse }
         } finally {
           if (created) await unlink(temp).catch(() => {})
         }
