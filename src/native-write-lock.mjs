@@ -31,6 +31,11 @@ export async function withNativeWriteLock(absolute, action, { waitMs = 3500, pol
       if (!acquired.isDirectory()) throw new Error('Native lock is not a directory')
       break
     } catch (err) {
+      if (err.code === 'ENOENT' || err.code === 'ENOTDIR') {
+        const moved = new Error('Native file parent directory disappeared while acquiring the lock; reopen before saving')
+        moved.code = 'stale-revision'
+        throw moved
+      }
       if (err.code !== 'EEXIST') throw err
       if (performance.now() - started >= waitMs) {
         const busy = new Error('Design file locked by another operation. Check for a running editor before manually removing a stale .dsh-native.lock directory.')
