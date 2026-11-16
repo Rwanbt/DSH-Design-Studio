@@ -121,7 +121,7 @@ window.__ModuleLoader__.load({
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
         setBusy(true);setError('')
         try {
-          const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,...payload})})
+          const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
           const reloaded=await load(true,doc.file,response.createdId||active)
           if(!reloaded) {
             setReloadRequired(true)
