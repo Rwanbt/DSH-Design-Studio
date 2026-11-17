@@ -31,7 +31,7 @@ jobs:
   # simulated here; tests/e2e/real-dsh.mjs covers the actual installation.
   browser:
     name: browser (chromium + firefox)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

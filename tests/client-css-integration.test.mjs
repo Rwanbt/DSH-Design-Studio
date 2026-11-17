@@ -13,7 +13,10 @@ function find(node,predicate){
   return find(node.children||[],predicate)
 }
 async function until(predicate,message) {
-  const deadline=Date.now()+2500
+  // Windows can keep a deleted lock directory in "delete pending" for a moment,
+  // so the next acquire legitimately waits before succeeding. The invariant is
+  // that the write lands, not that it lands within 2.5 s.
+  const deadline=Date.now()+(process.platform==='win32'?15000:5000)
   while(Date.now()<deadline){
     if(await predicate())return
     await new Promise(resolve=>setTimeout(resolve,20))

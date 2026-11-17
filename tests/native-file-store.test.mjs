@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, symlink, chmod, stat, rm, link, rename, utimes } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, symlink, chmod, stat, rm, link, rename, utimes, access } from 'node:fs/promises'
+import { constants } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createNativeFileStore } from '../src/native-file-store.mjs'
@@ -82,11 +83,22 @@ test('rejects invalid UTF-8 and NUL',()=>workspace(async(root,store)=>{
   await assert.rejects(store.read('bad.svg'),{code:'invalid-encoding'})
 }))
 test('preserves file permissions during a save',()=>workspace(async(root,store)=>{
-  await writeFile(path.join(root,'x.css'),'a{color:red}')
-  await chmod(path.join(root,'x.css'),0o640)
+  const file=path.join(root,'x.css')
+  await writeFile(file,'a{color:red}')
+  await chmod(file,0o640)
+  const before=(await stat(file)).mode&0o777
   const doc=await store.read('x.css')
   await store.apply('x.css',{baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(doc.source,'red','blue')})
-  assert.equal((await stat(path.join(root,'x.css'))).mode&0o777,0o640)
+  const after=(await stat(file)).mode&0o777
+  if(process.platform==='win32') {
+    // Windows exposes no POSIX permission bits: chmod only toggles read-only, so
+    // the meaningful guarantee is that a save neither changes the reported mode
+    // nor drops read/write access to the file.
+    assert.equal(after,before,'a save must not change the mode Windows reports')
+    await access(file,constants.R_OK|constants.W_OK)
+  } else {
+    assert.equal(after,0o640,'POSIX permission bits must survive a save')
+  }
 }))
 test('rejects malformed edits without modifying source',()=>workspace(async(root,store)=>{
   await writeFile(path.join(root,'x.svg'),'<svg/>')

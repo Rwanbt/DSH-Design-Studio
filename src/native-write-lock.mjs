@@ -100,7 +100,20 @@ export async function withNativeWriteLock(absolute, action, { waitMs = 3500, pol
     if (current.dev !== acquired.dev || current.ino !== acquired.ino || !current.isDirectory()) {
       throw error('lock-changed', 'Native write lock was replaced while held; refusing unsafe cleanup')
     }
-    await io.rmdir(lockPath)
+    // Windows keeps a handle on a freshly used directory for a few milliseconds
+    // and can refuse rmdir with EPERM/EACCES/EBUSY. Retrying the *same* rmdir is
+    // safe because the inode identity was verified just above; exhausting the
+    // retries still fails loudly instead of leaking the lock silently.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await io.rmdir(lockPath)
+        break
+      } catch (err) {
+        const transient = ['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY'].includes(err?.code)
+        if (!transient || attempt >= 5) throw err
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+      }
+    }
   } catch (err) {
     releaseError = err
   }
