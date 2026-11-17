@@ -1,6 +1,6 @@
 # DSH Design Studio — Matrice de livraison et de couverture
 
-**Mise à jour :** 17 novembre 2026 (session autonome post-fusion) · **branche d'intégration :** `dev` · **PR #8 fusionnée par squash** (`c2f1747`) ; **`main` inchangée** ; remote limité à `main` + `dev`.
+**Mise à jour :** 17 novembre 2026 (session d'intégration de l'interface Graphite) · **branche d'intégration :** `dev` · **PR #8 fusionnée par squash** (`c2f1747`) ; **`main` alignée sur `dev` par fast-forward** (`6f57a95`), sur demande explicite du propriétaire ; remote limité à `main` + `dev`. Une `main` alignée ne vaut pas validation : les gates ci-dessous restent celles de `dev`, et `test:dsh` n'a pas été réexécuté après cette passe UI.
 
 **Règle de lecture :** un test unitaire, une simulation du Host **ou un test navigateur avec shell simulé** ne remplace pas un test dans l'application réelle. Chaque promotion de gate ci-dessous cite la commande, le résultat exact et le niveau de test réellement atteint. Un `NOT_RUN` n'est jamais un `PASS`.
 

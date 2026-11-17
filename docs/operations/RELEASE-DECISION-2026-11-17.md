@@ -26,7 +26,7 @@ standalone application, no separate process, no own window/port; installation is
 | Third-party notices | written | `NOTICE` |
 | Licence | MIT | `LICENSE` |
 | Install/rollback guide | written | `docs/operations/INSTALL.md` |
-| Branch hygiene | remote = `main` + `dev` only; `main` untouched | `git ls-remote --heads origin` |
+| Branch hygiene | remote = `main` + `dev` only; `main` fast-forwarded to `dev` at the owner's explicit request (`6f57a95`) | `git ls-remote --heads origin` |
 
 ## 2. Packaging steps (to run after approval only)
 
