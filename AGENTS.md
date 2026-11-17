@@ -28,3 +28,7 @@ level you actually executed, and never promote a lower level to a higher one:
 
 `npm run sbom` regenerates `docs/operations/SBOM.json`; the runtime dependency set
 must stay empty and the test-only devDependencies are recorded in `NOTICE`.
+
+## UI reference for agents
+
+Before redesigning any editor workbench UI, inspect `docs/design/DSH-Design-Studio-V3-Graphite-interactive.html` **and** `docs/design/INTERFACE-V3-GRAPHITE.md`. The HTML is the actual interactive Graphite V3 visual reference: dominant canvas, compact tool strip, layers, contextual inspector, warm graphite/stone accents, and editable SVG text. Preserve the host-native DSH architecture and theme tokens; translate the visual hierarchy, do not paste the standalone HTML as the plugin implementation. Verify proposed changes in the real DSH workbench, compare screenshots and interactions to the reference, and report differences. The initial mockup is a design direction, not a claim of final professional UX or production-readiness.
