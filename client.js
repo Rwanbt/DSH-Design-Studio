@@ -9,6 +9,22 @@ window.__ModuleLoader__.load({
     const pane = { background:'var(--dsw-alias-bg-base, #202124)', color:'var(--dsw-alias-label-primary, #e8e7e2)', border:'1px solid var(--dsw-alias-border-l1, #37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'var(--dsw-alias-bg-layer-2, #292b2f)', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-bg-layer-2,#27292d)', color:'inherit', padding:'6px 8px' }
+    /**
+     * Starting points for a brand-new document. Each one is valid native source
+     * that the existing inspectors can already edit: the SVG carries a real
+     * viewBox so the canvas mounts, the HTML carries ids the element mapper can
+     * target, the CSS carries rules the rule inspector can list.
+     */
+    const NEW_TEMPLATES = {
+      svg: '<?xml version="1.0" encoding="UTF-8"?>\n'+
+        '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">\n'+
+        '  <rect id="fond" x="0" y="0" width="640" height="360" fill="#1f2124"/>\n'+
+        '  <text id="titre" x="40" y="80" fill="#e8e7e2" font-family="system-ui, sans-serif" font-size="28">Nouveau titre</text>\n'+
+        '</svg>\n',
+      html: '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<title>Nouvelle page</title>\n</head>\n<body>\n'+
+        '<h1 id="titre">Nouvelle page</h1>\n<p id="intro">Modifiez ce texte depuis le canevas.</p>\n</body>\n</html>\n',
+      css: ':root {\n  --accent: #bda991;\n}\n\nbody {\n  font-family: system-ui, sans-serif;\n  color: #1f2124;\n}\n',
+    }
     /** Decode numeric HTML character references, so an encoded `refresh` is seen. */
     function decodeNumericReferences(text) {
       return String(text)
@@ -91,6 +107,8 @@ window.__ModuleLoader__.load({
       const [filesTruncated,setFilesTruncated] = React.useState(false)
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
+      const [newName,setNewName] = React.useState('')
+      const [creating,setCreating] = React.useState(false)
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
       const [nodes,setNodes] = React.useState([])
@@ -248,6 +266,29 @@ window.__ModuleLoader__.load({
       async function openPickedFile(picked) {
         const opened=await load(false,picked)
         if(opened)setShowFiles(false)
+      }
+      /**
+       * Create a new native document and open it. The Host refuses to replace an
+       * existing path, so a duplicate name is reported instead of overwriting a
+       * file the user did not mean to touch.
+       */
+      async function createDocument(format) {
+        if(!sessionId||creating) return
+        const typed=newName.trim()
+        const base=typed.replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')
+        const target=(base||'nouveau-fichier')+'.'+format
+        setCreating(true);setError('')
+        try {
+          await request('/create',{method:'POST',headers:{'content-type':'application/json'},
+            body:JSON.stringify({sessionId,file:target,source:NEW_TEMPLATES[format]})})
+          setNewName('')
+          await loadWorkspaceFiles()
+          await load(false,target)
+        }catch(e){
+          setError(e.code==='already-exists'?'Un fichier occupe déjà ce chemin : '+target
+            :e.code==='missing-directory'?'Ce dossier n’existe pas encore dans l’espace de travail.'
+            :String(e.message))
+        }finally{setCreating(false)}
       }
       async function save(payload, historyMode='record',onSaved=null) {
         if(!doc || busy)return false
@@ -1044,6 +1085,21 @@ window.__ModuleLoader__.load({
             h('small',{style:{opacity:0.7}},workspaceFiles.length+
               (workspaceFiles.length===1?' fichier de design':' fichiers de design')+
               (filesTruncated?' · liste limitée':''))),
+          // Creating a file is the first thing a user looks for; it used to be
+          // impossible from the workbench (the Host had no create path at all).
+          h('div',{role:'group','aria-label':'New design file',
+            style:{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginTop:2}},
+            h('span',{style:{fontSize:11.5,opacity:0.8}},'Nouveau :'),
+            h('input',{style:{...field,maxWidth:260},value:newName,'aria-label':'New design file name',
+              placeholder:'nom (ex. accueil.svg)',
+              onChange:e=>setNewName(e.target.value),
+              onKeyDown:e=>{if(e.key==='Enter')void createDocument('svg')}}),
+            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+              'aria-label':'Create SVG file',onClick:()=>void createDocument('svg')},'+ SVG'),
+            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+              'aria-label':'Create HTML file',onClick:()=>void createDocument('html')},'+ HTML'),
+            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+              'aria-label':'Create CSS file',onClick:()=>void createDocument('css')},'+ CSS')),
           workspaceFiles.length
             ? h('input',{style:{...field,maxWidth:420},value:fileSearch,'aria-label':'Filter design files',
                 placeholder:'Filtrer : nom, dossier, extension…',

@@ -23,11 +23,15 @@ import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
 import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 import { landingSpec, landingEmptySpec } from './landing.mjs'
+import { createSpec, createCssSpec, createRefusalSpec } from './create.mjs'
 
 export const specs = [
   mountSpec,
   landingSpec,
   landingEmptySpec,
+  createSpec,
+  createCssSpec,
+  createRefusalSpec,
   dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,
