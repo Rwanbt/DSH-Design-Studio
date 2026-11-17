@@ -86,6 +86,47 @@ disposable profile used for the automated run has no provider adapter
 (`NO_ADAPTER`). The workbench itself, the Host routes, the theme and the absence
 of client errors are verified in the real application.
 
+## 3 ter. If the bundled pnpm refuses the profile store
+
+Observed on a real 0.2.2-rc.3 installation whose profile had been created by an
+older runtime: every install — ours or any other — fails before touching the
+plugin with
+
+```
+[ERR_PNPM_UNEXPECTED_STORE] Unexpected store location
+The dependencies at "<profile>/node_modules" are currently linked from the store
+at "…/store/v10". pnpm now wants to use the store at "…/store/v11".
+```
+
+The profile records `packageManager: pnpm@10.33.2` while DSH now ships pnpm 11;
+pnpm 11 always appends its own store version, so no `store-dir` / `storeDir`
+setting can make it reuse a `v10` store (tried: it resolves to `v10/v11`). The
+install is refused cleanly, so nothing is half-written.
+
+Two honest options:
+
+1. **Migrate the profile (supported path).** Run the bundled pnpm 11 once in the
+   profile so its `node_modules` is re-linked from the v11 store. This is a real
+   maintenance operation: it downloads packages and rewrites the profile tree,
+   so take a copy of `package.json`, `pnpm-lock.yaml` and `node_modules/.modules.yaml`
+   first, and only do it with the application closed.
+2. **Link manually + restart (workaround).** What a `link:` dependency is anyway:
+   a symlink plus two entries.
+
+```bash
+cd ~/.dsh/profiles/desktop            # or your profile directory
+mkdir -p node_modules/@rwanbt
+ln -sfn /absolute/path/to/DSH-Design-Studio node_modules/@rwanbt/dsh-design-studio
+# then add, in package.json:
+#   "dependencies": { "@rwanbt/dsh-design-studio": "link:../../../../absolute/path" }
+#   "dsh.profile.bundles": [ …, "@rwanbt/dsh-design-studio" ]
+```
+
+A manual link is **not** the supported path: the next `pnpm install` in that
+profile will drop the symlink, and the Plugins screen keeps failing until the
+store is migrated. Restarting the application is required — bundles are read at
+startup, and `link:` cannot hot-load.
+
 ## 4. First run checklist
 
 1. Open a conversation with a workspace that contains an `.svg`, `.html` or `.css` file.
