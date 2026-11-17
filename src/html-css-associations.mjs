@@ -18,8 +18,7 @@ export function resolveStylesheetPath(htmlFile,href) {
   // A single leading "./" is permitted, but parent-directory traversal,
   // URI schemes, query/fragment and percent escapes are always refused.
   const normalizedHref=href.startsWith('./')?href.slice(2):href
-  if(!normalizedHref || normalizedHref.split('/').includes('.') ||
-     normalizedHref.split('/').includes('..'))return null
+  if(!normalizedHref || normalizedHref.split('/').some(part=>!part||part.startsWith('.')))return null
   const resolved=path.posix.join(path.posix.dirname(htmlFile),normalizedHref)
   if(resolved.startsWith('/') || resolved.split('/').some(part=>part==='..'||!part) ||
      path.posix.extname(resolved).toLowerCase()!=='.css')return null
