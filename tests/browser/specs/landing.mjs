@@ -28,14 +28,16 @@ export const landingSpec = {
     const nested = page.getByRole('button', { name: 'Open file nested/landing-b.svg' })
     await first.waitFor({ state: 'visible', timeout: 20000 })
     await nested.waitFor({ state: 'visible', timeout: 20000 })
-    assert.equal(await page.getByText('Aucun fichier ouvert').count(), 1,
+    assert.equal(await region.getByText('Aucun fichier ouvert').count(), 1,
       'the landing state must name what the user is looking at')
 
     // Opening from that list must reach a real document, not just change a label.
     await nested.click()
     await page.waitForSelector('[aria-label="Canvas viewport"]', { timeout: 20000 })
-    assert.equal(await page.getByText('Canevas · SVG').count(), 1,
-      'the canvas must be mounted after opening a file from the landing list')
+    const stage = page.locator('.dsh-studio-stage-top')
+    await stage.waitFor({ state: 'visible', timeout: 20000 })
+    assert.ok((await stage.innerText()).includes('nested/landing-b.svg'),
+      'the stage header must name the open document: ' + JSON.stringify(await stage.innerText()))
     assert.equal(await region.count(), 0,
       'the landing state must disappear once a document is open')
     // The open document is the one that was clicked, and the bytes are the real

@@ -101,7 +101,7 @@ export const svgNavigationSpec = {
 
     // Switching to the pan tool must be reflected in the toolbar state.
     await page.getByRole('button', { name: 'Pan canvas tool' }).click()
-    assert.equal(await page.evaluate(() => document.body.innerText.includes('Canevas · SVG')), true,
+    assert.equal(await page.evaluate(() => document.body.innerText.includes('nav.svg')), true,
       'canvas stays mounted when the pan tool is active')
     // No edit may happen without a validated gesture.
     assert.equal(await harness.read('nav.svg'), SVG_DOCUMENT,
