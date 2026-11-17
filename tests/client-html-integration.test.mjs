@@ -14,7 +14,7 @@ function find(node,predicate){
   return find(node.children||[],predicate)
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,25))
-async function until(predicate,message) {
+async function until(predicate,message,diagnose) {
   // Windows can keep a deleted lock directory in "delete pending" for a moment,
   // so the next acquire legitimately waits before succeeding. The invariant is
   // that the write lands, not that it lands within 2.5 s.
@@ -23,7 +23,35 @@ async function until(predicate,message) {
     if(await predicate())return
     await new Promise(resolve=>setTimeout(resolve,20))
   }
-  assert.fail(message)
+  // A failure must explain itself: include the UI's own error/status text and the
+  // Host calls that were made, so a platform-only failure is diagnosable from CI.
+  let detail=''
+  if(typeof diagnose==='function'){
+    try{ detail=' | '+await diagnose() }catch(error){ detail=' | diagnose failed: '+String(error) }
+  }
+  assert.fail(message+detail)
+}
+
+/** Collect the client's own error/status text plus the Host calls made so far. */
+function clientDiagnostics(app) {
+  const textOf=(node)=>{
+    if(node==null)return ''
+    if(typeof node==='string')return node
+    if(Array.isArray(node))return node.map(textOf).join('')
+    return textOf(node.children)
+  }
+  const tree=app.render()
+  const alert=find(tree,n=>n.props?.role==='alert')
+  const status=find(tree,n=>n.props?.role==='status')
+  const calls=app.calls()
+  return JSON.stringify({
+    alert: alert?textOf(alert).slice(0,240):null,
+    status: status?textOf(status).slice(0,120):null,
+    calls: calls.map(call=>call.method+' '+call.path),
+    lastStatuses: calls.slice(-3).map(call=>call.status??null),
+    hasReturnButton: !!find(tree,n=>n.props?.['aria-label']==='Return to linked HTML page'),
+    hasLinkedCssButton: !!find(tree,n=>String(n.props?.['aria-label']||'').startsWith('Open linked CSS')),
+  })
 }
 async function harness(run,options={}) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-html-client-'))
@@ -52,13 +80,15 @@ async function harness(run,options={}) {
       assert.equal(dest.origin,'https://dsh.example')
       const method=options.method||'GET'
       const body=options.body?JSON.parse(options.body):null
-      calls.push({method,path:dest.pathname,body})
+      const call={method,path:dest.pathname,body,status:null}
+      calls.push(call)
       const req=Readable.from(options.body?[Buffer.from(options.body)]:[])
       req.method=method
       req.url=dest.pathname+dest.search
       req.headers=options.body?options.headers||{'content-type':'application/json'}:{}
       let status,content
       await route(req,{writeHead(code){status=code},end(answer){content=JSON.parse(answer)}})
+      call.status=status
       return {ok:status>=200&&status<300,status,json:async()=>content}
     }
     runInNewContext(await readFile(new URL('../client.js',import.meta.url),'utf8'),{
@@ -260,7 +290,7 @@ test('HTML CSS candidate navigation uses the real CSS inspector and native Undo,
   assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
   match.props.onClick()
   await until(()=>!!find(app.render(),n=>n.props?.['aria-label']==='CSS rule value'),
-    'Linked CSS file did not open')
+    'Linked CSS file did not open',()=>clientDiagnostics(app))
   assert.equal(find(app.render(),n=>n.props?.['aria-label']==='CSS rule value').props.value,'red')
   find(app.render(),n=>n.props?.['aria-label']==='CSS rule value')
     .props.onChange({target:{value:'#bda991'}})
@@ -281,7 +311,7 @@ test('HTML CSS candidate navigation uses the real CSS inspector and native Undo,
   assert.ok(back)
   back.props.onClick()
   await until(()=>!!find(app.render(),n=>n.props?.['aria-label']==='Open linked CSS #title in theme.css'),
-    'Return to HTML did not restore selected element')
+    'Return to HTML did not restore selected element',()=>clientDiagnostics(app))
   assert.equal(await readFile(app.file,'utf8'),app.source)
 }, {
   html:'<link rel="stylesheet" href="theme.css"><h1 id="title" class="card">Hello</h1>',
