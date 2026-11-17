@@ -1,6 +1,6 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.20` on DRAFT PR #8 (not released). GitHub Actions [run 43993385351](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43993385351), tested source SHA `a88f340b8098cedef1a3e8847f37f320277aa237`: **269 PASS, 0 FAIL, 0 SKIP**. HTML/CSS inspectors now provide **native Flexbox/Grid presets** and the Graphite workspace has a compact pane dock driven by its container width. CSS computed style, real DSH/browser/mobile smoke and universal external-editor atomic CAS remain **NOT_IMPLEMENTED / NOT_RUN**. See [alpha.20 evidence](ALPHA20-EVIDENCE.md) and ADR-020.
+**Status:** experimental `0.1.0-alpha.20` integrated into `dev` via squash-merged PR #8 at `c2f17475` (not released). GitHub Actions [run 43993385351](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43993385351), tested source SHA `a88f340b8098cedef1a3e8847f37f320277aa237`: **269 PASS, 0 FAIL, 0 SKIP**. HTML/CSS inspectors now provide **native Flexbox/Grid presets** and the Graphite workspace has a compact pane dock driven by its container width. CSS computed style, real DSH/browser/mobile smoke and universal external-editor atomic CAS remain **NOT_IMPLEMENTED / NOT_RUN**. See [alpha.20 evidence](ALPHA20-EVIDENCE.md) and ADR-020.
 
 ## What it can do
 
@@ -108,4 +108,4 @@ Native patch engine (src/native-patch.mjs)
 
 UI direction is documented in [V3 Graphite decision](../design/INTERFACE-V3-GRAPHITE.md). The separate HTML V3 concept is **not** this running plugin; the real plugin uses the native DSH React/Host shell and is only partially visually aligned so far.
 
-**Do not merge to `main` or publish an npm release from this experimental branch without an explicit smoke test and review.**
+**Do not merge to `main` or publish an npm release from experimental `dev` without actual DSH integration, security review and explicit approval.**
