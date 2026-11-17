@@ -374,7 +374,7 @@ window.__ModuleLoader__.load({
           for(const declaration of item.declarations||[])values[declaration.property]=declaration.value
         } else {
           for(const part of String(item.style||'').split(';')){
-            const match=/^\\s*([a-z-]+)\\s*:\\s*([^;]*)$/i.exec(part)
+            const match=/^\s*([a-z-]+)\s*:\s*([^;]*)$/i.exec(part)
             if(match)values[match[1].toLowerCase()]=match[2].trim()
           }
         }
@@ -793,8 +793,10 @@ window.__ModuleLoader__.load({
           '.dsh-studio-workbench button:not(:disabled):hover{filter:brightness(1.12)}',
           '.dsh-studio-layout{min-height:0;flex:1;overflow:auto}',
           '.dsh-studio-canvas{background-color:#191a1d;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
-          '@media(max-width:1020px){.dsh-studio-layout{grid-template-columns:160px minmax(250px,1fr) 210px!important}}',
-          '@media(max-width:650px){.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:200px}.dsh-studio-canvas{min-height:240px}}'
+          '.dsh-studio-workbench{container-type:inline-size}',
+          '.dsh-studio-mobile-tabs{display:none}',
+          '@container(max-width:1080px){.dsh-studio-layout{grid-template-columns:170px minmax(230px,1fr) 230px!important}}',
+          '@container(max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #414141;background:#232529}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
         ].join('')),
         h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'#1e2023',minHeight:46}},
           h('strong',{style:{fontSize:14,letterSpacing:'.01em'}},'DSH · Design Studio'),
@@ -854,8 +856,16 @@ window.__ModuleLoader__.load({
           reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
             disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
         warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
+        doc&&h('nav',{className:'dsh-studio-mobile-tabs',role:'tablist',
+          'aria-label':'Mobile editor panels'},
+          [['layers','Calques'],['canvas','Canevas'],['inspector','Propriétés']].map(([tab,label])=>
+            h('button',{key:tab,type:'button',role:'tab',
+              'aria-label':'Mobile panel '+tab,'aria-selected':mobilePanel===tab,
+              style:{...button,background:mobilePanel===tab?'#574939':button.background,
+                borderColor:mobilePanel===tab?ACCENT:'#44464b'},
+              onClick:()=>setMobilePanel(tab)},label))),
         doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
-          h('aside',{className:'dsh-studio-sidebar',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
+          h('aside',{className:'dsh-studio-sidebar'+(mobilePanel==='layers'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
             h('strong',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':doc.format==='css'?'Règles CSS':'Calques'),
             h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
               doc.format==='css'?
@@ -875,7 +885,7 @@ window.__ModuleLoader__.load({
                   style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},
                   onClick:()=>select(n.id)},n.tag+' #'+n.id)):
                   h('small',null,'No addressable SVG nodes (unique id attributes required).')))),
-          h('div',{className:'dsh-studio-canvas',style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
+          h('div',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}},
               h('strong',null,'Canevas · '+doc.format.toUpperCase()),
               artboard&&doc.format==='svg'&&h('div',{role:'toolbar','aria-label':'Canvas navigation',style:{display:'flex',gap:5,alignItems:'center'}},
@@ -1143,7 +1153,7 @@ window.__ModuleLoader__.load({
                       referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
                       srcDoc:safePreview(source,doc.format,htmlActive),
                       style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
-          h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
+          h('aside',{className:'dsh-studio-inspector'+(mobilePanel==='inspector'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
             h('strong',null,'Design · Propriétés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
