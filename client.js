@@ -1095,7 +1095,18 @@ window.__ModuleLoader__.load({
               h('input',{type:'text',defaultValue:fillValue,key:fillValue,'aria-label':'Fill hex',
                 spellCheck:false,disabled:!editable,style:{...field,height:30},
                 onBlur:e=>commitAttributes({fill:e.target.value}),
-                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))
+                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+            h('div',{style:{display:'flex',gap:8,alignItems:'center',marginTop:8}},
+              h('span',{style:{color:'var(--dsw-alias-label-tertiary, #8c96a6)',fontSize:10,minWidth:58}},
+                'Opacité'),
+              h('input',{type:'number',min:0,max:1,step:0.05,key:'opacity:'+(selected.attributes.opacity??''),
+                defaultValue:selected.attributes.opacity??'1',disabled:!editable,
+                'aria-label':'Opacity',
+                style:{...field,height:30,width:80},
+                onBlur:e=>commitAttributes({opacity:e.target.value}),
+                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+            h('small',{style:{display:'block',marginTop:8,color:'var(--dsw-alias-label-tertiary, #7e8795)',fontSize:10,lineHeight:1.5}},
+              'Contour, dégradés et effets ne sont pas pris en charge par le moteur actuel : aucune commande factice n’est affichée.'))
         : null
       return h('section',{className:'dsh-studio-workbench',lang:'fr',
         'aria-label':'DSH Design Studio workbench',
