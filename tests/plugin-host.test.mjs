@@ -620,3 +620,36 @@ test('HTML linked styles refuse unsafe paths, stale symlinks and never fetch ext
     ['unsupported-link','unsupported-link','unavailable'])
   assert.equal(opened.json.styleMatches.find(x=>x.id==='app').matches.length,0)
 }))
+
+
+test('HTML API preview projection includes only safe CSS declarations and never rewrites linked file',()=>fixture(async(invoke,root)=>{
+  await mkdir(path.join(root,'styles'))
+  const html='<link rel="stylesheet" href="styles/theme.css"><main id="app" class="card">Hello</main>'
+  const css='#app{color:#bda991;display:grid;background-image:url(https://example.invalid/i)}'+
+    '\n.card{gap:16px;font-size:18px;}'
+  await writeFile(path.join(root,'page.html'),html)
+  await writeFile(path.join(root,'styles/theme.css'),css)
+  const response=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  assert.equal(response.status,200)
+  assert.ok(response.json.previewCss.includes('#app{color:#bda991;display:grid;}'))
+  assert.ok(response.json.previewCss.includes('.card{gap:16px;font-size:18px;}'))
+  assert.ok(!response.json.previewCss.includes('url('))
+  assert.ok(!response.json.previewCss.includes('https:'))
+  assert.deepEqual(response.json.previewCoverage,{
+    status:'partial',includedDeclarations:4,omittedDeclarations:1,truncated:false
+  })
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),html)
+  assert.equal(await readFile(path.join(root,'styles/theme.css'),'utf8'),css)
+}))
+test('unsupported and conditional linked stylesheets do not inject untrusted CSS into preview',()=>fixture(async(invoke,root)=>{
+  await writeFile(path.join(root,'bad.css'),'#app{display:none}')
+  const html='<link rel="stylesheet" href="bad.css" media="print">'+
+    '<link rel="stylesheet" href="https://bad.invalid/no.css">'+
+    '<main id="app">Visible</main>'
+  await writeFile(path.join(root,'page.html'),html)
+  const response=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  assert.equal(response.status,200)
+  assert.equal(response.json.previewCss,'')
+  assert.deepEqual(response.json.stylesheets.map(link=>link.status),['unsupported-link','unsupported-link'])
+  assert.equal(await readFile(path.join(root,'bad.css'),'utf8'),'#app{display:none}')
+}))
