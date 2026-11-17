@@ -8,6 +8,7 @@ import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
 import { listHtmlVisualElements, htmlVisualStylePatch } from './html-visual.mjs'
 import { listCssVisualRules, cssVisualRulePatch } from './css-visual.mjs'
+import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory']
@@ -77,7 +78,7 @@ export function createRouteHandler(ctx) {
         const file=url.searchParams.get('file') || ''
         const store=await storeFor(ctx,url.searchParams.get('sessionId'))
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let stylesheets=[]; let styleMatches=[]; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             nodes=listEditableSvgNodes(document.source)
@@ -90,12 +91,19 @@ export function createRouteHandler(ctx) {
         if(document.format==='html'||document.format==='htm') {
           htmlElements=listHtmlVisualElements(document.source)
           if(document.source.length>512*1024) warning='HTML visual mapping limited to documents under 512 KiB'
+          else {
+            try {
+              const linked=await collectHtmlCssCandidates(store,document)
+              stylesheets=linked.stylesheets
+              styleMatches=linked.styleMatches
+            } catch(_) { warning='Linked CSS inspector unavailable: reload document or use source editor' }
+          }
         }
         if(document.format==='css') {
           cssRules=listCssVisualRules(document.source)
           if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,geometry,warning})
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,stylesheets,styleMatches,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
