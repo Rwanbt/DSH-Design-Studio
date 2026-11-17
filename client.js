@@ -379,7 +379,7 @@ window.__ModuleLoader__.load({
           const element=target.closest('[id]')
           if(!element || !frameDoc.documentElement?.contains(element))return
           const id=element.getAttribute?.('id')
-          if(typeof id!=='string'||!(/^[A-Za-z][\\w:.-]{0,79}$/).test(id))return
+          if(typeof id!=='string'||!(/^[A-Za-z][A-Za-z0-9_:.-]{0,79}$/).test(id))return
           const models=context.htmlElements.filter(item=>item.id===id)
           if(models.length!==1 || !models[0].editable ||
              models[0].tag!==String(element.tagName||'').toLowerCase())return
