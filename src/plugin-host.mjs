@@ -6,7 +6,11 @@ import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
-import { listHtmlVisualElements, htmlVisualStylePatch } from './html-visual.mjs'
+import { listHtmlVisualElements, htmlVisualStylePatch, htmlVisualTextPatch, htmlVisualAttributePatch } from './html-visual.mjs'
+import { svgGroupingPatch } from './svg-groups.mjs'
+import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
+import { scanSvgDocument } from './svg-document.mjs'
+import { svgTransformPatch } from './svg-transform.mjs'
 import { listCssVisualRules, cssVisualRulePatch } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
@@ -81,9 +85,28 @@ export function createRouteHandler(ctx) {
         let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
-            nodes=listEditableSvgNodes(document.source)
+            // One structure scan feeds the whole layer list. Calling the per-node
+            // helpers here would rescan the document for every node and turn a
+            // 1500-layer open into quadratic work (measured: 12 s instead of 0.7 s).
+            let layerScan=null
+            try { layerScan=scanSvgDocument(document.source) } catch(_) { layerScan=null }
+            nodes=listEditableSvgNodes(document.source).map(node=>{
+              // Visibility/lock/transform state is read from the very bytes the
+              // patch engine will edit, never inferred from a rendered preview.
+              const scanned=layerScan?.byId.get(node.id)
+              const attribute=name=>scanned?.attributes.get(name)?.value??null
+              const display=attribute('display')
+              const visibility=attribute('visibility')
+              return {...node,
+                hidden:display==='none'||visibility==='hidden'||visibility==='collapse',
+                locked:attribute('data-locked')==='true',
+                transform:attribute('transform')}
+            })
             textNodes=listSvgTextNodes(document.source).map(({id,text,editable,attributes})=>({id,text,editable,attributes}))
-            geometry=svgGeometry(document.source)
+            // Transform-aware geometry: a document with groups or transforms keeps
+            // a real canvas, and each handle carries the linear inverse of its
+            // ancestor+self matrix so a visible drag maps back to local coordinates.
+            geometry=svgGeometry(document.source,{transforms:true})
             pathNodes=listSvgPathModels(document.source)
             if(geometry.warning) warning=geometry.warning
           } catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
@@ -172,6 +195,38 @@ export function createRouteHandler(ctx) {
             unique.add(key)
             return svgAttributePatch(doc.source,edit)
           })
+        } else if (params.kind === 'svg-grouping') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          const operation=svgGroupingPatch(doc.source,{
+            operation:params.operation,
+            ids:params.ids,
+            // `group` names its new wrapper, `ungroup` targets an existing one.
+            id:params.operation==='group'?(params.groupId||params.id):params.id,
+          })
+          patches=operation.patches
+          createdId=operation.id||null
+        } else if (params.kind === 'svg-visibility') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[svgVisibilityPatch(doc.source,{
+            id:params.id,property:params.property,value:params.value===undefined?null:params.value,
+          })]
+        } else if (params.kind === 'svg-lock') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[svgLockPatch(doc.source,{id:params.id,locked:params.locked===true})]
+        } else if (params.kind === 'svg-transform') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[svgTransformPatch(doc.source,{id:params.id,operation:params.operation}).patch]
+        } else if (params.kind === 'html-text') {
+          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[htmlVisualTextPatch(doc.source,{
+            id:params.id,key:params.key,path:params.path,text:params.value,
+          })]
+        } else if (params.kind === 'html-attribute') {
+          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[htmlVisualAttributePatch(doc.source,{
+            id:params.id,key:params.key,path:params.path,name:params.attribute,
+            value:params.value===undefined?null:params.value,
+          })]
         } else if (params.kind === 'replace-source' && typeof params.source==='string') {
           patches=[{start:0,end:doc.source.length,before:doc.source,after:params.source}]
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {

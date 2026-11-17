@@ -19,6 +19,7 @@ import { htmlSecuritySpec, svgSecuritySpec, cssInjectionSpec } from './security.
 import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y.mjs'
 import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
+import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec } from './structure.mjs'
 
 export const specs = [
   mountSpec,
@@ -27,6 +28,11 @@ export const specs = [
   svgLayersSpec,
   handleGeometrySpec,
   zoomGeometrySpec,
+  hierarchySpec,
+  lockSpec,
+  groupSpec,
+  ungroupSpec,
+  transformSpec,
   htmlSelectSpec,
   htmlClickInvalidationSpec,
   htmlLayoutSpec,

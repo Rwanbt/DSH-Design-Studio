@@ -67,6 +67,7 @@ window.__ModuleLoader__.load({
       const [editingText,setEditingText] = React.useState('')
       const [textDraft,setTextDraft] = React.useState('')
       const [active,setActive] = React.useState('')
+      const [extraSelection,setExtraSelection] = React.useState([])
       const [attribute,setAttribute] = React.useState('')
       const [value,setValue] = React.useState('')
       const [error,setError] = React.useState('')
@@ -213,6 +214,20 @@ window.__ModuleLoader__.load({
           setError(String(e.message)+(uncertain?' · Reload the file before editing.':''))
           return false
         }finally{setBusy(false)}
+      }
+      /** Rotate or scale the selected layer about its real rendered centre. */
+      function transformSelected(kind) {
+        if(!selected || busy || reloadRequired || source!==doc?.source) return
+        const box=handles.find(item=>item.id===selected.id)
+        if(!box || !Number.isFinite(box.x) || !box.width) {
+          setError('Transformations are unavailable for this layer: its geometry is not addressable')
+          return
+        }
+        const pivot={x:Math.round((box.x+box.width/2)*1000)/1000,y:Math.round((box.y+box.height/2)*1000)/1000}
+        const operation=kind==='rotate'?{type:'rotate',angle:90,pivot}
+          :kind==='scaleUp'?{type:'scale',sx:1.1,sy:1.1,pivot}
+            :{type:'scale',sx:1/1.1,sy:1/1.1,pivot}
+        return save({kind:'svg-transform',id:selected.id,operation})
       }
       async function layerAction(operation) {
         if(!active || busy || reloadRequired || !doc || doc.format!=='svg' || source!==doc.source)return false
@@ -372,13 +387,29 @@ window.__ModuleLoader__.load({
       function onEditorKeyUp(event) {
         if(event.key===' ' || event.code==='Space') setSpaceHeld(false)
       }
-      function select(nodeId) {
+      function select(nodeId, additive=false) {
         setActive(nodeId)
         setEditingText('')
         setTextDraft(textNodes.find(item=>item.id===nodeId)?.text||'')
         const node=nodes.find(n=>n.id===nodeId)
         const property=Object.keys(node?.attributes||{})[0]||''
         setAttribute(property);setValue(property ? node.attributes[property]:'')
+        // Ctrl/Cmd-click extends a structural selection so several sibling
+        // layers can be grouped in one exact patch set.
+        setExtraSelection(previous=>{
+          if(!additive) return []
+          // `active` is still the previous primary selection here: it joins the
+          // set so the first Ctrl-click already yields two selected layers.
+          const base=previous.includes(active)?previous:[...previous,active].filter(Boolean)
+          if(base.includes(nodeId)) return base.filter(id=>id!==nodeId)
+          return [...base,nodeId]
+        })
+      }
+      /** Selected layer ids in document order (primary selection always included). */
+      function selectionIds() {
+        const wanted=new Set(extraSelection)
+        if(active) wanted.add(active)
+        return nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
       }
       const selected=nodes.find(n=>n.id===active)
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
@@ -815,9 +846,14 @@ window.__ModuleLoader__.load({
             [{id:item.id,attribute:'cx',value:number(x+w/2)},{id:item.id,attribute:'cy',value:number(y+height/2)},
              {id:item.id,attribute:'rx',value:number(w/2)},{id:item.id,attribute:'ry',value:number(height/2)}]
         }else{
+          // Under a scaled or rotated ancestor the visible delta is not the local
+          // one: apply the linear inverse of the accumulated transform matrix.
+          const inverse=Array.isArray(item.move?.inverse)&&item.move.inverse.length===4?item.move.inverse:null
+          const localX=inverse?inverse[0]*dx+inverse[2]*dy:dx
+          const localY=inverse?inverse[1]*dx+inverse[3]*dy:dy
           edits=[
-            {id:drag.id,attribute:item.move.x,value:number(item.move.initialX+dx)},
-            {id:drag.id,attribute:item.move.y,value:number(item.move.initialY+dy)}
+            {id:drag.id,attribute:item.move.x,value:number(item.move.initialX+localX)},
+            {id:drag.id,attribute:item.move.y,value:number(item.move.initialY+localY)}
           ]
         }
         void save({kind:'svg-attributes',edits})
@@ -922,8 +958,17 @@ window.__ModuleLoader__.load({
                   onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
                   h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
                 (nodes.length?nodes.map(n=>h('button',{key:n.id,
-                  style:{...button,textAlign:'left',background:active===n.id?'#494034':'transparent'},
-                  onClick:()=>select(n.id)},n.tag+' #'+n.id)):
+                  type:'button',
+                  'aria-label':'Select layer '+n.tag+' #'+n.id+
+                    (n.hidden?' (hidden)':'')+(n.locked?' (locked)':'')+
+                    (extraSelection.includes(n.id)?' (in selection)':''),
+                  'aria-pressed':active===n.id,
+                  style:{...button,textAlign:'left',
+                    paddingLeft:8+(Math.max(0,Math.min(12,n.depth||0))*11),
+                    opacity:n.hidden?0.55:1,
+                    background:active===n.id?'#494034':extraSelection.includes(n.id)?'#3a3630':'transparent'},
+                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))},
+                  (n.hidden?'◌ ':'')+(n.locked?'⛔ ':'')+(n.isGroup?'▸ ':'')+(n.tag+' #'+n.id))):
                   h('small',null,'No addressable SVG nodes (unique id attributes required).')))),
           h('div',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}},
@@ -1289,6 +1334,51 @@ window.__ModuleLoader__.load({
                   h('button',{style:{...button,color:'#e7b2a8'},'aria-label':'Delete selected layer',
                     disabled:busy||source!==doc.source,
                     onClick:()=>void layerAction('delete'),title:'Supprimer le calque · Delete (annulable)'},'⌫ Supprimer')
+                ),
+                h('div',{role:'group','aria-label':'Layer structure',style:{display:'grid',gap:6,
+                  padding:8,background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                  h('small',{style:{color:'#c5ae94'}},'Structure · '+(selected.isGroup?'groupe':'forme')+
+                    ' · profondeur '+(selected.depth||0)+
+                    (extraSelection.length?' · '+(extraSelection.length+1)+' calques sélectionnés':'')),
+                  h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+                    h('button',{type:'button',style:button,'aria-label':'Group selected layers',
+                      disabled:busy||source!==doc.source||selectionIds().length<2,
+                      title:'Grouper les calques frères sélectionnés dans un nouveau <g>',
+                      onClick:()=>void save({kind:'svg-grouping',operation:'group',ids:selectionIds()})},
+                      '▣ Grouper'),
+                    h('button',{type:'button',style:button,'aria-label':'Ungroup selected layer',
+                      disabled:busy||source!==doc.source||!selected.isGroup,
+                      title:'Supprimer le groupe et remonter ses enfants',
+                      onClick:()=>void save({kind:'svg-grouping',operation:'ungroup',id:selected.id})},
+                      '▤ Dégrouper')
+                  ),
+                  h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+                    h('button',{type:'button',style:button,
+                      'aria-label':selected.hidden?'Show selected layer':'Hide selected layer',
+                      disabled:busy||source!==doc.source||selected.locked,
+                      onClick:()=>void save({kind:'svg-visibility',id:selected.id,property:'display',
+                        value:selected.hidden?null:'none'})},
+                      selected.hidden?'◉ Afficher':'◌ Masquer'),
+                    h('button',{type:'button',style:button,
+                      'aria-label':selected.locked?'Unlock selected layer':'Lock selected layer',
+                      disabled:busy||source!==doc.source,
+                      onClick:()=>void save({kind:'svg-lock',id:selected.id,locked:!selected.locked})},
+                      selected.locked?'⛔ Verrouillé':'🔓 Verrouiller')
+                  ),
+                  h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+                    h('button',{type:'button',style:button,'aria-label':'Rotate selected layer 90 degrees',
+                      disabled:busy||source!==doc.source||selected.locked,
+                      title:'Rotation de 90° autour du centre réel de la forme',
+                      onClick:()=>void transformSelected('rotate')},'⟳ Pivoter 90°'),
+                    h('button',{type:'button',style:button,'aria-label':'Scale selected layer up',
+                      disabled:busy||source!==doc.source||selected.locked,
+                      onClick:()=>void transformSelected('scaleUp')},'＋ Échelle ×1.1'),
+                    h('button',{type:'button',style:button,'aria-label':'Scale selected layer down',
+                      disabled:busy||source!==doc.source||selected.locked,
+                      onClick:()=>void transformSelected('scaleDown')},'－ Échelle ÷1.1')
+                  ),
+                  h('small',{style:{opacity:.7}},
+                    'Une seule matrice normalisée par action, pivot au centre de la forme, Undo exact.')
                 ),
                 selected.tag==='path'&&h('div',{style:{display:'grid',gap:6,padding:'10px 0'}},
                   h('strong',{style:{color:ACCENT}},'Tracé vectoriel · Nœuds'),
