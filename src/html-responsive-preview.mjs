@@ -35,14 +35,15 @@ export function buildSafeLinkedPreviewCss(rules, acceptedSelectors, currentLengt
     }
     if (!declarations.length) continue
     const text=rule.selector+'{'+declarations.join('')+'}'
-    if (length+text.length > MAX_PREVIEW_BYTES) {
+    const addition=text.length+(css.length?1:0)
+    if (length+addition > MAX_PREVIEW_BYTES) {
       truncated=true
       omitted+=declarations.length
       continue
     }
     css.push(text)
     included+=declarations.length
-    length+=text.length
+    length+=addition
   }
   return {css:css.join('\n'),included,omitted,truncated}
 }
