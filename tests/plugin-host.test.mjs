@@ -578,3 +578,45 @@ test('CSS visual edit rejects ambiguous selectors, untrusted values and stale id
   })
   assert.equal(stale.status,409)
 }))
+
+
+test('HTML Host response discovers safe linked CSS files and candidate ID/class declarations',()=>fixture(async(invoke,root)=>{
+  await mkdir(path.join(root,'assets'))
+  const html='<link rel="stylesheet" href="./assets/site.css">'+
+    '<main id="app"><h1 id="title" class="card">Hello</h1></main>'
+  const css='#title{color:red}\n.card{display:flex;gap:8px}\n'
+  await writeFile(path.join(root,'page.html'),html)
+  await writeFile(path.join(root,'assets/site.css'),css)
+  const opened=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  assert.equal(opened.status,200)
+  assert.equal(opened.json.stylesheets[0].file,'assets/site.css')
+  assert.equal(opened.json.stylesheets[0].status,'inspected')
+  assert.match(opened.json.stylesheets[0].identity,/^[a-f0-9]{64}$/)
+  const matches=opened.json.styleMatches.find(x=>x.id==='title').matches
+  assert.deepEqual(matches.map(x=>x.selector),['#title','.card'])
+  assert.ok(matches.every(x=>x.file==='assets/site.css'))
+  assert.deepEqual(opened.json.styleMatches.find(x=>x.id==='app').matches,[])
+  assert.equal(await readFile(path.join(root,'assets/site.css'),'utf8'),css)
+  // A candidate click is NOT a write; the existing CSS route requires a fresh
+  // CSS file revision before any actual edit is committed.
+  const cssDoc=(await invoke('GET','/design-studio-native/document?sessionId=known&file=assets%2Fsite.css')).json.document
+  const applied=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'assets/site.css',baseHash:cssDoc.hash,
+    baseIdentity:cssDoc.identity,kind:'css-rule',selector:'#title',property:'color',value:'#bda991'
+  })
+  assert.equal(applied.status,200)
+  assert.equal(await readFile(path.join(root,'page.html'),'utf8'),html)
+  assert.equal(await readFile(path.join(root,'assets/site.css'),'utf8'),css.replace('color:red','color:#bda991'))
+}))
+test('HTML linked styles refuse unsafe paths, stale symlinks and never fetch external resources',()=>fixture(async(invoke,root)=>{
+  const html='<link rel="stylesheet" href="https://example.invalid/a.css">'+
+    '<link href="../private.css" rel="stylesheet">'+
+    '<link rel="stylesheet" href="missing.css">'+
+    '<main id="app"></main>'
+  await writeFile(path.join(root,'page.html'),html)
+  const opened=await invoke('GET','/design-studio-native/document?sessionId=known&file=page.html')
+  assert.equal(opened.status,200)
+  assert.deepEqual(opened.json.stylesheets.map(x=>x.status),
+    ['unsupported-link','unsupported-link','unavailable'])
+  assert.equal(opened.json.styleMatches.find(x=>x.id==='app').matches.length,0)
+}))
