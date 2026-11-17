@@ -1840,12 +1840,19 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         const slots=ctx.slots
         if (!slots || typeof slots.inject!=='function') return
-        slots.inject('conversation.view',()=>slots.register({name:'conversation.view',id:'dsh-design-studio',order:25,label:()=> 'Design Studio'},Studio))
+        // Each cell is registered on its own: an older host that lacks one slot
+        // must still get the others, and a refused cell must never make the
+        // already working conversation view disappear.
+        const mount=(slot,register)=>{
+          try { slots.inject(slot,register) }
+          catch (error) { console.error('[dsh-design-studio] could not register '+slot, error) }
+        }
+        mount('conversation.view',()=>slots.register({name:'conversation.view',id:'dsh-design-studio',order:25,label:()=> 'Design Studio'},Studio))
         // A sidebar entry is the first place a user looks for an installed
         // plugin. The list id addresses the main cell of the same name, so both
         // registrations must keep one id: `design-studio`.
-        slots.inject('sidebar.panellist',()=>slots.register({name:'sidebar.panellist',id:'design-studio',order:20,label:()=> 'Design Studio'},StudioPanelIcon))
-        slots.inject('main',()=>slots.register({name:'main',key:'design-studio'},StudioPanel))
+        mount('sidebar.panellist',()=>slots.register({name:'sidebar.panellist',id:'design-studio',order:20,label:()=> 'Design Studio'},StudioPanelIcon))
+        mount('main',()=>slots.register({name:'main',key:'design-studio'},StudioPanel))
       },
     }
   },
