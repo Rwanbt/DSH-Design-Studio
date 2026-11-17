@@ -1,11 +1,12 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.18` on PR #8 DRAFT (not released). GitHub Actions [run 43988320991](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43988320991), tested source SHA `9e9e6f7310f7d83b016d6ec18a8d891becca628d`: **249 PASS, 0 FAIL, 0 SKIP**. The inspector can now navigate from a selected HTML ID/class to **candidate** rules in safe local CSS files and edit those files independently. The effective CSS cascade, linked CSS rendering, real DSH/browser integration and universal external-editor atomic CAS remain **NOT_IMPLEMENTED / NOT_RUN**. See [alpha.18 evidence](ALPHA18-EVIDENCE.md), ADR-018.
+**Status:** experimental `0.1.0-alpha.19` on PR #8 DRAFT (not released). GitHub Actions [run 43991894012](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43991894012), tested source SHA `e40daa813bedda34284b30d77e57eecd6216de1a`: **259 PASS, 0 FAIL, 0 SKIP**. HTML preview now has 100% / 1280 / 768 / 390 px viewport presets and bounded injection of **safe CSS subset only** from workspace-linked stylesheets. True browser cascade, DSH/browser smoke and universal external-editor atomic CAS remain **NOT_IMPLEMENTED / NOT_RUN**. See [alpha.19 evidence](ALPHA19-EVIDENCE.md), ADR-019.
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
-- **Correspondances HTML ↔ CSS locales expérimentales** : sélection d'un élément HTML, liste limitée aux règles simples `#id`/`.classe` dans les feuilles locales explicitement liées ; ouverture du vrai fichier CSS, vérification de sa version fraîche, édition et Undo, puis retour au HTML. **Pas de cascade calculée ni de rendu de CSS externe dans la prévisualisation** (ADR-018).
+- **Aperçu HTML responsive expérimental (alpha.19)** : Auto, 1280, 768 et 390 px avec iframe défilable et meta viewport. Rendu d'un **sous-ensemble de CSS locaux** reconnu et filtré (24 KiB maximum), sans URL/import ni règles complexes. Le panneau signale la couverture partielle, sans prétendre reproduire la cascade ou un rendu navigateur complet (ADR-019).
+- **Correspondances HTML ↔ CSS locales expérimentales** : sélection d'un élément HTML, liste limitée aux règles simples `#id`/`.classe` dans les feuilles locales explicitement liées ; ouverture du vrai fichier CSS, vérification de sa version fraîche, édition et Undo, puis retour au HTML. **Pas de cascade calculée ; seule une projection partielle et filtrée de CSS externe est montrée depuis l'alpha.19** (ADR-018/019).
 - **Inspecteur de règles CSS externes expérimental** : ouvrir un fichier `.css`, sélectionner une règle simple `#id` ou `.classe` unique, inspecter les déclarations, modifier une valeur autorisée ou en ajouter une, avec patch exact, Undo/Redo et contrôle d'identité. Les règles complexes restent en lecture seule ; la cascade HTML↔CSS n'est pas résolue.
 - **Sélection directe HTML expérimentale** : clic dans le `srcDoc` avec sandbox `allow-same-origin` **sans scripts** et CSP `script-src 'none'`. Le parent de confiance vérifie ID source unique, DOM non ambigu, session et identité de révision avant de sélectionner ; aucun changement de fichier n'est émis par le clic. Tests DOM simulés uniquement (voir ADR-017).
 - **Inspecteur HTML expérimental** : identifier les éléments par un `id` unique, les sélectionner dans la liste, les surligner dans un aperçu sandboxé et modifier des propriétés CSS inline simples par patches natifs exacts et annulables. Ne gère pas encore la cascade effective ni les sélecteurs complexes ; le clic direct dans la page est expérimental (alpha.17).
@@ -99,7 +100,7 @@ Native patch engine (src/native-patch.mjs)
 | Inline editor, text inspector, Add Text UI (mocked client) | PASS (GitHub Actions client simulations) |
 | Undo/redo native source round-trip and conflict rejection | PASS (GitHub Actions file/API integration tests) |
 | Real DSH browser pointer interaction | NOT_RUN |
-| Freehand vector drawing / Bézier handles | NOT_IMPLEMENTED |
+| Pen paths / Bézier handles and native topological edits (subset) | PASS (automated tests), advanced curve modes NOT_IMPLEMENTED |
 | HTML→CSS local candidate association and navigation | PASS (GitHub Actions Host/client simulations; no computed cascade) |
 | Real HTML/CSS cascade and exact computed style mapping | NOT_IMPLEMENTED |
 | CI on multiple operating systems | NOT_RUN |
