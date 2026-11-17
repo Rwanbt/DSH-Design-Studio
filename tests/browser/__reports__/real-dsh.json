@@ -13,7 +13,7 @@
     {
       "step": "create disposable profile",
       "status": "PASS",
-      "detail": "/tmp/dsh-g0-P0Rq2v/dsh-home/profiles/e2e (shipped web template)"
+      "detail": "/tmp/dsh-g0-5NOPGw/dsh-home/profiles/e2e (shipped web template)"
     },
     {
       "step": "install plugin into profile",
@@ -28,7 +28,7 @@
     {
       "step": "boot real DSH web app",
       "status": "PASS",
-      "detail": "http://127.0.0.1:43165"
+      "detail": "http://127.0.0.1:42547"
     },
     {
       "step": "load real DSH Web UI",
@@ -38,7 +38,7 @@
     {
       "step": "create a real DSH session",
       "status": "PASS",
-      "detail": "session-3d73a76d-df5a-4e5b-813f-c02cd1e6eb0f"
+      "detail": "session-601f495f-a5f5-408c-ad4c-16c42c8fae68"
     },
     {
       "step": "plugin route /health on the real Host",
@@ -73,7 +73,7 @@
     {
       "step": "client bundle served by the real Host",
       "status": "PASS",
-      "detail": "@rwanbt/dsh-design-studio HTTP 200, 106855 bytes, immediately=true, inject=[\"slots\"]"
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 110092 bytes, immediately=true, inject=[\"slots\"]"
     },
     {
       "step": "client bundle registers the conversation view",
@@ -96,6 +96,11 @@
       "detail": "background=rgb(255, 255, 255), DSH --dsw-alias-bg-layer-1=rgb(255, 255, 255), font=-apple-system, BlinkMacSystemFont, \"Sego"
     },
     {
+      "step": "the native editor opens a real document in DSH",
+      "status": "FAIL",
+      "detail": "canvas=false, layers=1, opened from the landing file list"
+    },
+    {
       "step": "screenshot of the real DSH workbench",
       "status": "PASS",
       "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench.png + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-element.png"
@@ -103,7 +108,7 @@
     {
       "step": "boot the real DSH Desktop shell",
       "status": "PASS",
-      "detail": "Electron shell, CDP port 37697, Host http://127.0.0.1:42899"
+      "detail": "Electron shell, CDP port 41771, Host http://127.0.0.1:44299"
     },
     {
       "step": "the shell initializes its own desktop profile",
@@ -123,7 +128,7 @@
     {
       "step": "the Desktop shell serves the plugin client bundle",
       "status": "PASS",
-      "detail": "@rwanbt/dsh-design-studio plugins/??@rwanbt/dsh-design-studio/client.js&rev=1d95b76ad6e1 HTTP 200, 106855 bytes, immediately=true"
+      "detail": "@rwanbt/dsh-design-studio plugins/??@rwanbt/dsh-design-studio/client.js&rev=34e638303765 HTTP 200, 110092 bytes, immediately=true"
     },
     {
       "step": "the plugin Host routes run in the desktop runtime",
@@ -148,7 +153,7 @@
     {
       "step": "screenshot of the workbench in DSH Desktop",
       "status": "PASS",
-      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop.png (86345 bytes) + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop-element.png (48317 bytes, 993x658)"
+      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop.png (92507 bytes) + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop-element.png (54524 bytes, 993x658)"
     },
     {
       "step": "no plugin JavaScript errors in DSH Desktop",
@@ -163,8 +168,8 @@
   ],
   "summary": {
     "pass": 32,
-    "fail": 0,
+    "fail": 1,
     "notRun": 0
   },
-  "at": "2026-11-17T14:20:20.686Z"
+  "at": "2026-11-17T15:31:30.191Z"
 }

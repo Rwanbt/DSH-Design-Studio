@@ -51,6 +51,8 @@ The owner opened the real `Design Studio` view and saw *"l'onglet est vide je ne
 
 Fixed (first half): a real landing region that lists the workspace's design files, loaded on mount, filterable, with a refresh control for files that appear while the view is open, and an honest "no design file in this workspace" state. The stale footer claim ("installation DSH réelle non validée") is gone. Proven by two new browser specs — `landing.mjs` opens a nested file straight from the list and asserts the canvas mounts; the empty spec asserts zero rows *and* a zero count, so an empty list can no longer masquerade as success. Remaining: creating a file still has no Host path (next slice, with the same transactional guarantees).
 
+Second, deeper cause found while proving the editor in the real product: `resolveArtboard` refused any root without a `viewBox`, so a document declaring only `width`/`height` — how most exported SVGs look — rendered its **layers but no canvas at all**. The geometry now derives the coordinate system from an absolute root size (`120` or `120px`; a percentage genuinely cannot define one) and keeps refusing only when neither is available. Regression test added: the canvas mounts and the rect stays draggable for a sized root, the percentage case stays refused.
+
 ### Internal-plugin integration (framing + theme)
 
 The product is an internal DSH bundle, not an external application (ADR-023). Two integration defects were found:

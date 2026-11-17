@@ -19,12 +19,36 @@ function finiteCoord(value) {
   return Number.isFinite(number) && Math.abs(number) <= MAX_COORD ? number : null
 }
 
+/**
+ * Intrinsic size declared on the root, in user units. Only an absolute number
+ * (optionally `px`) is usable: a percentage depends on a viewport this editor
+ * does not have, so it cannot define a coordinate system.
+ */
+function intrinsicSize(value) {
+  if (typeof value !== 'string') return null
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?:px)?$/.exec(value.trim())
+  if (!match) return null
+  const number = Number(match[1])
+  return Number.isFinite(number) && number > 0 && Math.abs(number) <= MAX_COORD ? number : null
+}
+
 function resolveArtboard(source) {
   let root
   try { root = svgRootAttributes(source) }
   catch (error) { return { root: null, artboard: null, warning: error.code || 'invalid-svg' } }
   const ratio = root.preserveAspectRatio
-  if (typeof root.viewBox !== 'string' || (ratio && !/^xMidYMid\s+meet$/.test(ratio.trim()))) {
+  if (typeof root.viewBox !== 'string') {
+    // A document without a viewBox still has a coordinate system when the root
+    // declares width and height, which is how most exported SVGs look. Refusing
+    // the whole canvas there left the editor with layers and no canvas at all.
+    const width = intrinsicSize(root.width)
+    const height = intrinsicSize(root.height)
+    if (width !== null && height !== null) {
+      return { root, artboard: { x: 0, y: 0, width, height }, warning: null }
+    }
+    return { root, artboard: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
+  }
+  if (ratio && !/^xMidYMid\s+meet$/.test(ratio.trim())) {
     return { root, artboard: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
   }
   const parts = root.viewBox.trim().split(/[\s,]+/).map(Number)

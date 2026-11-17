@@ -111,3 +111,24 @@ test('corner resize rejects unsupported shapes/corners and invalid deltas',()=>{
   assert.throws(()=>svgResizeCornerEdits(item,'nw',Infinity,0),TypeError)
   assert.throws(()=>svgResizeCornerEdits(svgGeometry(source).handles[1],'se',3,3),TypeError)
 })
+
+test('a root with width/height and no viewBox still yields a real canvas', () => {
+  // Regression: the editor rendered layers but NO canvas for this very common
+  // shape of exported SVG, which made the workbench look unimplemented.
+  const sized = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">' +
+    '<rect id="box" x="10" y="10" width="40" height="30" fill="#bda991"/></svg>'
+  const absolute = svgGeometry(sized, { transforms: true })
+  assert.deepEqual(absolute.artboard, { x: 0, y: 0, width: 120, height: 80 },
+    'width/height define the user-unit coordinate system, so the canvas must mount')
+  assert.equal(absolute.warning, null)
+  assert.equal(absolute.handles.length, 1, 'the rect stays draggable in user units')
+
+  // The conservative path must agree, otherwise the canvas appears without drag.
+  assert.deepEqual(svgGeometry(sized).artboard, { x: 0, y: 0, width: 120, height: 80 })
+
+  // A px suffix is the same size; a percentage is not an intrinsic size.
+  assert.deepEqual(svgGeometry('<svg width="120px" height="80px"><rect id="b" x="0" y="0" width="1" height="1"/></svg>').artboard,
+    { x: 0, y: 0, width: 120, height: 80 })
+  assert.equal(svgGeometry('<svg width="100%" height="100%"><rect id="b" x="0" y="0" width="1" height="1"/></svg>').artboard,
+    null)
+})

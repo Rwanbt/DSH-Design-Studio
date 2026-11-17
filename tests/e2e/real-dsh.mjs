@@ -399,6 +399,26 @@ async function main() {
             : 'the workbench section was not found')
       }
 
+      // The workbench is only an editor once a document is open: prove the real
+      // 3-pane interface (layers, canvas, inspector) inside the real product, not
+      // just its landing state.
+      if (workbench > 0) {
+        const row = page.getByRole('button', { name: 'Open file g0-art.svg' })
+        const opened = await row.count()
+          ? await row.first().click({ timeout: 15000 }).then(() => true).catch(() => false)
+          : false
+        if (!opened) {
+          await page.getByLabel('Workspace file').fill('g0-art.svg')
+          await page.getByRole('button', { name: 'Open', exact: true }).click().catch(() => {})
+        }
+        const canvas = await page.waitForSelector('[aria-label="Canvas viewport"]', { timeout: 25000 })
+          .then(() => true).catch(() => false)
+        const layerCount = await page.getByRole('button', { name: /^Select layer / }).count()
+        record('the native editor opens a real document in DSH',
+          canvas && layerCount > 0 ? 'PASS' : 'FAIL',
+          `canvas=${canvas}, layers=${layerCount}, opened from ${opened ? 'the landing file list' : 'the typed path'}`)
+      }
+
       // Optional evidence capture: the viewport AND the workbench element itself.
       // An element screenshot is proof that the plugin is really on screen; a bare
       // viewport shot can be all page chrome if the view sits below the fold.
