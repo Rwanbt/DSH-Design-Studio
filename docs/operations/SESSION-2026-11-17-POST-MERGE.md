@@ -1,6 +1,7 @@
 # Session report — post-merge autonomous run (17 November 2026)
 
 **Baseline:** `dev` @ `c97101e` (PR #8 squash `c2f1747` already integrated), `npm run check` **269 pass / 0 fail / 0 skip**, Node v24.19.0, Linux x64.
+**Final:** 398 core tests, 31 real-browser specs × Chromium + Firefox, real DSH 19/19.
 **Work branch:** `dev` only. `main` untouched. Remote heads: `main` + `dev` (the merged `feat/native-file-persistence` was deleted after verifying its tip was byte-identical to the squash commit).
 
 ## 1. What actually changed
@@ -30,6 +31,10 @@ The alpha evidence was string-level and React-simulated: **no browser had ever r
 6. **Windows: replacement rename and lock release.** Real Windows CI showed 3 then 2 failures. Fixes: bounded retry of the same `rename` on EACCES/EBUSY/EPERM, bounded retry of the lock `rmdir`, a platform-correct permission assertion instead of asserted POSIX bits, and Windows-tolerant polling deadlines.
 7. **Accessibility:** added `lang="fr"`, a `prefers-reduced-motion` rule, `prefers-contrast` support and an accessible name for the workbench. The documented canvas-owned shortcut contract (Space = temporary pan even when a control is focused) was kept and is now asserted in a browser instead of being changed silently.
 
+### Security work beyond the plan
+
+- Measured the `<meta http-equiv="refresh">` / `<base>` vectors in real Chromium and Firefox: an isolated probe showed a body-level meta refresh DOES navigate an unsandboxed `srcDoc` frame and does NOT navigate a frame with our `sandbox="allow-same-origin"`. Rather than relying on one browser behaviour, the preview projection now also strips `meta refresh` and `base` (the file on disk is untouched). Recorded in `docs/adr/ADR-022-HTML-PREVIEW-SECURITY-VERIFIED.md`, asserted on both engines.
+
 ### Capabilities delivered
 
 - **SVG structure:** byte-exact hierarchy model, group/ungroup of contiguous siblings, visibility toggle, lock marker, and rotation/scale about the real rendered pivot written as one normalised `matrix(...)`. Transform-aware geometry keeps a usable canvas for documents with groups or transforms, and drag deltas are mapped back through the accumulated matrix inverse.
@@ -42,8 +47,8 @@ The alpha evidence was string-level and React-simulated: **no browser had ever r
 | Command | Result |
 |---|---|
 | `npm run check` (baseline `c97101e`) | 269 pass / 0 fail / 0 skip |
-| `npm run check` (final) | **394 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
-| `npm run test:browser` (Chromium 145 + Firefox 146) | see `tests/browser/__reports__/browser-report.json`; 27 specs per browser, **all PASS** locally |
+| `npm run check` (final) | **398 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
+| `npm run test:browser` (Chromium 145 + Firefox 146) | **62 PASS / 0 FAIL** (31 specs × 2 engines); report at `tests/browser/__reports__/browser-report.json` |
 | `npm run test:dsh` (without credentials) | 14 PASS / 0 FAIL / 1 NOT_RUN (blank-session limit) |
 | `npm run test:dsh` (credentials opt-in) | **19 PASS / 0 FAIL / 0 NOT_RUN**, workbench rendered in the real conversation |
 | GitHub Actions `core` (ubuntu) | PASS |
