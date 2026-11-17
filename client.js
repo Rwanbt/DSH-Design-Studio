@@ -43,6 +43,9 @@ window.__ModuleLoader__.load({
       const previewBindingRef=React.useRef(null)
       const [htmlProperty,setHtmlProperty] = React.useState('background-color')
       const [htmlValue,setHtmlValue] = React.useState('')
+      const [htmlStylesheets,setHtmlStylesheets] = React.useState([])
+      const [htmlStyleMatches,setHtmlStyleMatches] = React.useState([])
+      const [returnHtmlRef,setReturnHtmlRef] = React.useState(null)
       const [cssRules,setCssRules] = React.useState([])
       const [cssActive,setCssActive] = React.useState('')
       const [cssProperty,setCssProperty] = React.useState('color')
@@ -104,6 +107,8 @@ window.__ModuleLoader__.load({
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setHtmlElements(data.htmlElements||[])
+          setHtmlStylesheets(data.stylesheets||[])
+          setHtmlStyleMatches(data.styleMatches||[])
           setCssRules(data.cssRules||[])
           if(doc?.file!==targetFile){
             setHtmlActive('');setHtmlValue('')
@@ -325,10 +330,31 @@ window.__ModuleLoader__.load({
       }
       const selected=nodes.find(n=>n.id===active)
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
+      const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
       const htmlProps=['color','background-color','display','width','height','padding','margin',
         'gap','font-size','border-radius','font-weight','text-align','flex-direction',
         'justify-content','align-items','opacity']
+      async function openLinkedCssRule(match) {
+        if(!doc || !['html','htm'].includes(doc.format)||busy||reloadRequired||
+           source!==doc.source || !match?.file || !match?.selector)return
+        const back={file:doc.file,id:htmlActive}
+        const ok=await load(false,match.file)
+        if(!ok)return
+        setReturnHtmlRef(back)
+        setCssActive(match.selector)
+        const first=match.declarations?.find(entry=>htmlProps.includes(entry.property))
+        setCssProperty(first?.property||'color')
+        setCssValue(first?.value||'')
+      }
+      async function returnToHtml() {
+        if(!returnHtmlRef || busy || reloadRequired || source!==doc?.source)return
+        const back=returnHtmlRef
+        if(await load(false,back.file)) {
+          setHtmlActive(back.id)
+          setReturnHtmlRef(null)
+        }
+      }
       function chooseCssRule(selector) {
         setCssActive(selector)
         const rule=cssRules.find(item=>item.selector===selector)
@@ -1005,6 +1031,10 @@ window.__ModuleLoader__.load({
             h('strong',null,'Design · Propriétés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
+                returnHtmlRef&&h('button',{type:'button',style:button,
+                  'aria-label':'Return to linked HTML page',
+                  disabled:busy||reloadRequired||source!==doc.source,
+                  onClick:()=>void returnToHtml()},'← Retour à la page HTML'),
                 h('small',{style:{color:'#a9a6a1'}},
                   'Édition ciblée d’une règle dans le fichier CSS natif. Les @media et sélecteurs complexes restent en lecture seule.'),
                 !selectedCss.editable?h('small',{style:{color:'#e7b2a8'}},
@@ -1032,6 +1062,33 @@ window.__ModuleLoader__.load({
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedHtml.tag+' #'+selectedHtml.id),
                 h('small',{style:{color:'#a9a6a1'}},'HTML natif : clic dans l’aperçu pour sélectionner un élément à id unique. Scripts bloqués ; propriétés inline ciblées.'),
+                h('div',{className:'dsh-studio-linked-css',style:{display:'grid',gap:5,padding:8,
+                  background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                  h('strong',{style:{fontSize:12,color:'#c5ae94'}},'CSS externe · correspondances possibles'),
+                  h('small',{style:{fontSize:11,color:'#aaa9a5'}},
+                    'Ce ne sont pas des styles calculés. Cascade, !important, media queries et héritage non résolus.'),
+                  htmlStylesheets.filter(link=>link.status!=='inspected').map((link,index)=>
+                    h('small',{key:'blocked-'+index,style:{color:'#e5b39b'}},
+                      (link.file||'Lien CSS')+' · '+link.status)),
+                  selectedHtmlRules.length?
+                    selectedHtmlRules.map((match,index)=>
+                      h('button',{type:'button',key:match.file+match.selector+index,
+                        'aria-label':'Open linked CSS '+match.selector+' in '+match.file,
+                        title:'Ouvrir le fichier CSS natif et inspecter '+match.selector,
+                        disabled:busy||reloadRequired||source!==doc.source,
+                        style:{...button,textAlign:'left',display:'grid',gap:3},
+                        onClick:()=>void openLinkedCssRule(match)},
+                        h('span',{style:{color:ACCENT}},match.selector+' · '+match.file),
+                        h('small',{style:{color:'#bdbbb7'}},
+                          'Spécificité indicative '+match.specificity+
+                          (match.editable?'':' · règle en lecture seule')+
+                          (match.duplicateAcrossFiles?' · sélecteur répété':'')
+                        )
+                      )
+                    ):
+                    h('small',{style:{color:'#aaa9a5'}},
+                      'Aucune règle simple #id ou .classe reconnue dans les CSS locaux référencés.')
+                ),
                 !selectedHtml.editable?h('small',{style:{color:'#f1b6aa'}},
                   'Lecture seule : '+(selectedHtml.reason||'structure complexe')):
                 h('div',{style:{display:'grid',gap:8}},
