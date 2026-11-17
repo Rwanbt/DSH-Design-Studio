@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
-import { mkdtemp, mkdir, rmdir, symlink, writeFile, readFile, rename, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rmdir, symlink, writeFile, readFile, readdir, rename, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createRouteHandler } from '../src/plugin-host.mjs'
@@ -662,4 +662,72 @@ test('unsupported and conditional linked stylesheets do not inject untrusted CSS
   assert.equal(response.json.previewCss,'')
   assert.deepEqual(response.json.stylesheets.map(link=>link.status),['unsupported-link','unsupported-link'])
   assert.equal(await readFile(path.join(root,'bad.css'),'utf8'),'#app{display:none}')
+}))
+
+// --- creation -----------------------------------------------------------------
+// A workbench that can only open existing files forces the user to leave it to
+// start any design. These tests drive the real route against a real workspace
+// and check the one property that must never regress: creation never replaces.
+const CREATE = '/design-studio-native/create'
+const NEW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect id="box" fill="red"/></svg>'
+
+test('create writes a new native document and the workbench can open it', () => fixture(async (invoke, root) => {
+  const created = await invoke('POST', CREATE, { sessionId: 'known', file: 'nouveau.svg', source: NEW_SVG })
+  assert.equal(created.status, 201)
+  assert.equal(created.json.ok, true)
+  assert.equal(created.json.created.format, 'svg')
+  assert.match(created.json.created.hash, /^[a-f0-9]{64}$/)
+  assert.equal(await readFile(path.join(root, 'nouveau.svg'), 'utf8'), NEW_SVG)
+
+  const files = await invoke('GET', '/design-studio-native/files?sessionId=known')
+  assert.ok(files.json.files.some((item) => item.path === 'nouveau.svg'), 'the new file must be listed')
+
+  const opened = await invoke('GET', '/design-studio-native/document?sessionId=known&file=nouveau.svg')
+  assert.equal(opened.status, 200)
+  assert.deepEqual(opened.json.nodes.map((node) => node.id), ['box'])
+  assert.deepEqual(opened.json.geometry.artboard, { x: 0, y: 0, width: 10, height: 10 })
+}))
+
+test('create refuses an existing path without touching one byte', () => fixture(async (invoke, root) => {
+  const original = await readFile(path.join(root, 'icon.svg'), 'utf8')
+  const refused = await invoke('POST', CREATE, { sessionId: 'known', file: 'icon.svg', source: NEW_SVG })
+  assert.equal(refused.status, 409)
+  assert.equal(refused.json.error, 'already-exists')
+  assert.equal(await readFile(path.join(root, 'icon.svg'), 'utf8'), original)
+}))
+
+test('create validates the path, the format and the payload before writing', () => fixture(async (invoke, root) => {
+  const traversal = await invoke('POST', CREATE, { sessionId: 'known', file: '../escape.svg', source: NEW_SVG })
+  assert.equal(traversal.status, 400)
+  assert.equal(traversal.json.error, 'invalid-path')
+  const format = await invoke('POST', CREATE, { sessionId: 'known', file: 'note.txt', source: 'x' })
+  assert.equal(format.status, 400)
+  assert.equal(format.json.error, 'unsupported-format')
+  const missingDirectory = await invoke('POST', CREATE, { sessionId: 'known', file: 'absent/page.svg', source: NEW_SVG })
+  assert.equal(missingDirectory.status, 400)
+  assert.equal(missingDirectory.json.error, 'missing-directory')
+  const noSource = await invoke('POST', CREATE, { sessionId: 'known', file: 'vide.svg' })
+  assert.equal(noSource.status, 400)
+  assert.equal(noSource.json.error, 'invalid-source')
+  const noSession = await invoke('POST', CREATE, { sessionId: 'other', file: 'x.svg', source: NEW_SVG })
+  assert.equal(noSession.status, 400)
+  assert.equal(noSession.json.error, 'no-session')
+  assert.deepEqual((await readdir(root)).filter((name) => name.includes('escape') || name.includes('vide') || name.includes('note')), [])
+}))
+
+test('a created document is editable through /apply with its fresh identity', () => fixture(async (invoke, root) => {
+  const created = (await invoke('POST', CREATE, { sessionId: 'known', file: 'frais.svg', source: NEW_SVG })).json.created
+  const edited = await invoke('POST', '/design-studio-native/apply', {
+    sessionId: 'known', file: 'frais.svg', baseHash: created.hash, baseIdentity: created.identity,
+    kind: 'svg-attribute', id: 'box', attribute: 'fill', value: '#00ff00',
+  })
+  assert.equal(edited.status, 200)
+  assert.ok((await readFile(path.join(root, 'frais.svg'), 'utf8')).includes('fill="#00ff00"'))
+  // The identity from before the edit must now be stale, exactly like a reopened file.
+  const stale = await invoke('POST', '/design-studio-native/apply', {
+    sessionId: 'known', file: 'frais.svg', baseHash: created.hash, baseIdentity: created.identity,
+    kind: 'svg-attribute', id: 'box', attribute: 'fill', value: '#000000',
+  })
+  assert.equal(stale.status, 409)
+  assert.equal(stale.json.error, 'stale-revision')
 }))

@@ -130,6 +130,20 @@ export function createRouteHandler(ctx) {
         }
         return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
       }
+      if (req.method === 'POST' && endpoint === '/create') {
+        // Creating a document is exclusive: an existing path is refused (409),
+        // never replaced. The store owns the no-overwrite commit protocol.
+        const params=await bodyJson(req)
+        if (typeof params.file !== 'string' || !params.file) {
+          return reply(res,400,{ok:false,error:'invalid-path',message:'A relative workspace path is required'})
+        }
+        if (typeof params.source !== 'string') {
+          return reply(res,400,{ok:false,error:'invalid-source',message:'New file content must be a string'})
+        }
+        const store=await storeFor(ctx,params.sessionId)
+        const created=await store.create(params.file,{source:params.source})
+        return reply(res,201,{ok:true,created})
+      }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
         if (typeof params.baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
@@ -241,7 +255,7 @@ export function createRouteHandler(ctx) {
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
       const code=e.code || 'internal-error'
-      const status=code==='stale-revision'?409:code==='file-busy'?423:code==='too-large'?413:
+      const status=code==='stale-revision'||code==='already-exists'?409:code==='file-busy'?423:code==='too-large'?413:
         ['internal-error','lock-release-failed','lock-changed'].includes(code)?500:400
       return reply(res,status,{ok:false,error:code,message:code==='internal-error'?'Request failed':String(e.message).slice(0,220)})
     }

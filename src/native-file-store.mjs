@@ -8,6 +8,12 @@ import { withNativeWriteLock } from './native-write-lock.mjs'
 const MAX_BYTES = 8 * 1024 * 1024
 const FORMATS = new Set(['svg', 'html', 'htm', 'css'])
 const locks = new Map()
+// New documents are created with ordinary user-file permissions; the process
+// umask still applies (Node has no portable way to force an exact mode).
+const CREATE_MODE = 0o644
+// Hard links are unavailable on some filesystems (exFAT/FAT32, a few network
+// mounts). Those codes select the exclusive-create fallback instead of failing.
+const CREATE_LINK_UNSUPPORTED = new Set(['EXDEV', 'EPERM', 'EACCES', 'ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EMLINK'])
 
 /**
  * Exact, revision-checked source storage for real SVG/HTML/CSS files.
@@ -25,6 +31,17 @@ const locks = new Map()
  *
  * In one sentence: a cooperative advisory lock + pre-rename re-validation +
  * post-commit verification. This is NOT a universal filesystem CAS.
+ *
+ * CREATE PROTOCOL (new documents):
+ *   1. the relative path is validated and every existing parent directory is
+ *      resolved (no symlink, no escape from the workspace root);
+ *   2. the target must be absent; absence is re-checked inside the lock;
+ *   3. bytes go to a same-directory temporary file, fsynced, then commit uses
+ *      link() — which fails with EEXIST instead of replacing a target — with an
+ *      exclusive `wx` create as the fallback for filesystems without links;
+ *   4. the committed file is read back and its SHA-256 must match the bytes.
+ *   Nothing is ever renamed over a target, so a race can lose the create but
+ *   can never destroy an existing file.
  *
  * GUARANTEES for cooperating writers:
  *   - two processes starting from the same revision never both commit;
@@ -54,6 +71,11 @@ const locks = new Map()
  *     ino 0 or coarse timestamps (some FAT/exotic mounts), identity is weaker:
  *     an identical-bytes replacement with identical timestamps can only be
  *     caught by re-reading the content, not by the identity token alone.
+ *   - create() never creates directories: a missing parent is `missing-directory`
+ *     and the user (or the conversation) must create it first;
+ *   - create() is exclusive with respect to the *name*, not to meaning: two
+ *     processes racing for the same new path get one file and one
+ *     `already-exists`, which is the intended outcome.
  *
  * `createNativeFileStore(workspace, { io, lock })` exposes a narrow test seam:
  * `io` may replace open/lstat/realpath/rename/unlink and `lock` forwards
@@ -66,6 +88,7 @@ const DEFAULT_IO = Object.freeze({
   realpath: nodeFs.realpath,
   rename: nodeFs.rename,
   unlink: nodeFs.unlink,
+  link: nodeFs.link,
 })
 
 function error(code, message, cause) {
@@ -164,7 +187,7 @@ function assertSameTree(before, after) {
   }
 }
 
-async function ensureSafeFile(workspace, file, io) {
+async function walkSafe(workspace, file, io, { allowMissingLeaf = false } = {}) {
   const { parts, format } = validateRelativePath(file)
   let root, rootInfo
   try {
@@ -177,30 +200,104 @@ async function ensureSafeFile(workspace, file, io) {
   const entries = [{path:root,key:nodeKey(rootInfo)}]
   let current = root
   for (let i = 0; i < parts.length; i += 1) {
+    const leaf = i === parts.length - 1
     current = path.join(current, parts[i])
     let info
     try {
       info = await io.lstat(current,{bigint:true})
     } catch (err) {
-      throw pathFailure(err, 'File or parent directory disappeared; reload before saving')
+      // A new document may not exist yet; its parents must, and are still
+      // verified below. Only the leaf itself is permitted to be absent.
+      if (leaf && allowMissingLeaf && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) break
+      if (!leaf && allowMissingLeaf && err.code === 'ENOENT') {
+        throw error('missing-directory', 'Parent directory does not exist inside the workspace')
+      }
+      throw pathFailure(err, allowMissingLeaf
+        ? 'Parent directory disappeared; reload before creating'
+        : 'File or parent directory disappeared; reload before saving')
     }
     entries.push({path:current,key:nodeKey(info)})
     if (info.isSymbolicLink()) throw error('symlink-forbidden', 'Symlinks inside the workspace are not editable')
-    if (i < parts.length - 1 && !info.isDirectory()) throw error('invalid-path', 'Parent is not a directory')
-    if (i === parts.length - 1 && (!info.isFile() || info.nlink !== 1n)) {
+    // Creation compares only the parent tree: a leaf that appears between
+    // validation and commit belongs to another creator and is refused by
+    // assertAbsent inside the critical section (as `already-exists`), not
+    // reported as a stale revision.
+    if (leaf && allowMissingLeaf) {
+      entries.pop()
+      continue
+    }
+    if (!leaf && !info.isDirectory()) throw error('invalid-path', 'Parent is not a directory')
+    if (leaf && (!info.isFile() || info.nlink !== 1n)) {
       throw error('invalid-file', 'Only regular, non-hardlinked files are editable')
     }
   }
+  const directory = path.dirname(current)
   let parent
   try {
-    parent = await io.realpath(path.dirname(current))
+    parent = await io.realpath(directory)
   } catch (err) {
-    throw pathFailure(err, 'File parent directory disappeared; reload before saving')
+    throw pathFailure(err, allowMissingLeaf
+      ? 'Parent directory disappeared; reload before creating'
+      : 'File parent directory disappeared; reload before saving')
   }
   if (parent !== root && !parent.startsWith(root + path.sep)) {
     throw error('invalid-path', 'File escapes workspace')
   }
-  return { absolute: current, format, root, entries }
+  return { absolute: current, directory, format, root, entries }
+}
+
+async function ensureSafeFile(workspace, file, io) {
+  return walkSafe(workspace, file, io)
+}
+
+async function ensureSafeTarget(workspace, file, io) {
+  return walkSafe(workspace, file, io, { allowMissingLeaf: true })
+}
+
+/** Refuse to create over anything that already occupies the path. */
+async function assertAbsent(absolute, io) {
+  try {
+    await io.lstat(absolute, { bigint: true })
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return
+    if (err && err.code === 'ENOTDIR') throw error('invalid-path', 'Parent is not a directory', err)
+    throw pathFailure(err, 'Could not check whether the path is free')
+  }
+  throw error('already-exists', 'A file already exists at that path; open it instead of creating it')
+}
+
+/**
+ * Commit a brand-new file without ever replacing existing bytes.
+ * `link()` is the atomic no-overwrite commit (it fails with EEXIST instead of
+ * replacing a target, unlike rename()). Filesystems without hard links fall
+ * back to an exclusive (`wx`) create, which is also no-overwrite.
+ */
+async function commitCreated(io, temp, target, bytes) {
+  try {
+    await io.link(temp, target)
+    return 'link'
+  } catch (err) {
+    if (err && err.code === 'EEXIST') {
+      throw error('already-exists', 'A file already exists at that path; open it instead of creating it', err)
+    }
+    if (!CREATE_LINK_UNSUPPORTED.has(err?.code ?? '')) {
+      throw error('commit-failed', 'Could not create the new file; nothing was replaced', err)
+    }
+  }
+  try {
+    const handle = await io.open(target, 'wx', CREATE_MODE)
+    try {
+      await handle.writeFile(bytes)
+      await handle.chmod(CREATE_MODE)
+      await handle.sync()
+    } finally { await handle.close() }
+    return 'exclusive-open'
+  } catch (err) {
+    if (err && err.code === 'EEXIST') {
+      throw error('already-exists', 'A file already exists at that path; open it instead of creating it', err)
+    }
+    throw error('commit-failed', 'Could not create the new file; nothing was replaced', err)
+  }
 }
 function revisionIdentity(info,rawHash) {
   const fields=[info.dev,info.ino,info.ctimeNs??info.ctimeMs,
@@ -294,6 +391,63 @@ export function createNativeFileStore(workspace, options = {}) {
     throw error('invalid-option', 'lock options must be an object')
   }
   return {
+    /**
+     * Create a brand-new native document inside the workspace.
+     *
+     * No-overwrite protocol: the path tree is validated (no symlink, no
+     * escape), the target must be absent, the advisory lock is taken, absence
+     * is re-checked inside the critical section, bytes are written to a
+     * same-directory temporary file, fsynced, then committed with link() (or an
+     * exclusive wx create on filesystems without hard links) — never with a
+     * replacing rename — and the committed file is read back and hashed.
+     */
+    async create(file, { source } = {}) {
+      if (typeof source !== 'string') throw error('invalid-source', 'New file content must be a string')
+      const bytes = Buffer.from(source, 'utf8')
+      if (bytes.length > MAX_BYTES) throw error('too-large', 'New file exceeds 8 MiB')
+      const target = await ensureSafeTarget(workspace, file, io)
+      return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
+        const checked = await ensureSafeTarget(workspace, file, io)
+        assertSameTree(target, checked)
+        await assertAbsent(target.absolute, io)
+        const temp = path.join(checked.directory, '.' + path.basename(target.absolute) + '.' + randomUUID() + '.tmp')
+        let tempExists = false
+        try {
+          let handle
+          try {
+            handle = await io.open(temp, 'wx', CREATE_MODE)
+          } catch (err) { throw tempCreateFailure(err) }
+          tempExists = true
+          try {
+            try {
+              await handle.writeFile(bytes)
+              await handle.chmod(CREATE_MODE)
+              await handle.sync()
+            } catch (err) {
+              throw error('temp-write-failed', 'Could not write the new file; nothing was created', err)
+            }
+          } finally { await handle.close() }
+          await commitCreated(io, temp, target.absolute, bytes)
+          await io.unlink(temp).catch(() => {})
+          tempExists = false
+          await fsyncDirectory(checked.directory, io)
+          const expected = createHash('sha256').update(bytes).digest('hex')
+          let written
+          try {
+            written = await readChecked(target.absolute, io)
+          } catch (err) {
+            throw error('stale-revision', 'New file could not be verified after creation; reload before editing', err)
+          }
+          if (written.rawHash !== expected) {
+            throw error('stale-revision', 'New file changed immediately after creation; reload before editing')
+          }
+          return { file, format: target.format, source: written.source,
+            hash: written.rawHash, identity: written.identity, changed: true }
+        } finally {
+          if (tempExists) await io.unlink(temp).catch(() => {})
+        }
+      }, lockOptions))
+    },
     async read(file) {
       const target = await ensureSafeFile(workspace, file, io)
       const current = await readChecked(target.absolute, io)
