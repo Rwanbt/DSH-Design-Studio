@@ -358,3 +358,31 @@ test('HTML preview warns of partial CSS rendering and omits conditional CSS link
   html:'<link rel="stylesheet" href="theme.css" media="print"><main id="app">Text</main>',
   css:{'theme.css':'#app{display:none}'}
 }))
+
+
+test('HTML layout presets apply targeted inline Grid and allow an exact Undo',()=>harness(async app=>{
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element app').props.onClick()
+  const control=find(app.render(),n=>n.props?.['aria-label']==='Set html layout display to grid')
+  assert.ok(control)
+  assert.equal(control.props.disabled,false)
+  control.props.onClick()
+  const expected=app.source.replace('display: block','display: grid')
+  await until(async()=>await readFile(app.file,'utf8')===expected,'Grid inline style not saved')
+  await until(()=>find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit')?.props.disabled===false,
+    'HTML history did not settle')
+  const rows=find(app.render(),n=>n.props?.['aria-label']==='Set html layout grid-template-columns to repeat(2, minmax(0, 1fr))')
+  assert.ok(rows)
+  assert.equal(rows.props.disabled,false)
+  assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Set html layout flex-direction to column').props.disabled,true)
+  assert.match(app.calls().filter(call=>call.method==='POST')[0].body.baseIdentity,/^[a-f0-9]{64}$/)
+  find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit').props.onClick()
+  await until(async()=>await readFile(app.file,'utf8')===app.source,'Grid undo did not restore source')
+}))
+test('HTML layout controls deny visual edits while source draft is unsaved',()=>harness(async app=>{
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element app').props.onClick()
+  find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
+    .props.onChange({target:{value:app.source+'<!-- draft -->'}})
+  const grid=find(app.render(),n=>n.props?.['aria-label']==='Set html layout display to grid')
+  assert.ok(grid.props.disabled)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}))
