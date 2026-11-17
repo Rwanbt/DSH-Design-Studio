@@ -81,7 +81,7 @@ standalone application, no separate process, no own window/port; installation is
 
 | Question | Answer |
 |---|---|
-| Merge into `main`? | **NO** — owner approval required and the Desktop build is untested. |
+| Merge into `main`? | **NO** — owner approval required and the DSH Desktop renderer is untested. |
 | Tag an experimental RC on `dev`? | **GO** after owner approval and step §2 executed. |
 | Publish to npm? | **NO** — explicit owner decision only. |
 | Call it production ready? | **NO**. |

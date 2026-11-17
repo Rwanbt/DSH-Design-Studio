@@ -106,6 +106,6 @@ Without credentials the two final steps stay `NOT_RUN`; that variant is reported
 ## 5. Next actions
 
 1. ~~Close G0 with a real turn~~ — done: 19 PASS / 0 FAIL, workbench rendered in the real product.
-2. Package the Desktop build and exercise the Electron application itself (only its Web server has been driven so far).
+2. Exercise the plugin inside the DSH Desktop renderer (there is no plugin build to package: the release artifact is a versioned bundle installed into a profile).
 3. Wire the remaining CSS capabilities (`@media` editing, computed-style distinction) and smoothed/symmetric Bézier tangents, each behind explicit refusals until proven.
 4. Optional AI tooling (G5.1/G5.2) once the owner approves the contract; today it is explicitly not implemented.
