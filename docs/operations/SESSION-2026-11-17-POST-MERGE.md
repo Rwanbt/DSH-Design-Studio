@@ -44,16 +44,22 @@ The alpha evidence was string-level and React-simulated: **no browser had ever r
 | `npm run check` (baseline `c97101e`) | 269 pass / 0 fail / 0 skip |
 | `npm run check` (final) | **394 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
 | `npm run test:browser` (Chromium 145 + Firefox 146) | see `tests/browser/__reports__/browser-report.json`; 27 specs per browser, **all PASS** locally |
-| `npm run test:dsh` | 14 PASS / 0 FAIL / 1 NOT_RUN (see below) |
+| `npm run test:dsh` (without credentials) | 14 PASS / 0 FAIL / 1 NOT_RUN (blank-session limit) |
+| `npm run test:dsh` (credentials opt-in) | **19 PASS / 0 FAIL / 0 NOT_RUN**, workbench rendered in the real conversation |
 | GitHub Actions `core` (ubuntu) | PASS |
 | GitHub Actions `core` (windows-latest) | see the run history; every observed failure was fixed (rename/lock/permission/path issues), never skipped |
 | GitHub Actions `browser` (ubuntu-24.04) | PASS (Chromium + Firefox installed and executed in CI) |
+| GitHub Actions run `44007780142` | **all jobs green**: `core (ubuntu)`, `core (windows)`, `browser` |
 
 ### Real DSH results (`tests/e2e/real-dsh.mjs`)
 
 PASS: installation resolution, disposable profile creation from the shipped template, plugin install and bundle registration, real web app boot, real Web UI load, real session creation, `/health`, `/files`, `/document`, a real save through `/apply`, stale-revision refusal (HTTP 409), **client bundle served by the real Host** (HTTP 200, 89,771 bytes, `immediately=true`, `inject=["slots"]`), **bundle declares the `conversation.view` slot**, no JavaScript errors on the page.
 
-NOT_RUN: the workbench opening **inside** the real conversation. DSH renders no `conversation.view` area at all while a session is blank, and producing a turn requires an LLM provider that this credential-free disposable profile deliberately does not have. This is a documented environment limit, not a pass.
+**Workbench inside the real conversation: PASS.** DSH renders no `conversation.view` area while a session is blank, so the harness now supports an opt-in real turn (`DSH_E2E_REUSE_CREDENTIALS=1` copies the caller's own credential file into the disposable, mode-600 home; `DSH_E2E_MODEL_PROVIDER`/`DSH_E2E_MODEL` add a model overlay). One short message produced a real assistant turn in 2 s, DSH rendered the view area, the registered `Design Studio` entry was clickable, and `DSH · Design Studio` appeared in the DOM of the real product.
+
+Evidence: `docs/operations/evidence/dsh-workbench.png` (1440×900, 5 779 distinct colours — verified non-blank) plus `tests/browser/__reports__/real-dsh.json`.
+
+Without credentials the two final steps stay `NOT_RUN`; that variant is reported as an environment limit, never as a pass.
 
 ## 3. Commits on `dev`
 
@@ -69,6 +75,7 @@ NOT_RUN: the workbench opening **inside** the real conversation. DSH renders no 
 
 ## 5. Next actions
 
-1. Run the real-DSH harness on a profile with a provider and a non-blank session to close the last G0 step.
-2. Finish G5: licence/NOTICE/SBOM, packaging, migration/rollback, operator documentation and the GO/NO-GO report.
-3. Wire the remaining CSS capabilities (computed-style distinction, `@media` editing) behind explicit refusals.
+1. ~~Close G0 with a real turn~~ — done: 19 PASS / 0 FAIL, workbench rendered in the real product.
+2. Package the Desktop build and exercise the Electron application itself (only its Web server has been driven so far).
+3. Wire the remaining CSS capabilities (`@media` editing, computed-style distinction) and smoothed/symmetric Bézier tangents, each behind explicit refusals until proven.
+4. Optional AI tooling (G5.1/G5.2) once the owner approves the contract; today it is explicitly not implemented.

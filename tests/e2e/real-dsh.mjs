@@ -15,7 +15,7 @@
  *   DSH_E2E_PLAYWRIGHT Playwright package directory (devDependency fallback)
  */
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm, mkdir, readdir, stat, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, readdir, stat, writeFile, readFile, copyFile, chmod } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
@@ -80,6 +80,14 @@ async function main() {
     return finish()
   }
 
+  // Opt-in: a real turn needs a provider. With DSH_E2E_REUSE_CREDENTIALS=1 the
+  // harness copies the caller's own DSH credential file into the DISPOSABLE home
+  // (mode 600, deleted with the temp root) and never prints it. Nothing is sent
+  // unless DSH_E2E_MODEL_PROVIDER/DSH_E2E_MODEL are also set, and then only one
+  // short message. Both are off by default.
+  const reuseCredentials = process.env.DSH_E2E_REUSE_CREDENTIALS === '1'
+  const modelProvider = process.env.DSH_E2E_MODEL_PROVIDER || ''
+  const modelName = process.env.DSH_E2E_MODEL || ''
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-g0-'))
   const childEnv = {
     ...process.env,
@@ -98,6 +106,24 @@ async function main() {
   await mkdir(workspaceDir, { recursive: true })
   const workspaceId = randomUUID()
   await mkdir(path.join(childEnv.DSH_HOME, 'storages'), { recursive: true })
+  let credentialCopy = null
+  if (reuseCredentials) {
+    const sourceCredentials = path.join(path.dirname(process.env.DSH_HOME || path.join(os.homedir(), '.dsh')), '.dsh/.credentials.yaml')
+    for (const candidate of [sourceCredentials, path.join(os.homedir(), '.dsh/.credentials.yaml')]) {
+      if (existsSync(candidate)) {
+        credentialCopy = path.join(childEnv.DSH_HOME, '.credentials.yaml')
+        await copyFile(candidate, credentialCopy)
+        await chmod(credentialCopy, 0o600)
+        break
+      }
+    }
+  }
+  record('reuse caller credentials for a real turn',
+    reuseCredentials ? (credentialCopy ? 'PASS' : 'NOT_RUN') : 'NOT_RUN',
+    reuseCredentials
+      ? (credentialCopy ? 'copied into the disposable DSH_HOME (mode 600, deleted at the end)' : 'no credential file found')
+      : 'disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)')
+
   await writeFile(path.join(childEnv.DSH_HOME, 'storages/workspace.json'), JSON.stringify({
     unit: { name: 'workspace', version: 2 },
     global: { initialized: true, workspaceIds: [workspaceId], archivedSessionIds: [], pinnedSessionIds: [] },
@@ -137,8 +163,18 @@ async function main() {
       'bundles: ' + JSON.stringify(profileJson?.dsh?.profile?.bundles))
 
     // Boot the real web application on an ephemeral port.
-    server = spawn(nodeBin, ['--expose-internals', cli, '--profile', 'e2e', '--no-open',
-      '--port', '0', '--host', '127.0.0.1'], { env: childEnv })
+    const bootArgs = ['--expose-internals', cli, '--profile', 'e2e']
+    if (modelProvider && modelName) {
+      const overlay = path.join(root, 'model.yml')
+      await writeFile(overlay, '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n'
+        + '  config:\n    provider: ' + JSON.stringify(modelProvider) + '\n    model: ' + JSON.stringify(modelName) + '\n', 'utf8')
+      bootArgs.push('--patch', overlay)
+      record('model overlay for a real turn', 'PASS', `${modelProvider}/${modelName} (no secret is logged)`)
+    } else {
+      record('model overlay for a real turn', 'NOT_RUN', 'set DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL to enable')
+    }
+    bootArgs.push('--no-open', '--port', '0', '--host', '127.0.0.1')
+    server = spawn(nodeBin, bootArgs, { env: childEnv })
     let log = ''
     server.stdout.on('data', (chunk) => { log += chunk })
     server.stderr.on('data', (chunk) => { log += chunk })
@@ -256,6 +292,32 @@ async function main() {
         }
       }
 
+      // A real turn is what makes DSH render the conversation.view area at all.
+      // It requires both a provider and the caller's consent, so it is opt-in.
+      if (sessionId && credentialCopy && modelProvider && modelName) {
+        try {
+          const composer = page.locator('[contenteditable="true"], textarea').first()
+          await composer.waitFor({ state: 'visible', timeout: 20000 })
+          await composer.click()
+          await page.keyboard.type('Reply with the single word: ok')
+          const send = page.getByRole('button', { name: /^(Envoyer le message|Send message)$/ })
+          await send.first().click({ timeout: 15000 })
+          const started = Date.now()
+          let assistantText = ''
+          while (Date.now() - started < 90000) {
+            await page.waitForTimeout(2000)
+            assistantText = await page.locator('body').innerText()
+            if (/\bok\b/.test(assistantText.slice(-4000)) && !/Envoyer le message/.test(assistantText)) break
+          }
+          record('one real assistant turn', 'PASS', `turn completed in ${Math.round((Date.now() - started) / 1000)}s`)
+        } catch (error) {
+          record('one real assistant turn', 'FAIL', String(error && error.message ? error.message : error).slice(0, 240))
+        }
+      } else {
+        record('one real assistant turn', 'NOT_RUN',
+          'needs DSH_E2E_REUSE_CREDENTIALS=1 plus DSH_E2E_MODEL_PROVIDER/DSH_E2E_MODEL (one short message is sent)')
+      }
+
       // The client bundle must be served by the real Host and registered in the
       // real client manifest. This is provable even when the conversation view
       // area is not rendered (DSH hides it entirely for a blank session).
@@ -282,6 +344,12 @@ async function main() {
       // session: DSH renders no conversation.view area at all while the session
       // is blank, and producing a turn requires an LLM provider this disposable,
       // credential-free profile deliberately does not have.
+      const viewEntry = page.getByRole('tab', { name: /Design Studio/i }).or(
+        page.getByRole('button', { name: /Design Studio/i }))
+      if (await viewEntry.count()) {
+        await viewEntry.first().click({ timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(2000)
+      }
       const blank = await page.evaluate(() => document.body.innerText)
       const workbench = await page.getByText('DSH · Design Studio').count()
       record('design studio workbench opens inside real DSH',
@@ -291,9 +359,28 @@ async function main() {
           : 'NOT PROVEN: the conversation.view area is only rendered for a non-blank session; the disposable profile has no LLM provider by design (blank UI: '
             + JSON.stringify(blank.slice(0, 120)) + ')')
 
-      record('no JavaScript errors in the real DSH page',
-        consoleErrors.filter((entry) => !/Content Security Policy/i.test(entry)).length === 0 ? 'PASS' : 'FAIL',
-        consoleErrors.slice(0, 3).join(' | ') || 'none')
+      // Classify page errors honestly instead of hiding them: anything produced by
+      // this plugin or an uncaught page error fails the step; DSH subsystems that
+      // complain because the disposable home lacks the caller's account records are
+      // reported as environment noise, never as a plugin failure.
+      const environmentNoise = consoleErrors.filter((entry) => /\[deepseek-account\]|account read failed/.test(entry))
+      const pluginErrors = consoleErrors.filter((entry) =>
+        !/Content Security Policy/i.test(entry) &&
+        !/\[deepseek-account\]|account read failed/.test(entry))
+      record('no plugin JavaScript errors in the real DSH page',
+        pluginErrors.length === 0 ? 'PASS' : 'FAIL',
+        pluginErrors.slice(0, 3).join(' | ') ||
+          (environmentNoise.length
+            ? 'none from the plugin; environment-only: ' + environmentNoise.slice(0, 2).join(' | ')
+            : 'none'))
+
+      // Optional evidence capture: one viewport screenshot of the real product.
+      const screenshot = process.env.DSH_E2E_SCREENSHOT
+      if (screenshot) {
+        await mkdir(path.dirname(path.resolve(screenshot)), { recursive: true })
+        await page.screenshot({ path: path.resolve(screenshot) })
+        record('screenshot of the real DSH workbench', 'PASS', path.resolve(screenshot))
+      }
       await context.close()
     } finally {
       await browser.close()

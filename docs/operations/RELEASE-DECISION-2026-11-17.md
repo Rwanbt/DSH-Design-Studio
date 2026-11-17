@@ -1,10 +1,11 @@
 # Release candidate checklist and GO/NO-GO — 17 November 2026
 
 **Candidate:** `@rwanbt/dsh-design-studio` @ `0.1.0-alpha.20`, branch `dev`.
-**Verdict: NO-GO for a stable release and NO-GO for a `main` merge.** GO only for
-an *internal experimental RC snapshot* once the two blockers in §3 are closed.
-Nothing was tagged, published or merged into `main`: both require the owner's
-explicit approval.
+**Verdict: GO for an owner-approved experimental RC snapshot on `dev`; NO-GO for a
+stable release and NO-GO for a `main` merge.** The real-installation blocker is
+closed (§3.1); the remaining limits are documented below and none of them hides a
+silent failure mode. Nothing was tagged, published or merged into `main`: both
+require the owner's explicit approval.
 
 ## 1. What is ready
 
@@ -12,7 +13,7 @@ explicit approval.
 |---|---|---|
 | Core suite | **394 / 394 PASS**, 0 fail, 0 skip, no dependencies installed | `npm run check` |
 | Real browser gate | 27 specs × Chromium 145 + Firefox 146 | `npm run test:browser`, report JSON |
-| Real DSH gate | 14 PASS / 0 FAIL / 1 NOT_RUN | `npm run test:dsh`, report JSON |
+| Real DSH gate | **19 PASS / 0 FAIL / 0 NOT_RUN** with a real assistant turn; workbench rendered inside the real conversation (`docs/operations/evidence/dsh-workbench.png`) | `npm run test:dsh`, report JSON |
 | CI — Linux | PASS | GitHub Actions `core (ubuntu-latest)` |
 | CI — Windows | every observed failure fixed (rename, lock release, POSIX bits, path separators) | GitHub Actions `core (windows-latest)` history |
 | CI — browser | PASS on pinned `ubuntu-24.04` | GitHub Actions `browser` |
@@ -37,12 +38,11 @@ explicit approval.
 
 ## 3. Blockers for a stable release
 
-1. **G0 is not fully closed.** The real installation proves installation, bundle
-   registration, the Host routes, a real save and a refused stale revision, but
-   **the workbench has never been observed opening inside the real DSH
-   conversation**. DSH renders no `conversation.view` area while a session is
-   blank, and producing a turn needs an LLM provider that the disposable profile
-   deliberately lacks. Closing it requires one run on a profile with a provider.
+1. ~~**G0 is not fully closed.**~~ **Closed.** With an opt-in real assistant turn
+   the workbench rendered inside the real DeepSeek Harness conversation, with the
+   registered client bundle served by the real Host. Screenshot evidence is
+   committed. What is *not* covered is the packaged Desktop/Electron shell: only
+   its real Web server has been driven so far.
 2. **No macOS, NFS/SMB, or real touch-device verification.** Windows is covered
    by CI; macOS and network filesystems are `NOT_RUN`, and the storage guarantee
    is explicitly *not* a universal CAS.
@@ -77,7 +77,7 @@ explicit approval.
 
 | Question | Answer |
 |---|---|
-| Merge into `main`? | **NO** — G0.2 open, owner approval required. |
+| Merge into `main`? | **NO** — owner approval required and the Desktop build is untested. |
 | Tag an experimental RC on `dev`? | **GO** after owner approval and step §2 executed. |
 | Publish to npm? | **NO** — explicit owner decision only. |
 | Call it production ready? | **NO**. |
