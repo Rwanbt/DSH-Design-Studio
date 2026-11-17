@@ -159,3 +159,27 @@ test('mobile panels expose an accessible single-active-pane navigation without w
   }
   assert.equal(calls().filter(item=>item.method==='POST').length,0)
 }))
+
+
+test('Grid columns preset performs two safe native saves and Undo restores last change',()=>fixture(async({render,file,source,calls})=>{
+  find(render(),n=>n.props?.['aria-label']==='Select CSS rule #app').props.onClick()
+  find(render(),n=>n.props?.['aria-label']==='Set css layout display to grid').props.onClick()
+  const initial=source.replace('display: block','display: grid')
+  await until(async()=>await readFile(file,'utf8')===initial,'Grid display save failed')
+  await until(()=>find(render(),n=>n.props?.['aria-label']===
+    'Set css layout grid-template-columns to repeat(2, minmax(0, 1fr))')?.props.disabled===false,
+    'Grid column controls did not activate')
+  find(render(),n=>n.props?.['aria-label']===
+    'Set css layout grid-template-columns to repeat(2, minmax(0, 1fr))').props.onClick()
+  const expected=initial.replace('display: grid;', 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
+  await until(async()=>await readFile(file,'utf8')===expected,'Grid column save failed')
+  await until(()=>find(render(),n=>n.props?.['aria-label']==='Undo saved edit')?.props.disabled===false,
+    'Native Undo did not activate')
+  const writes=calls().filter(item=>item.method==='POST')
+  assert.equal(writes.length,2)
+  assert.equal(writes[0].body.kind,'css-rule')
+  assert.equal(writes[1].body.property,'grid-template-columns')
+  assert.match(writes[1].body.baseIdentity,/^[a-f0-9]{64}$/)
+  find(render(),n=>n.props?.['aria-label']==='Undo saved edit').props.onClick()
+  await until(async()=>await readFile(file,'utf8')===initial,'Grid column Undo failed')
+}))
