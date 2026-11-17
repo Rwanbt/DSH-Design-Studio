@@ -16,6 +16,7 @@
  */
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm, mkdir, readdir, stat, writeFile, readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -62,12 +63,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 async function main() {
   const installRoot = process.env.DSH_E2E_DSH_ROOT || '/mnt/Stockage/App/DeepSeekHarness'
   const binary = path.join(installRoot, 'deepseek-harness')
-  const cli = path.join(installRoot, 'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')
-  if (!existsSync(binary) || !existsSync(cli)) {
+  const archive = path.join(installRoot, 'resources/app.asar')
+  const cli = path.join(archive, 'dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')
+  // The CLI lives INSIDE app.asar: only the Electron binary can read that
+  // archive (plain Node cannot traverse it), so the archive file is what must
+  // exist on disk and the binary is the interpreter for every CLI call.
+  if (!existsSync(binary) || !existsSync(archive)) {
     record('resolve DSH installation', 'NOT_RUN', `no DeepSeek Harness installation at ${installRoot}`)
     return finish()
   }
-  record('resolve DSH installation', 'PASS', `${binary} (${(await stat(binary)).size} bytes)`)
+  record('resolve DSH installation', 'PASS', `${binary} (${(await stat(binary)).size} bytes), archive present`)
 
   const playwright = await loadPlaywright()
   if (!playwright) {
@@ -85,7 +90,21 @@ async function main() {
   }
   await mkdir(childEnv.HOME, { recursive: true })
   await mkdir(childEnv.DSH_HOME, { recursive: true })
-  const nodeBin = process.env.DSH_E2E_NODE || process.execPath
+  // A registered workspace is a user-level precondition. The headless host
+  // cannot open the native folder picker, so the disposable profile is seeded
+  // with exactly what the desktop writes when a user adds a folder. Everything
+  // after this point (Host services, sessions, routes, saves) is real.
+  const workspaceDir = path.join(childEnv.HOME, 'Documents/deepseek-harness/default-workspace')
+  await mkdir(workspaceDir, { recursive: true })
+  const workspaceId = randomUUID()
+  await mkdir(path.join(childEnv.DSH_HOME, 'storages'), { recursive: true })
+  await writeFile(path.join(childEnv.DSH_HOME, 'storages/workspace.json'), JSON.stringify({
+    unit: { name: 'workspace', version: 2 },
+    global: { initialized: true, workspaceIds: [workspaceId], archivedSessionIds: [], pinnedSessionIds: [] },
+    tables: { workspaces: { [workspaceId]: { path: workspaceDir, title: 'e2e-workspace',
+      sessionIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } } },
+  }, null, 2) + '\n', 'utf8')
+  const nodeBin = process.env.DSH_E2E_NODE || binary
   /** Run the real dsh CLI to completion and capture both streams. */
   const run = (cliArgs, { timeout = 180000 } = {}) => new Promise((resolve) => {
     const child = spawn(nodeBin, ['--expose-internals', cli, ...cliArgs], { env: childEnv })
@@ -151,12 +170,15 @@ async function main() {
       const title = await page.title()
       record('load real DSH Web UI', 'PASS', JSON.stringify(title))
 
-      // Dismiss onboarding overlays without relying on a single language.
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await page.keyboard.press('Escape')
-        const continueButton = page.getByRole('button', { name: /^(Continuer|Continue)$/ })
-        if (await continueButton.count()) await continueButton.first().click({ timeout: 5000 }).catch(() => {})
-        await page.waitForTimeout(400)
+      // Dismiss onboarding overlays without relying on a single language: the
+      // preview notice, then the "no credentials yet" dialog.
+      for (const name of [/^(Continuer|Continue)$/, /^(Fermer|Close)$/]) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const button = page.getByRole('button', { name })
+          if (!(await button.count())) break
+          await button.first().click({ timeout: 8000 }).catch(() => {})
+          await page.waitForTimeout(700)
+        }
       }
 
       const newSession = page.getByRole('button', { name: /^(Nouvelle séance|New session)$/ })
@@ -234,16 +256,40 @@ async function main() {
         }
       }
 
-      // The Design Studio view must be reachable inside the real DSH shell.
-      const studioLabels = page.getByText('Design Studio', { exact: false })
-      const mounted = await studioLabels.count()
-      if (mounted) {
-        await studioLabels.first().click({ timeout: 10000 }).catch(() => {})
-        await page.waitForTimeout(1500)
-      }
+      // The client bundle must be served by the real Host and registered in the
+      // real client manifest. This is provable even when the conversation view
+      // area is not rendered (DSH hides it entirely for a blank session).
+      const clientEntry = await page.evaluate(async () => {
+        const entries = (window.__DSH_BOOT__?.entries || []).filter((entry) => String(entry.id || '').includes('dsh-design-studio'))
+        if (entries.length === 0) return { registered: false }
+        const entry = entries[0]
+        const response = await fetch('/' + entry.url, { cache: 'no-store' })
+        const source = await response.text()
+        return { registered: true, id: entry.id, url: entry.url, immediately: entry.immediately,
+          inject: entry.inject, status: response.status, bytes: source.length,
+          registersView: source.includes('conversation.view') && source.includes('dsh-design-studio') }
+      })
+      record('client bundle served by the real Host',
+        clientEntry.registered && clientEntry.status === 200 && clientEntry.bytes > 1000 ? 'PASS' : 'FAIL',
+        clientEntry.registered
+          ? `${clientEntry.id} HTTP ${clientEntry.status}, ${clientEntry.bytes} bytes, immediately=${clientEntry.immediately}, inject=${JSON.stringify(clientEntry.inject)}`
+          : 'the plugin client module is absent from window.__DSH_BOOT__.entries')
+      record('client bundle registers the conversation view',
+        clientEntry.registersView === true ? 'PASS' : 'FAIL',
+        clientEntry.registersView === true ? 'bundle declares conversation.view' : 'the served bundle does not register a conversation view')
+
+      // Opening the workbench inside the real conversation needs a non-blank
+      // session: DSH renders no conversation.view area at all while the session
+      // is blank, and producing a turn requires an LLM provider this disposable,
+      // credential-free profile deliberately does not have.
+      const blank = await page.evaluate(() => document.body.innerText)
       const workbench = await page.getByText('DSH · Design Studio').count()
-      record('design studio view mounts inside real DSH', workbench > 0 ? 'PASS' : 'NOT_RUN',
-        workbench > 0 ? 'workbench rendered' : 'view not opened automatically; requires manual navigation')
+      record('design studio workbench opens inside real DSH',
+        workbench > 0 ? 'PASS' : 'NOT_RUN',
+        workbench > 0
+          ? 'workbench rendered in the real conversation'
+          : 'NOT PROVEN: the conversation.view area is only rendered for a non-blank session; the disposable profile has no LLM provider by design (blank UI: '
+            + JSON.stringify(blank.slice(0, 120)) + ')')
 
       record('no JavaScript errors in the real DSH page',
         consoleErrors.filter((entry) => !/Content Security Policy/i.test(entry)).length === 0 ? 'PASS' : 'FAIL',

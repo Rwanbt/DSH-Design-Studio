@@ -8,7 +8,9 @@
   "exports": {
     ".": "./src/plugin-host.mjs",
     "./client": "./client.js",
-    "./cordis.patch.yml": "./cordis.patch.yml"
+    "./client.js": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
   },
   "files": [
     "src",
@@ -35,8 +37,7 @@
       "platform": "web",
       "immediately": true,
       "inject": [
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "slots"
       ]
     }
   },
