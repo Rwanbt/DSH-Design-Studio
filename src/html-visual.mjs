@@ -55,7 +55,7 @@ function attributes(source,begin,end) {
         value=source.slice(start,i);span={start,end:i,quote:null}
       }
     }
-    if(key==='id'||key==='style'){
+    if(['id','style','class','href','rel'].includes(key)){
       if(Object.hasOwn(found,key))return null
       found[key]={value,span}
     }
@@ -120,10 +120,16 @@ function indexed(source) {
   })
 }
 export function listHtmlVisualElements(source) {
-  return indexed(source).slice(0,200).map(entry=>({
-    id:entry.id,tag:entry.tag,editable:entry.editable,reason:entry.reason,
-    style:entry.attrs.style?.value||''
-  }))
+  return indexed(source).slice(0,200).map(entry=>{
+    const raw=entry.attrs.class
+    const valid=raw?.span?.quote &&
+      typeof raw.value==='string' && raw.value.length<=256 &&
+      /^[A-Za-z0-9_\s-]*$/.test(raw.value)
+    const classes=valid?Array.from(new Set(raw.value.split(/\s+/).filter(Boolean)
+      .filter(token=>/^[A-Za-z_][A-Za-z0-9_-]{0,79}$/.test(token)))).slice(0,16):[]
+    return {id:entry.id,tag:entry.tag,editable:entry.editable,reason:entry.reason,
+      style:entry.attrs.style?.value||'',classes}
+  })
 }
 export function htmlVisualStylePatch(source,{id,property,value}) {
   if(typeof id!=='string'||!id||typeof property!=='string'||
@@ -161,4 +167,20 @@ export function htmlVisualStylePatch(source,{id,property,value}) {
       (style.value.trim()?' ':'')+property+': '+value+';'
   }
   return {start:style.span.start,end:style.span.end,before:style.value,after}
+}
+
+
+/** Lists only static, explicit stylesheet references. No fetches or URL parsing. */
+export function listHtmlStylesheetLinks(source) {
+  if(typeof source!=='string'||source.length>512*1024)return []
+  const links=openingTags(source).filter(entry=>entry.tag==='link')
+  return links.slice(0,9).map(entry=>{
+    const rel=entry.attrs.rel,href=entry.attrs.href
+    const relValue=typeof rel?.value==='string'?rel.value.toLowerCase().trim():''
+    if(!/^(?:stylesheet|stylesheet\s+type)$/.test(relValue))return null
+    const valid=href?.span?.quote && rel?.span?.quote &&
+      typeof href.value==='string' && href.value.length>0 && href.value.length<=256
+    return {href:valid?href.value:'',valid:!!valid,
+      reason:valid?null:'unquoted-or-invalid-stylesheet-link'}
+  }).filter(Boolean)
 }
