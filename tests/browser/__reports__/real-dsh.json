@@ -13,7 +13,7 @@
     {
       "step": "create disposable profile",
       "status": "PASS",
-      "detail": "/tmp/dsh-g0-cRTMWS/dsh-home/profiles/e2e (shipped web template)"
+      "detail": "/tmp/dsh-g0-26nR3C/dsh-home/profiles/e2e (shipped web template)"
     },
     {
       "step": "install plugin into profile",
@@ -28,7 +28,7 @@
     {
       "step": "boot real DSH web app",
       "status": "PASS",
-      "detail": "http://127.0.0.1:33337"
+      "detail": "http://127.0.0.1:38077"
     },
     {
       "step": "load real DSH Web UI",
@@ -38,7 +38,7 @@
     {
       "step": "create a real DSH session",
       "status": "PASS",
-      "detail": "session-cd74e027-ad84-49ef-b56f-5086330d7af3"
+      "detail": "session-c4452c9f-ce87-415b-9b13-1cb8267d0524"
     },
     {
       "step": "plugin route /health on the real Host",
@@ -73,7 +73,7 @@
     {
       "step": "client bundle served by the real Host",
       "status": "PASS",
-      "detail": "@rwanbt/dsh-design-studio HTTP 200, 99367 bytes, immediately=true, inject=[\"slots\"]"
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 105222 bytes, immediately=true, inject=[\"slots\"]"
     },
     {
       "step": "client bundle registers the conversation view",
@@ -101,5 +101,6 @@
     "fail": 0,
     "notRun": 0
   },
-  "at": "2026-11-17T03:12:29.993Z"
+  "at": "2026-11-17T03:50:37.877Z",
+  "build": "ed3b56c10511d97fd3e7214bd4a622e6f4668e63"
 }
