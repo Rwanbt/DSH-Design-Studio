@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <rect id="background" x="0" y="0" width="640" height="360" fill="#101827"/>
+  <rect id="card" x="90" y="60" width="460" height="240" rx="18" fill="#25324a"/>
+  <circle id="accent" cx="168" cy="174" r="48" fill="#e5b567"/>
+  <path id="mark" d="M150 190 L170 145 L190 190" stroke="#101827" stroke-width="10" fill="none"/>
+  <text id="title" x="242" y="178" fill="#ffffff">DESIGN STUDIO</text>
+</svg>

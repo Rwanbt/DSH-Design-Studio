@@ -32,3 +32,25 @@ This is a **documentation/manifest-level preliminary review** based on live GitH
 ## Preliminary hypothesis (not a final selection)
 
 Sal7one's workbench may make the best DSH shell; Design Canvas can inform a shared command/document engine; Web Design can inform HTML targeted write-back; OpenPencil can inform SVG workflow. Keep two distinct canonical source adapters (HTML/CSS and SVG) to avoid lossy serialization.
+
+## Vérification de l'implémentation interne (17 novembre 2026)
+
+Le tableau des dépôts amont ci-dessus reste un inventaire **préliminaire**, sans transfert de code. La branche expérimentale locale contient désormais des modules natifs écrits pour ce plugin, dont `src/native-file-store.mjs`, `src/html-visual.mjs`, `src/svg-paths.mjs` et `src/css-visual.mjs`. L'alpha.16 dispose d'une **preuve de tests internes**, et non d'une preuve d'intégration DSH : [run 43982069590](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43982069590), source SHA `29fd25d881069574cea56154f135a20e5da7a0c5`, commande `npm run check` (Node 22), **230 PASS / 0 FAIL / 0 SKIP**.
+
+**Périmètre vérifié :** patches natifs ciblés SVG/HTML/CSS, édition manuelle, tests Host avec dossiers temporaires et React simulé. **Non vérifié :** licence de chaque dépendance amont par fichier, copie d'assets externes (aucune copie revendiquée ici), DSH réel, compatibilité cross-platform, sécurité filesystem contre éditeurs externes. La feuille de route consolidée avec gates de sortie et tickets est [DELIVERY-GATES-2026-11-17.md](../roadmap/DELIVERY-GATES-2026-11-17.md).
+
+## Alpha.17 — Frontière de confiance de l'aperçu HTML (17 novembre 2026)
+
+La sélection au clic a été ajoutée au client du dépôt, **sans copier de code amont** et sans installer d'éditeur tiers. Décision : [`ADR-017`](../adr/ADR-017-HTML-PREVIEW-CLICK-SELECTION.md). Le code de confiance du parent inspecte un iframe `srcDoc` avec `allow-same-origin`, **sans `allow-scripts`** et sous CSP restrictive. Les tests automatisés de cette sélection sont **simulés**, ce qui n'établit pas les garanties de sécurité en navigateur réel. Preuve globale : [run 43986355036](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43986355036), SHA `eb29a9660ee5a4f33a4064994af645b227cfd884`, `npm run check`, **236 PASS, 0 FAIL, 0 SKIP**. **NOT_RUN :** essai Firefox/Chromium/DSH réel, attaque XSS, sanitisation complète, navigation des iframes et audit d'isolation. G0/G2 demeurent ouverts.
+
+## Alpha.18 — Liaison locale HTML ↔ CSS (17 novembre 2026)
+
+Le module interne `src/html-css-associations.mjs` lit les seules références CSS relatives et sûres au workspace et affiche les **correspondances possibles** `#id`/`.classe` pour des éléments HTML ayant un ID source unique. Il n'intègre ni framework, ni runtime tiers, et ne copie aucun code amont. Les fichiers sont ouverts et édités via les primitives natives existantes, avec les mêmes préconditions de révision. **Le rendu CSS externe, la cascade effective et `getComputedStyle` ne sont pas implémentés.** Architecture : [`ADR-018`](../adr/ADR-018-HTML-CSS-CANDIDATE-MAPPING.md). CI : [run 43988320991](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43988320991), SHA `9e9e6f7310f7d83b016d6ec18a8d891becca628d`, `npm run check` sur Node 22, **249 PASS / 0 FAIL / 0 SKIP**. **G0 NOT_RUN, G1/G2 PARTIAL.**
+
+## Alpha.19 — Prévisualisation responsive bornée (17 novembre 2026)
+
+Le plugin embarque désormais un module interne indépendant `src/html-responsive-preview.mjs`, qui synthétise uniquement une **projection de déclarations CSS simples déjà validées** sans dépendances externes ni code repris de dépôts tiers. L'iframe HTML possède quatre largeurs d'affichage, mais le CSS calculé, les animations, les media queries des feuilles liées et la cascade complète restent hors périmètre. Voir [ADR-019](../adr/ADR-019-RESPONSIVE-CSS-PREVIEW.md) et [preuve alpha.19](../experiments/ALPHA19-EVIDENCE.md). CI : [run 43991894012](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43991894012), commit source `e40daa813bedda34284b30d77e57eecd6216de1a`, Node 22 `npm run check`, **259 PASS, 0 FAIL, 0 SKIP**. **NOT_RUN** : navigateur réel, DSH Web/Desktop, tests visuels mobile, audit XSS/CSP ; G0/G1/G2/G4 ouverts.
+
+## Alpha.20 — Préréglages de layout et dock compact (17 novembre 2026)
+
+Les contrôles Flex/Grid et la navigation compacte sont implémentés directement dans le client DSH natif, sans intégration de bibliothèque visuelle tierce. Le stockage conserve sa logique de patches exacts HTML/CSS, et les colonnes Grid sont limitées à des préréglages strictement validés dans `src/html-visual.mjs`. La CI [run 43993385351](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43993385351) sur le SHA `a88f340b8098cedef1a3e8847f37f320277aa237`, commande `npm run check` (Node 22), rapporte **269 PASS / 0 FAIL / 0 SKIP**. Il s'agit d'interactions simulées, **pas** d'une preuve de rendu/appareil réel. Architecture : [ADR-020](../adr/ADR-020-LAYOUT-PRESETS-AND-COMPACT-PANELS.md). **NOT_RUN :** DSH réel, rendu mobile, navigation clavier/lecteur d'écran, audit sécurité iframe et CSS complexe. G0/G1/G2/G4 ouverts.

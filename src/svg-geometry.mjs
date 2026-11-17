@@ -1,0 +1,167 @@
+import { listEditableSvgNodes, svgRootAttributes } from './svg-attributes.mjs'
+import { listSvgTextNodes } from './svg-text.mjs'
+
+const MOVABLE = new Set(['rect', 'circle', 'ellipse'])
+const MAX_COORD = 1_000_000
+
+function finiteCoord(value) {
+  if (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim())) return null
+  const number = Number(value)
+  return Number.isFinite(number) && Math.abs(number) <= MAX_COORD ? number : null
+}
+
+export function svgGeometry(source) {
+  // Conservative subset: no transformed/nested groups or non-standard aspect ratios.
+  // The SVG source is NOT parsed through a browser or executed.
+  if (/<g(?:\s|>)/i.test(source) || /<foreignObject(?:\s|>)/i.test(source) || /\btransform\s*=/i.test(source)) {
+    return { artboard: null, handles: [], warning: 'Drag editing requires an untransformed SVG with no groups or foreignObject' }
+  }
+  let root
+  try { root = svgRootAttributes(source) }
+  catch (error) { return { artboard: null, handles: [], warning: error.code || 'invalid-svg' } }
+  const ratio = root.preserveAspectRatio
+  if (typeof root.viewBox !== 'string' || (ratio && !/^xMidYMid\s+meet$/.test(ratio.trim()))) {
+    return { artboard: null, handles: [], warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
+  }
+  const parts = root.viewBox.trim().split(/[\s,]+/).map(Number)
+  if (parts.length !== 4 || parts.some(value => !Number.isFinite(value) || Math.abs(value) > MAX_COORD) ||
+      parts[2] <= 0 || parts[3] <= 0) {
+    return { artboard: null, handles: [], warning: 'Invalid or unsupported viewBox' }
+  }
+  const artboard = { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+  let nodes
+  try { nodes = listEditableSvgNodes(source) }
+  catch (error) { return { artboard, handles: [], warning: error.code || 'invalid-svg' } }
+  const handles = []
+  for (const node of nodes) {
+    if (!MOVABLE.has(node.tag) || node.attributes.transform) continue
+    const a = node.attributes
+    let x, y, width, height, move
+    if (node.tag === 'rect') {
+      const values = [a.x, a.y, a.width, a.height].map(finiteCoord)
+      if (values.some(value => value === null)) continue
+      ;[x,y,width,height] = values
+      move = { x: 'x', y: 'y', initialX: x, initialY: y }
+    } else {
+      const values = [a.cx, a.cy, ...(node.tag === 'circle' ? [a.r, a.r] : [a.rx, a.ry])].map(finiteCoord)
+      if (values.some(value => value === null)) continue
+      const [cx,cy,rx,ry] = values
+      x = cx - rx; y = cy - ry; width = rx * 2; height = ry * 2
+      move = { x: 'cx', y: 'cy', initialX: cx, initialY: cy }
+    }
+    if (width <= 0 || height <= 0) continue
+    handles.push({ id: node.id, tag: node.tag, x, y, width, height, move, resizable: node.tag === 'rect' || node.tag === 'ellipse' })
+  }
+  // Text hit areas are an estimate rather than glyph-perfect hit testing.
+  for(const textNode of listSvgTextNodes(source)) {
+    if(!textNode.editable)continue
+    const a=textNode.attributes
+    const x=finiteCoord(a.x), baseline=finiteCoord(a.y)
+    const size=a['font-size']===undefined?16:finiteCoord(a['font-size'])
+    if(x===null || baseline===null || size===null || size<=0)continue
+    const lines=textNode.text.split('\n')
+    const longest=Math.max(1,...lines.map(line=>Array.from(line).length))
+    const width=Math.max(8,Math.min(artboard.width*2,longest*size*0.58))
+    const height=size*Math.max(1,lines.length)*1.2
+    const alignment=a['text-anchor']
+    const left=alignment==='middle'?x-width/2:alignment==='end'?x-width:x
+    handles.push({
+      id:textNode.id, tag:'text',x:left,y:baseline-size,width,height,
+      move:{x:'x',y:'y',initialX:x,initialY:baseline},
+      resizable:false,text:true,
+    })
+  }
+  return { artboard, handles, warning: null }
+}
+
+function rounded(value) {
+  const safe = Math.round((value + Number.EPSILON) * 1000) / 1000
+  return String(Object.is(safe, -0) ? 0 : safe)
+}
+
+export function svgMoveEdits(handle, deltaX, deltaY) {
+  if (!handle || !handle.move || !Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+    throw new TypeError('Invalid SVG move')
+  }
+  const { x, y, initialX, initialY } = handle.move
+  if (![initialX, initialY].every(Number.isFinite)) throw new TypeError('Invalid SVG move origin')
+  return [
+    { id: handle.id, attribute: x, value: rounded(initialX + deltaX) },
+    { id: handle.id, attribute: y, value: rounded(initialY + deltaY) }
+  ]
+}
+
+/** South-east handle resize in SVG user units. Opposite corner stays fixed.
+ * Rect updates width/height; ellipse updates cx/cy/rx/ry. Circles are not
+ * resized until an aspect-ratio constrained interaction is implemented.
+ */
+export function svgResizeEdits(handle, deltaX, deltaY) {
+  if (!handle || handle.resizable !== true || !['rect','ellipse'].includes(handle.tag) ||
+      !Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+    throw new TypeError('Unsupported SVG resize')
+  }
+  if (![handle.x,handle.y,handle.width,handle.height].every(Number.isFinite) ||
+      handle.width <= 0 || handle.height <= 0) {
+    throw new TypeError('Invalid SVG dimensions')
+  }
+  const width = Math.max(1, handle.width + deltaX)
+  const height = Math.max(1, handle.height + deltaY)
+  if (handle.tag === 'rect') {
+    return [
+      { id: handle.id, attribute: 'width', value: rounded(width) },
+      { id: handle.id, attribute: 'height', value: rounded(height) },
+    ]
+  }
+  return [
+    { id: handle.id, attribute: 'cx', value: rounded(handle.x + width / 2) },
+    { id: handle.id, attribute: 'cy', value: rounded(handle.y + height / 2) },
+    { id: handle.id, attribute: 'rx', value: rounded(width / 2) },
+    { id: handle.id, attribute: 'ry', value: rounded(height / 2) },
+  ]
+}
+
+/**
+ * Four-corner resize for untransformed rectangles/ellipses, in SVG user units.
+ * With lockAspect=true, preserve original width/height; the opposing corner
+ * stays anchored. The minimum width/height is 1 SVG unit. Crossovers clamp.
+ */
+export function svgResizeCornerGeometry(handle, corner, dx, dy, lockAspect = false) {
+  if (!handle || !handle.resizable || !['rect','ellipse'].includes(handle.tag) ||
+      !['nw','ne','sw','se'].includes(corner) ||
+      ![dx,dy,handle.x,handle.y,handle.width,handle.height].every(Number.isFinite) ||
+      handle.width <= 0 || handle.height <= 0) {
+    throw new TypeError('Unsupported SVG corner resize')
+  }
+  const leftSide=corner.includes('w'), topSide=corner.includes('n')
+  const anchorX=leftSide?handle.x+handle.width:handle.x
+  const anchorY=topSide?handle.y+handle.height:handle.y
+  let width=Math.max(1,handle.width + (leftSide?-dx:dx))
+  let height=Math.max(1,handle.height + (topSide?-dy:dy))
+  if(lockAspect) {
+    // Choose the axis with the largest proportional movement; clamp once.
+    const scale=Math.max(Math.max(1/handle.width,1/handle.height),
+      Math.abs(width/handle.width-1)>=Math.abs(height/handle.height-1)?
+        width/handle.width:height/handle.height)
+    width=Math.max(1,handle.width*scale)
+    height=Math.max(1,handle.height*scale)
+  }
+  const x=leftSide?anchorX-width:anchorX
+  const y=topSide?anchorY-height:anchorY
+  return {x,y,width,height}
+}
+
+export function svgResizeCornerEdits(handle,corner,dx,dy,lockAspect=false) {
+  const rect=svgResizeCornerGeometry(handle,corner,dx,dy,lockAspect)
+  if(handle.tag==='rect')return [
+    {id:handle.id,attribute:'x',value:rounded(rect.x)},
+    {id:handle.id,attribute:'y',value:rounded(rect.y)},
+    {id:handle.id,attribute:'width',value:rounded(rect.width)},
+    {id:handle.id,attribute:'height',value:rounded(rect.height)},
+  ]
+  return [
+    {id:handle.id,attribute:'cx',value:rounded(rect.x+rect.width/2)},
+    {id:handle.id,attribute:'cy',value:rounded(rect.y+rect.height/2)},
+    {id:handle.id,attribute:'rx',value:rounded(rect.width/2)},
+    {id:handle.id,attribute:'ry',value:rounded(rect.height/2)},
+  ]
+}
