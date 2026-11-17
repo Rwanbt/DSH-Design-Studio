@@ -55,7 +55,7 @@ function attributes(source,begin,end) {
         value=source.slice(start,i);span={start,end:i,quote:null}
       }
     }
-    if(['id','style','class','href','rel'].includes(key)){
+    if(['id','style','class','href','rel','media','disabled','type'].includes(key)){
       if(Object.hasOwn(found,key))return null
       found[key]={value,span}
     }
@@ -177,7 +177,16 @@ export function listHtmlStylesheetLinks(source) {
   return links.slice(0,9).map(entry=>{
     const rel=entry.attrs.rel,href=entry.attrs.href
     const relValue=typeof rel?.value==='string'?rel.value.toLowerCase().trim():''
-    if(!/^(?:stylesheet|stylesheet\s+type)$/.test(relValue))return null
+    if(relValue!=='stylesheet')return null
+    if(entry.attrs.disabled) return {href:'',valid:false,reason:'disabled-stylesheet'}
+    const media=entry.attrs.media?.value
+    if(media!==undefined && (typeof media!=='string'||media.toLowerCase().trim()!=='all')) {
+      return {href:'',valid:false,reason:'conditional-media-not-evaluated'}
+    }
+    const type=entry.attrs.type?.value
+    if(type!==undefined && (typeof type!=='string'||type.toLowerCase().trim()!=='text/css')) {
+      return {href:'',valid:false,reason:'unsupported-stylesheet-type'}
+    }
     const valid=href?.span?.quote && rel?.span?.quote &&
       typeof href.value==='string' && href.value.length>0 && href.value.length<=256
     return {href:valid?href.value:'',valid:!!valid,
