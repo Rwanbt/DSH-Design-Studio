@@ -20,10 +20,18 @@ window.__ModuleLoader__.load({
         typeof linkedCss==='string' && linkedCss.length<=24576 &&
         !/[<>&]/.test(linkedCss) ?
           '<style data-dsh-preview-subset="partial">'+linkedCss+'</style>' : ''
+      // Defence in depth for the preview copy only (never the file):
+      // a `<meta http-equiv="refresh">` or `<base>` can steer navigation and
+      // relative URLs. The sandbox already neutralises both in real Chromium and
+      // Firefox (measured), but relying on one layer for a security boundary is
+      // not acceptable, and neither tag carries visual meaning for a preview.
+      const neutral = String(source)
+        .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '')
+        .replace(/<base\b[^>]*>/gi, '')
       return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy +
         '"><meta name="viewport" content="width=device-width, initial-scale=1">' +
         svgLayout + projected + marked + '</head><body style="margin:' +
-        (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
+        (format==='svg'?'0':'12px') + '">' + neutral + '</body></html>'
     }
     async function request(endpoint, options) {
       const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})

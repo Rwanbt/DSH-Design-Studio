@@ -28,6 +28,10 @@ body { background-image: url("https://evil.invalid/bg.png") }</style>
   <object id="obj" data="https://evil.invalid/obj"></object>
   <form id="form" action="https://evil.invalid/post" method="post"><input name="a"><button id="submit" type="submit">send</button></form>
   <div id="handler" onclick="window.__pwned='inline-handler'">inline handler</div>
+  <meta http-equiv="refresh" content="0; url=https://evil.invalid/refreshed">
+  <base href="https://evil.invalid/">
+  <link rel="dns-prefetch" href="//evil.invalid">
+  <link rel="prefetch" href="https://evil.invalid/prefetch">
 </body>
 </html>
 `
@@ -88,6 +92,11 @@ export const htmlSecuritySpec = {
     assert.match(srcDoc, /connect-src 'none'/, 'CSP must forbid network connections')
     assert.match(srcDoc, /default-src 'none'/, 'CSP must default-deny every resource type')
     assert.match(srcDoc, /frame-src 'none'/, 'CSP must forbid nested frames')
+    // Depth 2: the projection itself drops navigation-priming tags, so safety does
+    // not depend on a single browser behaviour.
+    assert.ok(!/http-equiv=["']?refresh/i.test(srcDoc), 'the preview must not carry a meta refresh')
+    assert.ok(!/<base\b/i.test(srcDoc), 'the preview must not carry a <base> element')
+    assert.match(srcDoc, /Hostile fixture/, 'stripping the navigation tags must not alter the content')
 
     const frame = page.frames().find((candidate) => candidate !== page.mainFrame() && candidate.url() === 'about:srcdoc')
     assert.ok(frame, 'the preview frame must be an inert about:srcdoc document')
@@ -115,7 +124,9 @@ export const htmlSecuritySpec = {
         `request ${attempt} must not complete`)
     }
     assert.deepEqual(navigations.filter((url) => /evil\.invalid/.test(url)), [],
-      'the preview must never navigate to an untrusted origin')
+      'the preview must never navigate to an untrusted origin (meta refresh, base, prefetch)')
+    assert.equal(await frame.evaluate(() => location.href).catch(() => 'gone'), 'about:srcdoc',
+      'the preview frame must still be the inert srcdoc document after all hostile tags')
 
     // 4. Interacting with the inert document must not navigate the host page.
     const frameLocator = page.frameLocator('iframe[title="Isolated design preview"]')
