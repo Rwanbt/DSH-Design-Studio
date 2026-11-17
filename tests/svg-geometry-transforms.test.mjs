@@ -21,10 +21,11 @@ test('the historical conservative mode is unchanged and the absolute mode is opt
     warning: 'Drag editing requires an untransformed SVG with no groups or foreignObject',
   })
   const absolute = svgGeometry(nested, { transforms: true })
-  assert.equal(absolute.handles.length, 1)
-  assert.deepEqual(absolute.handles[0].matrix, [1, 0, 0, 1, 0, 0])
-  assert.deepEqual([absolute.handles[0].x, absolute.handles[0].y, absolute.handles[0].width, absolute.handles[0].height],
-    [1, 1, 2, 2])
+  // One leaf handle plus one group handle: a grouped selection must stay movable.
+  assert.equal(absolute.handles.filter(handle => handle.tag !== 'g').length, 1)
+  const leaf = absolute.handles.find(handle => handle.id === 'r')
+  assert.deepEqual(leaf.matrix, [1, 0, 0, 1, 0, 0])
+  assert.deepEqual([leaf.x, leaf.y, leaf.width, leaf.height], [1, 1, 2, 2])
   assert.equal(absolute.mode, 'absolute')
   assert.deepEqual(svgAbsoluteGeometry(nested).handles[0].id, 'r')
 })
@@ -64,7 +65,7 @@ test('circles and ellipses are mapped through the transform chain', () => {
   const doc = '<svg viewBox="0 0 100 100"><g transform="translate(50 25)">' +
     '<circle id="c" cx="10" cy="10" r="4"/>' +
     '<ellipse id="e" cx="20" cy="20" rx="6" ry="3" transform="scale(2)"/></g></svg>'
-  const handles = svgAbsoluteGeometry(doc).handles
+  const handles = svgAbsoluteGeometry(doc).handles.filter(handle => handle.tag !== 'g')
   assert.deepEqual(handles.map(handle => handle.id), ['c', 'e'])
   assert.deepEqual([handles[0].x, handles[0].y, handles[0].width, handles[0].height], [56, 31, 8, 8])
   // ellipse local box (14,17,12,6) scaled by 2 then translated by (50,25)

@@ -93,6 +93,30 @@ export const HTML_STYLE_PROPERTIES={
   'justify-content':/^(?:start|end|center|space-between|space-around|space-evenly|flex-start|flex-end)$/i,
   'align-items':/^(?:start|end|center|stretch|baseline|flex-start|flex-end)$/i,
   opacity:/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/,
+  // Layout controls required by G2: flex wrapping/alignment, sizing, gaps and
+  // simple grid tracks. Every entry is a strict allowlist of literal tokens; no
+  // value can reference a resource, a function call or another selector.
+  'flex-wrap':/^(?:nowrap|wrap|wrap-reverse)$/i,
+  'align-content':/^(?:normal|start|end|center|stretch|space-between|space-around|space-evenly|flex-start|flex-end)$/i,
+  'align-self':/^(?:auto|start|end|center|stretch|baseline|flex-start|flex-end)$/i,
+  'flex-grow':/^(?:0|1|2|3|4|5|6|8|10|12)$/,
+  'flex-shrink':/^(?:0|1|2|3|4|5|6|8|10)$/,
+  'flex-basis':/^(?:auto|\d+(?:\.\d+)?(?:px|rem|em|%))$/i,
+  'grid-template-rows':/^(?:1fr|repeat\((?:2|3|4),\s*minmax\(0,\s*1fr\)\))$/i,
+  'row-gap':/^\d+(?:\.\d+)?(?:px|rem|em|%)$/i,
+  'column-gap':/^\d+(?:\.\d+)?(?:px|rem|em|%)$/i,
+  'justify-items':/^(?:start|end|center|stretch)$/i,
+  'place-items':/^(?:start|end|center|stretch|center center|start center|center start)$/i,
+  'max-width':/^(?:none|100%|\d+(?:\.\d+)?(?:px|rem|em|%|vw))$/i,
+  'min-width':/^(?:auto|0|\d+(?:\.\d+)?(?:px|rem|em|%|vw))$/i,
+  'text-wrap':/^(?:wrap|nowrap|balance|pretty)$/i,
+  'line-height':/^(?:normal|1(?:\.\d+)?|[1-9](?:\.\d+)?)$/,
+  'object-fit':/^(?:fill|contain|cover|none|scale-down)$/i,
+  'overflow':/^(?:visible|hidden|auto|scroll)$/i,
+  'z-index':/^(?:auto|-?\d{1,3})$/,
+  // `position` stays refused on purpose (see tests/css-visual.test.mjs): without
+  // offset support a lone `position: absolute` is a half-feature that can wreck
+  // a layout, so it remains out of scope until offsets are validated too.
 }
 function fail(code,message){const e=new Error(message);e.code=code;throw e}
 function attributes(source,begin,end) {

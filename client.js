@@ -419,6 +419,9 @@ window.__ModuleLoader__.load({
       const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
       const htmlProps=['color','background-color','display','width','height','padding','margin',
+        'flex-wrap','align-content','align-self','flex-grow','flex-shrink','flex-basis',
+        'grid-template-rows','row-gap','column-gap','justify-items','place-items',
+        'max-width','min-width','text-wrap','line-height','object-fit','overflow','z-index',
         'gap','font-size','border-radius','font-weight','text-align','grid-template-columns','grid-auto-flow','flex-direction',
         'justify-content','align-items','opacity']
       const layoutGroups=[
@@ -436,6 +439,30 @@ window.__ModuleLoader__.load({
           options:[['row','Lignes'],['column','Colonnes']]},
         {property:'gap',label:'Espacement',mode:'layout',
           options:[['0px','0'],['8px','8'],['16px','16'],['24px','24'],['32px','32']]},
+        {property:'flex-wrap',label:'Retour à la ligne · Flex',mode:'flex',
+          options:[['nowrap','Non'],['wrap','Oui'],['wrap-reverse','Inversé']]},
+        {property:'align-content',label:'Lignes · Flex',mode:'flex',
+          options:[['stretch','Étirer'],['flex-start','Début'],['center','Centre'],['space-between','Répartir']]},
+        {property:'align-self',label:'Alignement de l’élément',mode:'layout',
+          options:[['auto','Auto'],['flex-start','Début'],['center','Centre'],['flex-end','Fin'],['stretch','Étirer']]},
+        {property:'flex-grow',label:'Croissance · Flex',mode:'flex',
+          options:[['0','0'],['1','1'],['2','2']]},
+        {property:'flex-shrink',label:'Rétrécissement · Flex',mode:'flex',
+          options:[['0','0'],['1','1']]},
+        {property:'flex-basis',label:'Base · Flex',mode:'flex',
+          options:[['auto','auto'],['0%','0%'],['25%','25%'],['50%','50%'],['100%','100%']]},
+        {property:'grid-template-rows',label:'Lignes · Grid',mode:'grid',
+          options:[['1fr','1'],['repeat(2, minmax(0, 1fr))','2'],['repeat(3, minmax(0, 1fr))','3']]},
+        {property:'row-gap',label:'Espacement vertical',mode:'layout',
+          options:[['0px','0'],['8px','8'],['16px','16'],['24px','24']]},
+        {property:'column-gap',label:'Espacement horizontal',mode:'layout',
+          options:[['0px','0'],['8px','8'],['16px','16'],['24px','24']]},
+        {property:'justify-items',label:'Justification · Grid',mode:'grid',
+          options:[['stretch','Étirer'],['start','Début'],['center','Centre'],['end','Fin']]},
+        {property:'max-width',label:'Largeur maximale',mode:'layout',
+          options:[['none','aucune'],['100%','100%'],['768px','768'],['390px','390']]},
+        {property:'overflow',label:'Débordement',mode:'layout',
+          options:[['visible','Visible'],['hidden','Masqué'],['auto','Auto'],['scroll','Défilant']]},
       ]
       function renderLayoutControls(format,item) {
         if(!item?.editable || !doc)return null
@@ -863,6 +890,15 @@ window.__ModuleLoader__.load({
           const inverse=Array.isArray(item.move?.inverse)&&item.move.inverse.length===4?item.move.inverse:null
           const localX=inverse?inverse[0]*dx+inverse[2]*dy:dx
           const localY=inverse?inverse[1]*dx+inverse[3]*dy:dy
+          if(item.move?.kind==='translate') {
+            // A group has no x/y attributes: move it with one translate transform.
+            // The transform operation takes real numbers, not the string form used
+            // for attribute patches.
+            const rounded=value=>Math.round(value*1000)/1000
+            void save({kind:'svg-transform',id:drag.id,
+              operation:{type:'translate',dx:rounded(localX),dy:rounded(localY)}})
+            return
+          }
           edits=[
             {id:drag.id,attribute:item.move.x,value:number(item.move.initialX+localX)},
             {id:drag.id,attribute:item.move.y,value:number(item.move.initialY+localY)}

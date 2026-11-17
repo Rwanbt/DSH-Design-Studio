@@ -269,6 +269,51 @@ function absoluteGeometry(source) {
       resizable: false, text: true, absolute: true, approximate: true,
     })
   }
+  // Group handles: a group is not directly drawable, but a user who grouped
+  // shapes must still be able to move the group. Its box is the union of its
+  // addressable descendants, and a drag becomes one translate transform applied
+  // in the PARENT coordinate space (so the parent's inverse maps the visible
+  // delta back to local units).
+  const handleById = new Map(handles.map((handle) => [handle.id, handle]))
+  for (const node of scan.nodes) {
+    if (node.tag !== 'g' || node === scan.root || node.readOnly) continue
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let children = 0
+    const stack = [...node.children]
+    while (stack.length) {
+      const child = stack.pop()
+      const handle = child.id ? handleById.get(child.id) : null
+      if (handle) {
+        children += 1
+        minX = Math.min(minX, handle.x)
+        minY = Math.min(minY, handle.y)
+        maxX = Math.max(maxX, handle.x + handle.width)
+        maxY = Math.max(maxY, handle.y + handle.height)
+      }
+      stack.push(...child.children)
+    }
+    if (children === 0 || !Number.isFinite(minX)) continue
+    const parentChain = node.parent ? absoluteMatrix(node.parent) : { matrix: [1, 0, 0, 1, 0, 0] }
+    if (parentChain.error) { refusals.push(refusal(node, parentChain.error)); continue }
+    const inverse = invertSvgMatrixLinear(parentChain.matrix)
+    if (!inverse) {
+      refusals.push({ id: node.id, tag: 'g', reason: 'degenerate-transform', message: 'Parent transform is not invertible' })
+      continue
+    }
+    handles.push({
+      id: node.id,
+      tag: 'g',
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      move: { kind: 'translate', inverse },
+      resizable: false,
+      absolute: true,
+      group: true,
+      children,
+    })
+  }
   return { artboard, handles, warning: null, refusals, mode: 'absolute' }
 }
 

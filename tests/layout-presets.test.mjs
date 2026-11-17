@@ -59,3 +59,33 @@ test('grid auto-flow, flex direction, gap and alignment stay allowlisted',()=>{
   ])assert.throws(()=>cssVisualRulePatch('#node{display:block}',{selector:'#node',property,value}),
     {code:'invalid-value'})
 })
+
+test('extended layout properties accept only literal, resource-free tokens', async () => {
+  const { listHtmlVisualElements, htmlVisualStylePatch } = await import('../src/html-visual.mjs')
+  const source = '<!doctype html><html><body><p id="lead">Text</p></body></html>'
+  const id = listHtmlVisualElements(source).find((element) => element.id === 'lead').id
+  const accepted = [
+    ['flex-wrap', 'wrap'], ['align-content', 'space-between'], ['align-self', 'center'],
+    ['flex-grow', '2'], ['flex-shrink', '0'], ['flex-basis', '25%'],
+    ['grid-template-rows', 'repeat(3, minmax(0, 1fr))'], ['row-gap', '16px'],
+    ['column-gap', '8px'], ['justify-items', 'center'], ['place-items', 'center'],
+    ['max-width', '100%'], ['min-width', 'auto'], ['text-wrap', 'balance'],
+    ['line-height', '1.4'], ['object-fit', 'cover'], ['overflow', 'hidden'], ['z-index', '3'],
+  ]
+  for (const [property, value] of accepted) {
+    const patch = htmlVisualStylePatch(source, { id, property, value })
+    assert.equal(patch.after.includes(property + ': ' + value), true,
+      `${property}: ${value} must be accepted`)
+  }
+  const rejected = [
+    ['flex-wrap', 'wrap; color: red'], ['flex-grow', '999'], ['flex-basis', 'url(evil)'],
+    ['grid-template-rows', 'repeat(99, 1fr)'], ['row-gap', 'expression(alert(1))'],
+    ['max-width', 'calc(100% - 1px)'], ['z-index', '99999'], ['overflow', 'overlay'],
+    ['position', 'absolute'],
+  ]
+  for (const [property, value] of rejected) {
+    assert.throws(() => htmlVisualStylePatch(source, { id, property, value }),
+      (error) => ['invalid-value', 'unsupported-property'].includes(error.code),
+      `${property}: ${JSON.stringify(value)} must be refused`)
+  }
+})

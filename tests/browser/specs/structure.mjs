@@ -172,3 +172,46 @@ export const transformSpec = {
     assert.equal(back, DOCUMENT, 'undoing both transforms restores the original bytes')
   },
 }
+
+export const groupDragSpec = {
+  name: 'structure: dragging a group moves it with one transform and keeps children bytes',
+  async run({ page, harness, assert }) {
+    const grouped = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">
+  <g id="row">
+    <rect id="left" x="20" y="40" width="60" height="40" fill="#bda991"/>
+    <rect id="right" x="100" y="40" width="60" height="40" fill="#8a9a7b"/>
+  </g>
+  <rect id="loose" x="180" y="40" width="40" height="40" fill="#5b6b7b"/>
+</svg>
+`
+    await harness.write('groupdrag.svg', grouped)
+    await openWorkspaceFile(page, 'groupdrag.svg', { expect: 'svg' })
+
+    const handle = page.getByRole('button', { name: 'Drag g row' })
+    await handle.waitFor({ state: 'visible' })
+    const box = await handle.boundingBox()
+    assert.ok(box.width > 20, 'the group handle spans the union of its children')
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30, { steps: 8 })
+    await page.mouse.up()
+
+    const moved = await waitForDisk(harness, 'groupdrag.svg', (content) => content.includes('transform="matrix('),
+      { label: 'group drag' })
+    const matrix = /<g id="row"[^>]*transform="matrix\(([^)]+)\)"/.exec(moved)
+    assert.ok(matrix, 'the group received a transform attribute')
+    const values = matrix[1].split(',').map(Number)
+    assert.ok(values[4] > 0 && values[5] > 0, `the translate must follow the drag (got ${values[4]}, ${values[5]})`)
+    assert.ok(Math.abs(values[0] - 1) < 1e-6 && Math.abs(values[3] - 1) < 1e-6, 'moving a group is a pure translation')
+    assert.ok(moved.includes('<rect id="left" x="20" y="40" width="60" height="40" fill="#bda991"/>'),
+      'children keep their own coordinates')
+    assert.ok(moved.includes('<rect id="right" x="100" y="40"'), 'siblings inside the group are untouched')
+    assert.ok(!/id="loose"[^>]*transform=/.test(moved), 'a layer outside the group is unaffected')
+
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    const restored = await waitForDisk(harness, 'groupdrag.svg', (content) => content === grouped,
+      { label: 'undo group drag' })
+    assert.equal(restored, grouped, 'undo restores the byte-identical original')
+  },
+}

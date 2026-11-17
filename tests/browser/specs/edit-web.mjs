@@ -127,3 +127,46 @@ export const cssRuleSpec = {
     assert.equal(restored, CSS_DOCUMENT, 'undo restores the exact original stylesheet bytes')
   },
 }
+
+export const layoutPresetExtrasSpec = {
+  name: 'html: wrap, gap and grid-row presets each write one validated declaration',
+  allowConsoleErrors: 'csp-only',
+  async run({ page, harness, assert }) {
+    await harness.write('layout2.html', HTML_DOCUMENT)
+    await harness.write('styles.css', CSS_DOCUMENT)
+    await openWorkspaceFile(page, 'layout2.html', { expect: 'html' })
+    const frame = page.frameLocator('iframe[title="Isolated design preview"]')
+    await frame.locator('#lead').click()
+    await page.getByLabel('HTML style property').waitFor({ state: 'visible' })
+
+    const click = async (label) => {
+      // `getByRole(name)` matches substrings: "…to wrap" would also match
+      // "…to wrap-reverse", so these preset labels must be matched exactly.
+      const button = page.getByRole('button', { name: label, exact: true })
+      await button.scrollIntoViewIfNeeded()
+      assert.equal(await button.isDisabled(), false, `${label} must be available`)
+      await button.click()
+    }
+
+    await click('Set html layout display to flex')
+    let disk = await waitForDisk(harness, 'layout2.html', (content) => /display:\s*flex/.test(content),
+      { label: 'display' })
+    await click('Set html layout flex-wrap to wrap')
+    disk = await waitForDisk(harness, 'layout2.html', (content) => /flex-wrap:\s*wrap/.test(content),
+      { label: 'flex-wrap' })
+    await click('Set html layout column-gap to 16px')
+    disk = await waitForDisk(harness, 'layout2.html', (content) => /column-gap:\s*16px/.test(content),
+      { label: 'column-gap' })
+    assert.ok(disk.includes('id="lead"'), 'the target element kept its identity attribute')
+    assert.ok(disk.includes('color: #333'), 'the pre-existing inline declaration survived each preset')
+
+    // Each preset must be reversible one action at a time.
+    for (const name of ['column-gap', 'flex-wrap', 'display']) {
+      await page.getByRole('button', { name: 'Undo saved edit' }).click()
+      await page.waitForTimeout(250)
+    }
+    const restored = await waitForDisk(harness, 'layout2.html', (content) => content === HTML_DOCUMENT,
+      { label: 'undo all presets' })
+    assert.equal(restored, HTML_DOCUMENT, 'undoing every preset restores the byte-identical original')
+  },
+}
