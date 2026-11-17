@@ -50,6 +50,8 @@ The product is an internal DSH bundle, not an external application (ADR-023). Tw
 
 Guardrails: `tests/dsh-theme-tokens.test.mjs` fails on any unknown token name, and the browser spec `dsh-theme` injects a light palette and asserts the workbench surfaces/text actually follow it.
 
+Proven in the product: the real DSH instance renders a **light** theme, and the workbench now paints `rgb(255,255,255)` — exactly the value DSH gives `--dsw-alias-bg-layer-1` — instead of its previous hardcoded dark surface. The gate asserts that equality, and the canvas uses the recessed `--dsw-alias-bg-layer-2` so the white artwork sheet stays distinguishable. Evidence: `docs/operations/evidence/dsh-workbench-element.png` (1153×785, 1 552 distinct colours). Real DSH result: **20 PASS / 0 FAIL**.
+
 ### Windows intermittent failure: diagnosed, not papered over
 
 One HTML↔CSS navigation test failed intermittently on Windows only. Instead of raising a timeout again, the failure now reports the client's own state; the next failing run returned `{"alert":null,"hasReturnButton":true,"hasLinkedCssButton":false}` — proving the "return to HTML" click was a no-op because the client was still busy after the undo, not that the Host had failed. The test now waits until the button is actionable, and the same class of race is already guarded in the CSS integration tests.

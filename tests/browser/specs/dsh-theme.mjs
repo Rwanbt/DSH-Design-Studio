@@ -61,5 +61,19 @@ export const dshThemeSpec = {
     })
     assert.ok(accent === null || /rgb\(189, 169, 145\)|rgb\(189,169,145\)/.test(accent.replace(/\s+/g, ' ')),
       'the Graphite accent must survive theming')
+
+    // The artwork sheet must stay distinguishable from the recessed canvas in a
+    // light host theme: same-colour sheet on canvas would hide the artboard edge.
+    const surfaces = await page.evaluate(() => {
+      const canvas = document.querySelector('.dsh-studio-canvas')
+      const artboard = document.querySelector('.dsh-studio-artboard')
+      return {
+        canvas: canvas ? getComputedStyle(canvas).backgroundColor : '',
+        artboard: artboard ? getComputedStyle(artboard).backgroundColor : '',
+      }
+    })
+    assert.ok(surfaces.canvas && surfaces.artboard, 'both surfaces must resolve')
+    assert.ok(normalise(surfaces.canvas) !== normalise(surfaces.artboard),
+      `the artboard must stand out from the canvas (canvas ${surfaces.canvas}, artboard ${surfaces.artboard})`)
   },
 }

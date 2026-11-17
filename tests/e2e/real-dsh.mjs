@@ -374,12 +374,45 @@ async function main() {
             ? 'none from the plugin; environment-only: ' + environmentNoise.slice(0, 2).join(' | ')
             : 'none'))
 
-      // Optional evidence capture: one viewport screenshot of the real product.
+      // The view must be painted by the HOST theme, not by the plugin's fallbacks:
+      // compare its computed background with the value DSH gives the same token.
+      if (workbench > 0) {
+        const theme = await page.evaluate(() => {
+          const section = document.querySelector('.dsh-studio-workbench')
+          if (!section) return { found: false }
+          const probe = document.createElement('div')
+          probe.style.background = 'var(--dsw-alias-bg-layer-1)'
+          document.body.appendChild(probe)
+          const tokenValue = getComputedStyle(probe).backgroundColor
+          probe.remove()
+          const style = getComputedStyle(section)
+          return { found: true, background: style.backgroundColor, color: style.color,
+            font: style.fontFamily, tokenValue }
+        })
+        const opaque = (value) => typeof value === 'string' && /^rgba?\(/.test(value) && !/rgba\(0, 0, 0, 0\)/.test(value)
+        record('workbench painted by the host theme in real DSH',
+          theme.found && opaque(theme.background) && theme.tokenValue !== '' &&
+            theme.background === theme.tokenValue ? 'PASS' : 'FAIL',
+          theme.found
+            ? `background=${theme.background}, DSH --dsw-alias-bg-layer-1=${theme.tokenValue}, font=${String(theme.font).slice(0, 40)}`
+            : 'the workbench section was not found')
+      }
+
+      // Optional evidence capture: the viewport AND the workbench element itself.
+      // An element screenshot is proof that the plugin is really on screen; a bare
+      // viewport shot can be all page chrome if the view sits below the fold.
       const screenshot = process.env.DSH_E2E_SCREENSHOT
       if (screenshot) {
+        const target = page.getByText('DSH · Design Studio').first()
+        await target.scrollIntoViewIfNeeded().catch(() => {})
+        await page.waitForTimeout(400)
         await mkdir(path.dirname(path.resolve(screenshot)), { recursive: true })
         await page.screenshot({ path: path.resolve(screenshot) })
-        record('screenshot of the real DSH workbench', 'PASS', path.resolve(screenshot))
+        const section = page.locator('.dsh-studio-workbench').first()
+        const elementShot = path.resolve(screenshot).replace(/\.png$/i, '-element.png')
+        const captured = await section.screenshot({ path: elementShot }).then(() => true).catch(() => false)
+        record('screenshot of the real DSH workbench', captured ? 'PASS' : 'FAIL',
+          captured ? `${path.resolve(screenshot)} + ${elementShot}` : 'could not capture the workbench element')
       }
       await context.close()
     } finally {

@@ -29,8 +29,8 @@ Preuves exécutées (`node tests/e2e/real-dsh.mjs`, DSH 0.2.2-rc.3, Node 24, Lin
 - `dsh --profile e2e --no-open` sert l'application réelle ; session réelle créée par l'UI.
 - `/design-studio-native/health` → 200 `{"ok":true,...}` ; `/files` → 200 ; `/document` → 200 avec `nodes` ; `/apply` → 200 et fichier réellement modifié ; seconde écriture avec révision périmée → **409** et fichier inchangé.
 - `window.__DSH_BOOT__.entries` contient `@rwanbt/dsh-design-studio` et le module servi (200, 89 771 octets) déclare `conversation.view`.
-- **Workbench dans la vraie conversation :** avec `DSH_E2E_REUSE_CREDENTIALS=1` (copie locale, mode 600, supprimée avec le profil jetable) et une surcouche de modèle, **un tour assistant réel** a été produit en 2 s ; DSH rend alors la zone `conversation.view`, le composant enregistré est cliquable et le texte `DSH · Design Studio` est présent dans le DOM. Capture : `docs/operations/evidence/dsh-workbench.png` (1440×900, contenu non uniforme vérifié).
-- **Résultat final : 19 PASS / 0 FAIL / 0 NOT_RUN.** La variante sans credentials reste à `NOT_RUN` sur les deux dernières étapes : c'est une limite d'environnement, pas un succès simulé.
+- **Workbench dans la vraie conversation (plugin interne) :** avec `DSH_E2E_REUSE_CREDENTIALS=1` (copie locale, mode 600, supprimée avec le profil jetable) et une surcouche de modèle, **un tour assistant réel** a été produit en 2 s ; DSH rend alors la zone `conversation.view`, le composant enregistré est cliquable et le texte `DSH · Design Studio` est présent dans le DOM. Captures : `docs/operations/evidence/dsh-workbench.png` (viewport) et `dsh-workbench-element.png` (la vue elle-même) ; le workbench est peint par le thème de l'hôte (`rgb(255,255,255)` = valeur DSH de `--dsw-alias-bg-layer-1`).
+- **Résultat final : 20 PASS / 0 FAIL / 0 NOT_RUN.** La variante sans credentials reste à `NOT_RUN` sur les deux dernières étapes : c'est une limite d'environnement, pas un succès simulé.
 - Non couvert : l'application Desktop (Electron) elle-même, seulement son serveur Web réellement démarré.
 
 ### Gate G1 — Stockage sans perte silencieuse

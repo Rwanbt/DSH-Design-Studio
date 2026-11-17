@@ -13,7 +13,7 @@
     {
       "step": "create disposable profile",
       "status": "PASS",
-      "detail": "/tmp/dsh-g0-26nR3C/dsh-home/profiles/e2e (shipped web template)"
+      "detail": "/tmp/dsh-g0-Ax9z7T/dsh-home/profiles/e2e (shipped web template)"
     },
     {
       "step": "install plugin into profile",
@@ -28,7 +28,7 @@
     {
       "step": "boot real DSH web app",
       "status": "PASS",
-      "detail": "http://127.0.0.1:38077"
+      "detail": "http://127.0.0.1:42589"
     },
     {
       "step": "load real DSH Web UI",
@@ -38,7 +38,7 @@
     {
       "step": "create a real DSH session",
       "status": "PASS",
-      "detail": "session-c4452c9f-ce87-415b-9b13-1cb8267d0524"
+      "detail": "session-1028f21e-b5cb-4a69-9937-7bda4436cfb5"
     },
     {
       "step": "plugin route /health on the real Host",
@@ -73,7 +73,7 @@
     {
       "step": "client bundle served by the real Host",
       "status": "PASS",
-      "detail": "@rwanbt/dsh-design-studio HTTP 200, 105222 bytes, immediately=true, inject=[\"slots\"]"
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 106855 bytes, immediately=true, inject=[\"slots\"]"
     },
     {
       "step": "client bundle registers the conversation view",
@@ -91,16 +91,20 @@
       "detail": "none from the plugin; environment-only: [deepseek-account] account read failed {field: profile}"
     },
     {
+      "step": "workbench painted by the host theme in real DSH",
+      "status": "PASS",
+      "detail": "background=rgb(255, 255, 255), DSH --dsw-alias-bg-layer-1=rgb(255, 255, 255), font=-apple-system, BlinkMacSystemFont, \"Sego"
+    },
+    {
       "step": "screenshot of the real DSH workbench",
       "status": "PASS",
-      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench.png"
+      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench.png + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-element.png"
     }
   ],
   "summary": {
-    "pass": 19,
+    "pass": 20,
     "fail": 0,
     "notRun": 0
   },
-  "at": "2026-11-17T03:50:37.877Z",
-  "build": "ed3b56c10511d97fd3e7214bd4a622e6f4668e63"
+  "at": "2026-11-17T12:31:40.280Z"
 }
