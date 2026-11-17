@@ -39,6 +39,17 @@ export async function sourceOf(page) {
   return page.locator('textarea').first().inputValue()
 }
 
+/**
+ * Wait until the editor shows `expected`, then return it.
+ * The Host writes the file before the client finishes reloading it, so an
+ * immediate comparison races the reload on slow machines.
+ */
+export async function waitForEditorSource(page, expected, { timeout = 15000 } = {}) {
+  await page.waitForFunction((value) => document.querySelector('textarea')?.value === value, expected,
+    { timeout })
+  return sourceOf(page)
+}
+
 /** Open a workspace file through the real UI: type the path and press Open. */
 export async function openWorkspaceFile(page, relativePath, { expect } = {}) {
   await page.getByLabel('Workspace file').fill(relativePath)

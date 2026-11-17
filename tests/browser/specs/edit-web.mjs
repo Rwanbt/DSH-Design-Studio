@@ -2,7 +2,8 @@
  * HTML visual editing: click-to-select inside the inert preview frame and
  * targeted inline-style writes that preserve every other byte.
  */
-import { HTML_DOCUMENT, CSS_DOCUMENT, assertSingleDifferingRange, openWorkspaceFile, sourceOf, waitForDisk } from './helpers.mjs'
+import { HTML_DOCUMENT, CSS_DOCUMENT, assertSingleDifferingRange, openWorkspaceFile, sourceOf, waitForDisk,
+  waitForEditorSource } from './helpers.mjs'
 
 export const htmlSelectSpec = {
   allowConsoleErrors: 'csp-only',
@@ -30,7 +31,7 @@ export const htmlSelectSpec = {
     assert.ok(edited.includes('id="lead" class="lead" style="color: #333"'),
       'unrelated inline styles must stay byte-identical')
     assert.ok(edited.includes('<title>Harness page</title>'), 'the head must be untouched')
-    assert.equal(await sourceOf(page), edited, 'the source editor mirrors the saved file')
+    assert.equal(await waitForEditorSource(page, edited), edited, 'the source editor mirrors the saved file')
 
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
     const restored = await waitForDisk(harness, 'page.html', (content) => content === HTML_DOCUMENT,

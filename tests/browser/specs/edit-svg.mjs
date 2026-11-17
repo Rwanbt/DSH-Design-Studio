@@ -3,7 +3,8 @@
  * native Undo/Redo and reopening. Every assertion is observed in a real browser
  * against the real Host route handler and a real file on disk.
  */
-import { SVG_DOCUMENT, assertSingleDifferingRange, dragBy, openWorkspaceFile, sourceOf, waitForDisk } from './helpers.mjs'
+import { SVG_DOCUMENT, assertSingleDifferingRange, dragBy, openWorkspaceFile, sourceOf, waitForDisk,
+  waitForEditorSource } from './helpers.mjs'
 
 function numbersIn(xml, id, attributes) {
   const start = xml.indexOf(`id="${id}"`)
@@ -47,11 +48,7 @@ export const svgEditSpec = {
     assert.ok(moved.includes('data-note="keep-me"'), 'unfamiliar attributes survive the edit')
     assert.ok(moved.includes('<!-- editable demo; comments and unfamiliar attributes must survive -->'),
       'comments survive the edit')
-    // The disk write completes before the client finishes its reload: wait for the
-    // editor view instead of racing it.
-    await page.waitForFunction((expected) => document.querySelector('textarea')?.value === expected, moved,
-      { timeout: 15000 })
-    assert.equal(await sourceOf(page), moved, 'the editor reflects the saved source')
+    assert.equal(await waitForEditorSource(page, moved), moved, 'the editor reflects the saved source')
 
     // Native Undo replays the exact inverse patch.
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
@@ -66,9 +63,7 @@ export const svgEditSpec = {
 
     // Reopening the file must show the persisted document.
     await openWorkspaceFile(page, 'art.svg', { expect: 'svg' })
-    await page.waitForFunction((expected) => document.querySelector('textarea')?.value === expected, redone,
-      { timeout: 15000 })
-    assert.equal(await sourceOf(page), redone, 'reopening keeps the saved geometry')
+    assert.equal(await waitForEditorSource(page, redone), redone, 'reopening keeps the saved geometry')
   },
 }
 
