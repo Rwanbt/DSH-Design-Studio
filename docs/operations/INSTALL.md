@@ -118,8 +118,12 @@ cd ~/.dsh/profiles/desktop            # or your profile directory
 mkdir -p node_modules/@rwanbt
 ln -sfn /absolute/path/to/DSH-Design-Studio node_modules/@rwanbt/dsh-design-studio
 # then add, in package.json:
-#   "dependencies": { "@rwanbt/dsh-design-studio": "link:../../../../absolute/path" }
+#   "dependencies": { "@rwanbt/dsh-design-studio": "link:/absolute/path/to/DSH-Design-Studio" }
 #   "dsh.profile.bundles": [ …, "@rwanbt/dsh-design-studio" ]
+# Use an ABSOLUTE link target, like every other profile bundle. A relative
+# `link:` is resolved against the profile directory and silently yields a
+# wrong path (observed: ../../../../mnt/... became /home/mnt/...), which the
+# bundle list then displays as the plugin's source.
 ```
 
 A manual link is **not** the supported path: the next `pnpm install` in that
