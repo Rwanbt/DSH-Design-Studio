@@ -1,13 +1,14 @@
 # Native editor alpha — P0/P1 experiment
 
-**Status:** experimental `0.1.0-alpha.17` on PR #8 DRAFT (not released). GitHub Actions [run 43986355036](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43986355036), tested SHA `eb29a9660ee5a4f33a4064994af645b227cfd884`: **236 PASS, 0 FAIL, 0 SKIP**. HTML preview now supports parent-controlled click selection in an iframe without user scripts. Real browser and DSH runtime remain **NOT_RUN**; the `allow-same-origin` isolation tradeoff requires an explicit security review (ADR-017). See [alpha.17 evidence](ALPHA17-EVIDENCE.md).
+**Status:** experimental `0.1.0-alpha.18` on PR #8 DRAFT (not released). GitHub Actions [run 43988320991](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43988320991), tested source SHA `9e9e6f7310f7d83b016d6ec18a8d891becca628d`: **249 PASS, 0 FAIL, 0 SKIP**. The inspector can now navigate from a selected HTML ID/class to **candidate** rules in safe local CSS files and edit those files independently. The effective CSS cascade, linked CSS rendering, real DSH/browser integration and universal external-editor atomic CAS remain **NOT_IMPLEMENTED / NOT_RUN**. See [alpha.18 evidence](ALPHA18-EVIDENCE.md), ADR-018.
 
 ## What it can do
 
 - Read an existing SVG, HTML/HTM or CSS file **relative to the current DSH session workspace**.
-- **Inspecteur de règles CSS externes expérimental** : ouvrir un fichier `.css`, sélectionner une règle simple `#id` ou `.classe` unique, inspecter les déclarations, modifier une valeur autorisée ou en ajouter une, avec patch exact, Undo/Redo et contrôle d'identité. Les règles complexes restent en lecture seule ; la cascade HTML↔CSS n'est pas encore raccordée.
+- **Correspondances HTML ↔ CSS locales expérimentales** : sélection d'un élément HTML, liste limitée aux règles simples `#id`/`.classe` dans les feuilles locales explicitement liées ; ouverture du vrai fichier CSS, vérification de sa version fraîche, édition et Undo, puis retour au HTML. **Pas de cascade calculée ni de rendu de CSS externe dans la prévisualisation** (ADR-018).
+- **Inspecteur de règles CSS externes expérimental** : ouvrir un fichier `.css`, sélectionner une règle simple `#id` ou `.classe` unique, inspecter les déclarations, modifier une valeur autorisée ou en ajouter une, avec patch exact, Undo/Redo et contrôle d'identité. Les règles complexes restent en lecture seule ; la cascade HTML↔CSS n'est pas résolue.
 - **Sélection directe HTML expérimentale** : clic dans le `srcDoc` avec sandbox `allow-same-origin` **sans scripts** et CSP `script-src 'none'`. Le parent de confiance vérifie ID source unique, DOM non ambigu, session et identité de révision avant de sélectionner ; aucun changement de fichier n'est émis par le clic. Tests DOM simulés uniquement (voir ADR-017).
-- **Inspecteur HTML expérimental** : identifier les éléments par un `id` unique, les sélectionner dans la liste, les surligner dans un aperçu sandboxé et modifier des propriétés CSS inline simples par patches natifs exacts et annulables. Ne gère pas encore la cascade externe, les sélecteurs complexes ni le clic direct dans la page.
+- **Inspecteur HTML expérimental** : identifier les éléments par un `id` unique, les sélectionner dans la liste, les surligner dans un aperçu sandboxé et modifier des propriétés CSS inline simples par patches natifs exacts et annulables. Ne gère pas encore la cascade effective ni les sélecteurs complexes ; le clic direct dans la page est expérimental (alpha.17).
 - **Protection obligatoire des révisions** : chaque requête native d'écriture doit inclure `baseIdentity` et `baseHash`; un ancien client sans jeton d'identité reçoit HTTP 428 et doit rouvrir le fichier avec un client actuel.
 - **Browse and filter** existing SVG/HTML/CSS files from the live conversation's workspace using **Parcourir…**, then open them without manually typing a relative path. The picker excludes symlinks and hidden/vendor folders, caps the number of entries and does not disclose file contents.
 - Show a sandboxed HTML/SVG preview (scripts forbidden, remote resources disallowed by its preview policy).
@@ -99,7 +100,8 @@ Native patch engine (src/native-patch.mjs)
 | Undo/redo native source round-trip and conflict rejection | PASS (GitHub Actions file/API integration tests) |
 | Real DSH browser pointer interaction | NOT_RUN |
 | Freehand vector drawing / Bézier handles | NOT_IMPLEMENTED |
-| Real HTML visual source mapping | NOT_IMPLEMENTED |
+| HTML→CSS local candidate association and navigation | PASS (GitHub Actions Host/client simulations; no computed cascade) |
+| Real HTML/CSS cascade and exact computed style mapping | NOT_IMPLEMENTED |
 | CI on multiple operating systems | NOT_RUN |
 
 UI direction is documented in [V3 Graphite decision](../design/INTERFACE-V3-GRAPHITE.md). The separate HTML V3 concept is **not** this running plugin; the real plugin uses the native DSH React/Host shell and is only partially visually aligned so far.
