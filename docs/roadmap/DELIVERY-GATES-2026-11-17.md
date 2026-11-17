@@ -1,6 +1,6 @@
 # DSH Design Studio — Matrice de livraison et de couverture
 
-**Mise à jour :** 17 novembre 2026 · **branche :** `feat/native-file-persistence` · **PR :** #8 (DRAFT vers `dev`).
+**Mise à jour :** 17 novembre 2026 · **branche d'intégration :** `dev` · **PR #8 fusionnée dans `dev` par squash** (`c2f17475`) ; **`main` inchangée**. La fermeture des gates G0–G5 reste indépendante de cette intégration.
 
 **Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA20-EVIDENCE.md` ; les décisions de sécurité, rendu partiel et disposition figurent dans ADR-017 à ADR-020.
 
@@ -65,7 +65,7 @@
 
 ## 4. Prochaine séquence de développement proposée
 
-- **Alpha.16 (branche actuelle)** : styles CSS externes simples, tests exacts et états read-only.
+- **Alpha.16 (historique du développement) : styles CSS externes simples, tests exacts et états read-only.
 - **Alpha.17 (prototype implémenté)** : clic HTML direct via accès DOM par le parent dans iframe sans scripts (ADR-017) ; tests React simulés PASS, tests navigateurs réels/sécurité NOT_RUN. La stratégie par messages demeure une option non implémentée.
 - **Alpha.18 (prototype implémenté)** : liens HTML→CSS locaux et correspondances indicatives avec navigation vers un inspecteur de feuille native ; cascade, rendu CSS externe et calcul des styles non implémentés.
 - **Alpha.20 (préréglages et dock implémentés)** : boutons Flex/Grid pour HTML/CSS avec whitelist côté serveur et Undo exact ; interface compacte via container queries avec onglets. Validation React simulée PASS, DSH et gestes mobiles réels NOT_RUN. Le constructeur complet et les media queries éditables restent NON IMPLÉMENTÉS (ADR-020).
