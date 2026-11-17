@@ -25,6 +25,7 @@ import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-htm
 import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createRefusalSpec } from './create.mjs'
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
+import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 
 export const specs = [
   mountSpec,
@@ -36,6 +37,8 @@ export const specs = [
   panelSpec,
   panelUnavailableSpec,
   panelEmptySpec,
+  geometryInspectorSpec,
+  fillInspectorSpec,
   dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,

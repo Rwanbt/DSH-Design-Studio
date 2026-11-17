@@ -1037,6 +1037,66 @@ window.__ModuleLoader__.load({
         }
         void save({kind:'svg-attributes',edits})
       }
+      // Numeric transformation and fill, straight from the document's own
+      // attributes: no second geometry model, so what the inputs show is what
+      // the file says. A shape whose attributes are missing stays read-only
+      // instead of being given invented values.
+      const GEOMETRY_FIELDS = {
+        rect:['x','y','width','height'], image:['x','y','width','height'],
+        ellipse:['cx','cy','rx','ry'], circle:['cx','cy','r'],
+        line:['x1','y1','x2','y2'], text:['x','y'], use:['x','y'],
+      }
+      const GEOMETRY_LABELS = {x:'X',y:'Y',width:'L',height:'H',cx:'X',cy:'Y',rx:'L',ry:'H',
+        r:'R',x1:'X1',y1:'Y1',x2:'X2',y2:'Y2'}
+      const geometryFields = selected && !selected.isGroup ? (GEOMETRY_FIELDS[selected.tag]||[]) : []
+      const geometryValues = geometryFields.every(key=>selected && selected.attributes &&
+        Object.hasOwn(selected.attributes,key)) ? geometryFields : []
+      const geometryWritable = geometryValues.length>0 && !selected?.locked &&
+        !busy && !reloadRequired && source===doc?.source
+      const editable = !busy && !reloadRequired && source===doc?.source && !selected?.locked
+      function commitAttributes(next) {
+        if(!selected) return
+        const edits = Object.entries(next)
+          .filter(([, value])=>typeof value==='string' && value.trim().length>0)
+          .filter(([attribute, value])=>String(selected.attributes[attribute]??'')!==value.trim())
+          .map(([attribute, value])=>({id:selected.id,attribute,value:value.trim()}))
+        if(edits.length===0) return
+        void save({kind:'svg-attributes',edits})
+      }
+      const geometryInspector = geometryValues.length>0
+        ? h('div',{className:'dsh-studio-ins-block'},
+            h('div',{className:'dsh-studio-ins-head'},'Transformation',
+              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},'unités SVG')),
+            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}},
+              geometryValues.map(key=>h('label',{key,style:{display:'flex',alignItems:'center',gap:7,
+                  border:'1px solid var(--dsw-alias-border-l2, #3a414c)',
+                  background:'var(--dsw-alias-bg-layer-2, #252a32)',borderRadius:5,height:30,padding:'0 9px',minWidth:0}},
+                h('span',{style:{color:'var(--dsw-alias-label-tertiary, #8c96a6)',fontSize:10,minWidth:12}},
+                  GEOMETRY_LABELS[key]||key),
+                h('input',{key:key+':'+selected.attributes[key],type:'number',step:'any',
+                  defaultValue:selected.attributes[key],disabled:!geometryWritable,
+                  'aria-label':'Geometry '+key,
+                  style:{width:'100%',minWidth:0,border:0,background:'transparent',height:26,
+                    color:'var(--dsw-alias-label-primary, #e8ecf1)',fontSize:11,padding:0},
+                  onBlur:e=>commitAttributes({[key]:e.target.value}),
+                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))) )
+        : null
+      const fillValue = selected && typeof selected.attributes?.fill==='string' &&
+        /^#[0-9a-f]{3,8}$/i.test(selected.attributes.fill) ? selected.attributes.fill : ''
+      const appearanceInspector = selected && !selectedCss && doc?.format==='svg' && fillValue
+        ? h('div',{className:'dsh-studio-ins-block'},
+            h('div',{className:'dsh-studio-ins-head'},'Apparence',
+              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},'remplissage')),
+            h('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+              h('input',{type:'color',value:fillValue.length===7?fillValue:fillValue,
+                'aria-label':'Fill colour',disabled:!editable,
+                style:{width:34,height:30,padding:2,cursor:'pointer'},
+                onChange:e=>commitAttributes({fill:e.target.value})}),
+              h('input',{type:'text',defaultValue:fillValue,key:fillValue,'aria-label':'Fill hex',
+                spellCheck:false,disabled:!editable,style:{...field,height:30},
+                onBlur:e=>commitAttributes({fill:e.target.value}),
+                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))
+        : null
       return h('section',{className:'dsh-studio-workbench',lang:'fr',
         'aria-label':'DSH Design Studio workbench',
         onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'var(--dsw-font-family, system-ui, sans-serif)',fontSize:12}},
@@ -1574,7 +1634,7 @@ window.__ModuleLoader__.load({
                 h('strong',{style:{fontSize:12.5,display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},
                   selectedCss?selectedCss.selector:(selected?(selected.tag+' #'+selected.id):'Aucune sélection')),
                 h('small',{style:{color:'var(--dsw-alias-label-tertiary, #8d8b88)'}},
-                  selectedCss?'Règle CSS native':(selected?(selected.isGroup?'Groupe':'Forme vectorielle · éditable'):'Sélectionnez un calque')))),selectedCss?
+                  selectedCss?'Règle CSS native':(selected?(selected.isGroup?'Groupe':'Forme vectorielle · éditable'):'Sélectionnez un calque')))),geometryInspector,appearanceInspector,selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
                 returnHtmlRef&&h('button',{type:'button',style:button,
