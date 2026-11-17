@@ -56,6 +56,7 @@ window.__ModuleLoader__.load({
       const [htmlPreviewCss,setHtmlPreviewCss] = React.useState('')
       const [htmlPreviewCoverage,setHtmlPreviewCoverage] = React.useState(null)
       const [htmlViewport,setHtmlViewport] = React.useState('auto')
+      const [mobilePanel,setMobilePanel] = React.useState('canvas')
       const [htmlStyleMatches,setHtmlStyleMatches] = React.useState([])
       const [returnHtmlRef,setReturnHtmlRef] = React.useState(null)
       const [cssRules,setCssRules] = React.useState([])
@@ -348,8 +349,73 @@ window.__ModuleLoader__.load({
       const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
       const htmlProps=['color','background-color','display','width','height','padding','margin',
-        'gap','font-size','border-radius','font-weight','text-align','flex-direction',
+        'gap','font-size','border-radius','font-weight','text-align','grid-template-columns','grid-auto-flow','flex-direction',
         'justify-content','align-items','opacity']
+      const layoutGroups=[
+        {property:'display',label:'Conteneur',options:[['flex','Flex'],['grid','Grid'],['block','Block']]},
+        {property:'flex-direction',label:'Direction · Flex',mode:'flex',
+          options:[['row','→'],['column','↓'],['row-reverse','←'],['column-reverse','↑']]},
+        {property:'justify-content',label:'Justification · Flex',mode:'flex',
+          options:[['flex-start','Début'],['center','Centre'],['flex-end','Fin'],['space-between','Répartir']]},
+        {property:'align-items',label:'Alignement · Flex',mode:'flex',
+          options:[['stretch','Étirer'],['flex-start','Début'],['center','Centre'],['flex-end','Fin']]},
+        {property:'grid-template-columns',label:'Colonnes · Grid',mode:'grid',
+          options:[['1fr','1'],['repeat(2, minmax(0, 1fr))','2'],
+            ['repeat(3, minmax(0, 1fr))','3'],['repeat(4, minmax(0, 1fr))','4']]},
+        {property:'grid-auto-flow',label:'Flux · Grid',mode:'grid',
+          options:[['row','Lignes'],['column','Colonnes']]},
+        {property:'gap',label:'Espacement',mode:'layout',
+          options:[['0px','0'],['8px','8'],['16px','16'],['24px','24'],['32px','32']]},
+      ]
+      function renderLayoutControls(format,item) {
+        if(!item?.editable || !doc)return null
+        const values={}
+        if(format==='css') {
+          for(const declaration of item.declarations||[])values[declaration.property]=declaration.value
+        } else {
+          for(const part of String(item.style||'').split(';')){
+            const match=/^\\s*([a-z-]+)\\s*:\\s*([^;]*)$/i.exec(part)
+            if(match)values[match[1].toLowerCase()]=match[2].trim()
+          }
+        }
+        const displayMode=values.display==='inline-flex'?'flex':values.display
+        const editingBlocked=busy||reloadRequired||source!==doc.source
+        return h('section',{className:'dsh-studio-layout-controls',
+          'aria-label':'Visual layout controls',
+          style:{display:'grid',gap:8,padding:10,marginTop:6,
+            background:'#292b2f',border:'1px solid #474343',borderRadius:8}},
+          h('strong',{style:{color:ACCENT}},'Disposition · Flex / Grid'),
+          h('small',{style:{color:'#b6afa7'}},
+            'Préréglages natifs, une propriété par action. CSS externe et cascade non calculés.'),
+          layoutGroups.map(group=>{
+            const requires=group.mode
+            const compatible=!requires || (requires==='layout'
+              ?displayMode==='flex'||displayMode==='grid'
+              :displayMode===requires)
+            if(!compatible && requires && requires!=='layout' && displayMode!=='flex' && displayMode!=='grid')return null
+            const off=editingBlocked||!compatible
+            return h('div',{key:group.property,style:{display:'grid',gap:5}},
+              h('small',{style:{color:'#d6c7b2'}},group.label+
+                (!compatible?' · choisir le mode correspondant':'')),
+              h('div',{style:{display:'flex',flexWrap:'wrap',gap:5}},
+                group.options.map(([value,label])=>
+                  h('button',{key:value,type:'button',
+                    'aria-label':'Set '+format+' layout '+group.property+' to '+value,
+                    'aria-pressed':values[group.property]===value,
+                    title:group.property+': '+value,
+                    disabled:off,
+                    style:{...button,minWidth:32,padding:'5px 8px',
+                      background:values[group.property]===value?'#574939':button.background,
+                      borderColor:values[group.property]===value?ACCENT:'#44464b'},
+                    onClick:()=>void save(format==='css'
+                      ?{kind:'css-rule',selector:item.selector,property:group.property,value}
+                      :{kind:'html-style',id:item.id,property:group.property,value})
+                  },label))
+              )
+            )
+          })
+        )
+      }
       async function openLinkedCssRule(match) {
         if(!doc || !['html','htm'].includes(doc.format)||busy||reloadRequired||
            source!==doc.source || !match?.file || !match?.selector)return
@@ -1105,7 +1171,8 @@ window.__ModuleLoader__.load({
                         property:cssProperty,value:cssValue})
                     },'Appliquer à la règle · sans IA'),
                     h('small',{style:{opacity:.7}},
-                      'Un seul changement de déclaration CSS par opération ; Undo/Redo natif.')
+                      'Un seul changement de déclaration CSS par opération ; Undo/Redo natif.'),
+                    renderLayoutControls('css',selectedCss)
                   )
               ):
               selectedHtml?
@@ -1155,7 +1222,8 @@ window.__ModuleLoader__.load({
                     disabled:busy||reloadRequired||source!==doc.source||!htmlValue,
                     onClick:()=>void save({kind:'html-style',id:htmlActive,property:htmlProperty,value:htmlValue})
                   },'Appliquer au HTML · sans IA'),
-                  h('small',{style:{opacity:.7}},'Modifie uniquement l’attribut style du nœud sélectionné, avec Undo/Redo.'))):
+                  h('small',{style:{opacity:.7}},'Modifie uniquement l’attribut style du nœud sélectionné, avec Undo/Redo.'),
+                  renderLayoutControls('html',selectedHtml))):
               selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},
                 h('div',null,selected.tag+' #'+selected.id),
