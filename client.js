@@ -9,12 +9,21 @@ window.__ModuleLoader__.load({
     const pane = { background:'var(--dsw-alias-surface-1,#202124)', color:'var(--dsw-alias-content-primary,#e8e7e2)', border:'1px solid var(--dsw-alias-border,#37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
-    function safePreview(source, format, selectedHtmlId='') {
+    function safePreview(source, format, selectedHtmlId='', linkedCss='') {
       const policy = "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
       const marked = /^(?:[A-Za-z][\w:.-]{0,79})$/.test(selectedHtmlId)?
         '<style>[id="'+selectedHtmlId+'"]{outline:2px solid #bda991!important;outline-offset:2px!important;}</style>':''
-      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy + '">' + svgLayout + marked + '</head><body style="margin:' + (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
+      // Linked CSS is a bounded, allowlisted *subset* prepared by the native
+      // Host, never the original stylesheet bytes. No @rules, URLs or JS.
+      const projected = ['html','htm'].includes(format) &&
+        typeof linkedCss==='string' && linkedCss.length<=24576 &&
+        !/[<>&]/.test(linkedCss) ?
+          '<style data-dsh-preview-subset="partial">'+linkedCss+'</style>' : ''
+      return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy +
+        '"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+        svgLayout + projected + marked + '</head><body style="margin:' +
+        (format==='svg'?'0':'12px') + '">' + source + '</body></html>'
     }
     async function request(endpoint, options) {
       const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})
@@ -44,6 +53,9 @@ window.__ModuleLoader__.load({
       const [htmlProperty,setHtmlProperty] = React.useState('background-color')
       const [htmlValue,setHtmlValue] = React.useState('')
       const [htmlStylesheets,setHtmlStylesheets] = React.useState([])
+      const [htmlPreviewCss,setHtmlPreviewCss] = React.useState('')
+      const [htmlPreviewCoverage,setHtmlPreviewCoverage] = React.useState(null)
+      const [htmlViewport,setHtmlViewport] = React.useState('auto')
       const [htmlStyleMatches,setHtmlStyleMatches] = React.useState([])
       const [returnHtmlRef,setReturnHtmlRef] = React.useState(null)
       const [cssRules,setCssRules] = React.useState([])
@@ -108,6 +120,8 @@ window.__ModuleLoader__.load({
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setHtmlElements(data.htmlElements||[])
           setHtmlStylesheets(data.stylesheets||[])
+          setHtmlPreviewCss(data.previewCss||'')
+          setHtmlPreviewCoverage(data.previewCoverage||null)
           setHtmlStyleMatches(data.styleMatches||[])
           setCssRules(data.cssRules||[])
           if(doc?.file!==targetFile){
@@ -1029,11 +1043,40 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                  h('iframe',{title:'Isolated design preview',
-                    sandbox:['html','htm'].includes(doc.format)?'allow-same-origin':'',
-                    referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
-                    srcDoc:safePreview(source,doc.format,htmlActive),
-                    style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+                  ['html','htm'].includes(doc.format)?
+                    h('div',{className:'dsh-studio-responsive-preview',
+                      style:{width:'100%',display:'grid',gap:8,alignContent:'start'}},
+                      h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
+                        style:{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}},
+                        [['auto','Auto'],['desktop','1280'],['tablet','768'],['mobile','390']].map(([mode,label])=>
+                          h('button',{type:'button',key:mode,
+                            'aria-label':'HTML viewport '+mode,'aria-pressed':htmlViewport===mode,
+                            style:{...button,background:htmlViewport===mode?'#574939':button.background},
+                            onClick:()=>setHtmlViewport(mode)},label)),
+                        h('small',{style:{color:'#aaa9a5',marginLeft:7}},
+                          htmlViewport==='auto'?'Largeur disponible':({desktop:'1280 px',tablet:'768 px',mobile:'390 px'})[htmlViewport])
+                      ),
+                      h('small',{role:'status',style:{color:'#d6b787',fontSize:11}},
+                        'Aperçu partiel · CSS locaux simples uniquement (pas de cascade calculée). '+
+                        (htmlPreviewCoverage?.includedDeclarations||0)+' déclarations compatibles, '+
+                        (htmlPreviewCoverage?.omittedDeclarations||0)+' ignorées'+
+                        (htmlPreviewCoverage?.truncated?' · limite atteinte':'')+'.'),
+                      h('div',{className:'dsh-studio-html-frame-scroll',
+                        style:{width:'100%',maxWidth:'100%',overflowX:'auto',overflowY:'hidden',
+                          border:'1px solid #474747',borderRadius:8,background:'#17191b',
+                          padding:8,boxSizing:'border-box'}},
+                        h('iframe',{title:'Isolated design preview',sandbox:'allow-same-origin',
+                          referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
+                          srcDoc:safePreview(source,doc.format,htmlActive,htmlPreviewCss),
+                          style:{display:'block',
+                            width:({auto:'100%',desktop:'1280px',tablet:'768px',mobile:'390px'})[htmlViewport],
+                            maxWidth:'none',height:520,border:'none',background:'#fff',borderRadius:6}})
+                      )
+                    ):
+                    h('iframe',{title:'Isolated design preview',sandbox:'',
+                      referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
+                      srcDoc:safePreview(source,doc.format,htmlActive),
+                      style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
             h('strong',null,'Design · Propriétés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
