@@ -44,6 +44,7 @@ Décision :
 - **Raccourcis DSH** : Ctrl+Z/Ctrl+D sont gérés localement par le workbench ; les enregistrer via le service de raccourcis de DSH demanderait l'injection de ce service et une revue de conflits clavier.
 - **i18n** : l'interface mélange français et anglais ; DSH expose un paquet de locale qui n'est pas encore consommé.
 - **Carte de réglages / palette de commandes** : aucun point d'entrée DSH au-delà de la vue.
+- **Entrée dans la barre latérale** : décidée et cadrée dans [ADR-024](ADR-024-SIDEBAR-PANEL-INTEGRATION.md) — un panneau `main` + `sidebar.panellist`, donc une surface Host cadrée par espace de travail (un panneau `main` ne reçoit aucune session). Non encore implémenté.
 - **Tour réel dans le Desktop** : la vue est rendue dans le shell, mais un tour assistant y reste non exécuté (profil `desktop` jetable sans adaptateur pour le fournisseur testé → `NO_ADAPTER`).
 - **Connexion au compte** : la fenêtre « bienvenue » et l'assistant de premier démarrage sont traversés par script dans les tests, pas validés manuellement.
 - **Cycle d'ouverture** : le renderer Electron est désormais prouvé (voir § « Desktop » ci-dessous) ; ce qui n'est pas fait relève des points ci-dessus, pas du rendu.
