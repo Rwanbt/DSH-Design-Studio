@@ -146,7 +146,7 @@ test('mobile panels expose an accessible single-active-pane navigation without w
   const styles=find(tree,n=>n.type==='style')
   assert.ok(styles)
   const css=String(styles.children.join(''))
-  assert.ok(css.includes('@container(max-width:750px)'))
+  assert.ok(css.includes('@container (max-width:750px)'))
   assert.ok(css.includes('.dsh-studio-mobile-active'))
   assert.equal(find(tree,n=>n.props?.['aria-label']==='Mobile panel canvas').props['aria-selected'],true)
   for(const [tab,pane] of [['inspector','dsh-studio-inspector'],['layers','dsh-studio-sidebar'],
