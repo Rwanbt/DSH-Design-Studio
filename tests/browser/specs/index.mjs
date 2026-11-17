@@ -25,6 +25,7 @@ import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-htm
 import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createFeedbackSpec, createRefusalSpec } from './create.mjs'
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
+import { renameFileSpec, deleteFileSpec, cancelDeleteSpec } from './file-admin.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -47,6 +48,9 @@ export const specs = [
   createFeedbackSpec,
   createRefusalSpec,
   panelSpec,
+  renameFileSpec,
+  deleteFileSpec,
+  cancelDeleteSpec,
   panelUnavailableSpec,
   panelEmptySpec,
   geometryInspectorSpec,

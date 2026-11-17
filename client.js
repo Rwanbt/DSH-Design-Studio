@@ -431,6 +431,7 @@ window.__ModuleLoader__.load({
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
+      const [fileAction,setFileAction] = React.useState(null)
       const [layerSearch,setLayerSearch] = React.useState('')
       const [previewMode,setPreviewMode] = React.useState(false)
       const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
@@ -616,6 +617,65 @@ window.__ModuleLoader__.load({
       async function openPickedFile(picked) {
         const opened=await load(false,picked)
         if(opened)setShowFiles(false)
+      }
+      /** Drop every per-document state so the landing state is honest again. */
+      function closeDocument() {
+        setDoc(null);setSource('')
+        setNodes([]);setTextNodes([]);setPathNodes([])
+        setHtmlElements([]);setHtmlStylesheets([]);setHtmlStyleMatches([]);setHtmlPreviewCss('')
+        setHtmlPreviewCoverage(null);setCssRules([]);setCssActive('');setCssValue('')
+        setHtmlActive('');setHtmlValue('')
+        setGeometry({artboard:null,handles:[]});setActive('')
+        setUndoStack([]);setRedoStack([]);setReloadRequired(false)
+        setEditingText('');setTextDraft('');setWarning('')
+      }
+      /**
+       * Rename or delete one workspace file through the Host.
+       *
+       * Both operations are destructive in a way the editor cannot undo (the
+       * Host keeps no history for them), so each one requires the opened
+       * revision and an explicit confirmation naming the exact path. A file that
+       * is not open is read first, because acting on unseen bytes is exactly the
+       * silent failure mode this editor refuses everywhere else.
+       */
+      async function manageFile(kind, target, nextPath='') {
+        if(busy||creating) return
+        const openTarget=doc && doc.file===target
+        if(openTarget && (source!==doc.source || hasTextDraft())) {
+          setError('Modifications non enregistrées : enregistrez ou abandonnez-les avant de renommer ou supprimer ce fichier.')
+          return
+        }
+        if(kind==='rename' && !nextPath.trim()) {setError('Indiquez le nouveau nom du fichier.');return}
+        setBusy(true);setError('');setNotice('')
+        try {
+          let baseHash,baseIdentity
+          if(openTarget) {baseHash=doc.hash;baseIdentity=doc.identity}
+          else {
+            const opened=await request('/document?'+scopeQuery+'&file='+encodeURIComponent(target))
+            baseHash=opened.document.hash;baseIdentity=opened.document.identity
+          }
+          if(kind==='rename') {
+            const response=await request('/rename',{method:'POST',headers:{'content-type':'application/json'},
+              body:JSON.stringify({...scopeBody,file:target,next:nextPath.trim(),baseHash,baseIdentity})})
+            setFileAction(null)
+            await loadWorkspaceFiles()
+            if(openTarget) await load(false,response.document.file)
+            setNotice('Fichier renommé : '+response.document.file)
+          } else {
+            await request('/delete',{method:'POST',headers:{'content-type':'application/json'},
+              body:JSON.stringify({...scopeBody,file:target,baseHash,baseIdentity})})
+            setFileAction(null)
+            await loadWorkspaceFiles()
+            if(openTarget) closeDocument()
+            setNotice('Fichier supprimé : '+target)
+          }
+        }catch(e){
+          setError(e.code==='already-exists'?'Un fichier occupe déjà ce nom : '+nextPath.trim()
+            :e.code==='stale-revision'?'Le fichier a changé sur le disque : rechargez avant d’agir.'
+            :e.code==='rename-unsupported'?'Ce système de fichiers ne permet pas de renommer sans risque d’écrasement.'
+            :String(e.message))
+          setFileAction(null)
+        }finally{setBusy(false)}
       }
       /**
        * The exact path a create button will write, computed by the very rule the
@@ -1587,14 +1647,43 @@ window.__ModuleLoader__.load({
           h('input',{style:field,value:fileSearch,'aria-label':'Filter design files',
             placeholder:'Rechercher : nom, dossier, extension…',
             onChange:e=>setFileSearch(e.target.value)}),
-          h('div',{role:'list',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:4}},
+          h('div',{role:'list',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:4}},
             ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase())).slice(0,100).map(item=>
-              h('button',{key:item.path,style:{...button,textAlign:'left',overflowWrap:'anywhere'},
-                'aria-label':'Open file '+item.path,disabled:busy,
-                title:item.path+' · '+item.size+' bytes',
-                onClick:()=>void openPickedFile(item.path)},
-                h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
-                item.path))),
+              h('div',{key:item.path,role:'listitem',
+                style:{display:'flex',gap:4,alignItems:'center',background:'#2c2e31',border:'1px solid #43454a',borderRadius:6,padding:'2px 4px'}},
+                h('button',{style:{...button,flex:1,minWidth:0,textAlign:'left',overflowWrap:'anywhere',background:'transparent',border:0},
+                  'aria-label':'Open file '+item.path,disabled:busy,
+                  title:item.path+' · '+item.size+' bytes',
+                  onClick:()=>void openPickedFile(item.path)},
+                  h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
+                  item.path),
+                h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
+                  title:'Renommer '+item.path,disabled:busy||creating,
+                  onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
+                h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Delete '+item.path,
+                  title:'Supprimer '+item.path,disabled:busy||creating,
+                  onClick:()=>{setError('');setFileAction({kind:'delete',file:item.path})}},'Supprimer')))),
+          // Deleting is not undoable, so the confirmation names the exact path
+          // and the file is never removed on a single click.
+          fileAction&&h('div',{role:'group','aria-label':'Confirm file '+fileAction.kind,
+            style:{...pane,padding:10,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',
+              border:'1px solid '+(fileAction.kind==='delete'?'#8a4b45':'#43454a')}},
+            fileAction.kind==='rename'
+              ? h('span',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+                  h('span',null,'Renommer ',h('code',null,fileAction.file),' en'),
+                  h('input',{style:{...field,maxWidth:300},value:fileAction.next,'aria-label':'New path for '+fileAction.file,
+                    autoFocus:true,
+                    onChange:e=>setFileAction(previous=>({...previous,next:e.target.value})),
+                    onKeyDown:e=>{if(e.key==='Enter')void manageFile('rename',fileAction.file,fileAction.next)
+                      else if(e.key==='Escape')setFileAction(null)}}),
+                  h('button',{style:button,'aria-label':'Confirm rename of '+fileAction.file,disabled:busy,
+                    onClick:()=>void manageFile('rename',fileAction.file,fileAction.next)},'Confirmer le renommage'))
+              : h('span',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+                  h('span',null,'Supprimer définitivement ',h('code',null,fileAction.file),' ? Le fichier ne sera pas mis à la corbeille.'),
+                  h('button',{style:button,'aria-label':'Confirm delete of '+fileAction.file,disabled:busy,
+                    onClick:()=>void manageFile('delete',fileAction.file)},'Confirmer la suppression')),
+            h('button',{style:button,'aria-label':'Cancel file action',disabled:busy,
+              onClick:()=>setFileAction(null)},'Annuler')),
           workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
         ),
 

@@ -390,6 +390,12 @@ export function createNativeFileStore(workspace, options = {}) {
       (lockOptions === null || typeof lockOptions !== 'object' || Array.isArray(lockOptions))) {
     throw error('invalid-option', 'lock options must be an object')
   }
+  function requireRevision(baseHash, baseIdentity) {
+    if (typeof baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(baseIdentity) ||
+        typeof baseHash !== 'string' || !/^[a-f0-9]{64}$/.test(baseHash)) {
+      throw error('missing-revision', 'Open the document in this editor before renaming or deleting it')
+    }
+  }
   return {
     /**
      * Create a brand-new native document inside the workspace.
@@ -537,6 +543,106 @@ export function createNativeFileStore(workspace, options = {}) {
         } finally {
           if (created) await io.unlink(temp).catch(() => {})
         }
+      }, lockOptions))
+    },
+    /**
+     * Give an opened document a new workspace path, preserving its bytes.
+     *
+     * The opened revision is required (hash + identity), the destination must be
+     * free, and the commit is link()+unlink(): link() fails with EEXIST instead
+     * of replacing a name, so a concurrent creator can lose the rename but can
+     * never have its file destroyed. A filesystem without hard links is refused
+     * (`rename-unsupported`) rather than falling back to a replacing rename().
+     */
+    async rename(file, { next, baseHash, baseIdentity } = {}) {
+      requireRevision(baseHash, baseIdentity)
+      const target = await ensureSafeFile(workspace, file, io)
+      const destination = await ensureSafeTarget(workspace, next, io)
+      if (destination.absolute === target.absolute) {
+        throw error('invalid-target', 'The new path is the path the file already has')
+      }
+      return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
+        const checked = await ensureSafeFile(workspace, file, io)
+        assertSameTree(target, checked)
+        const current = await readChecked(checked.absolute, io)
+        if (current.key !== checked.entries.at(-1).key ||
+            current.rawHash !== baseHash || current.identity !== baseIdentity) {
+          throw error('stale-revision', 'On-disk file changed since it was opened; reload before renaming it')
+        }
+        const free = await ensureSafeTarget(workspace, next, io)
+        assertSameTree(destination, free)
+        await assertAbsent(free.absolute, io)
+        try {
+          await io.link(checked.absolute, free.absolute)
+        } catch (err) {
+          if (err && err.code === 'EEXIST') {
+            throw error('already-exists', 'A file already exists at the new path', err)
+          }
+          if (CREATE_LINK_UNSUPPORTED.has(err?.code ?? '')) {
+            throw error('rename-unsupported',
+              'This filesystem cannot add a second name, so a rename could overwrite; nothing was changed', err)
+          }
+          throw error('commit-failed', 'Could not create the new name; the original file is untouched', err)
+        }
+        try {
+          await io.unlink(checked.absolute)
+        } catch (err) {
+          // Never leave the same bytes under two names because of a partial
+          // rename: drop the new name and report the failure.
+          await io.unlink(free.absolute).catch(() => {})
+          throw error('commit-failed', 'Could not remove the old name; the rename was rolled back', err)
+        }
+        await fsyncDirectory(checked.directory, io).catch(() => {})
+        await fsyncDirectory(free.directory, io).catch(() => {})
+        let written
+        try {
+          written = await readChecked(free.absolute, io)
+        } catch (err) {
+          throw error('stale-revision', 'The renamed file could not be verified; reload the workspace', err)
+        }
+        if (written.rawHash !== baseHash) {
+          throw error('stale-revision', 'The renamed file does not match the opened revision; reload the workspace')
+        }
+        return { file: next, format: free.format, source: written.source,
+          hash: written.rawHash, identity: written.identity, changed: true }
+      }, lockOptions))
+    },
+    /**
+     * Delete an opened document after re-checking its exact revision.
+     *
+     * Only a regular, non-hardlinked SVG/HTML/CSS file inside the workspace can
+     * be deleted: directories, symlinks, hardlinks and escapes are refused. A
+     * non-cooperating writer inside the final check→unlink window is the same
+     * documented limit as the write path; it is not a universal CAS.
+     */
+    async delete(file, { baseHash, baseIdentity } = {}) {
+      requireRevision(baseHash, baseIdentity)
+      const target = await ensureSafeFile(workspace, file, io)
+      return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
+        const checked = await ensureSafeFile(workspace, file, io)
+        assertSameTree(target, checked)
+        const current = await readChecked(checked.absolute, io)
+        if (current.key !== checked.entries.at(-1).key ||
+            current.rawHash !== baseHash || current.identity !== baseIdentity) {
+          throw error('stale-revision', 'On-disk file changed since it was opened; reload before deleting it')
+        }
+        try {
+          await io.unlink(checked.absolute)
+        } catch (err) {
+          throw error('commit-failed', 'Could not delete the file; it was left untouched', err)
+        }
+        await fsyncDirectory(checked.directory, io).catch(() => {})
+        let occupied = false
+        try {
+          await io.lstat(checked.absolute)
+          occupied = true
+        } catch (err) {
+          if (err?.code !== 'ENOENT') throw err
+        }
+        if (occupied) {
+          throw error('stale-revision', 'The file was deleted, but another writer already recreated that path')
+        }
+        return { file, deleted: true, changed: true }
       }, lockOptions))
     },
   }

@@ -205,6 +205,37 @@ export function createRouteHandler(ctx) {
         const created=await store.create(params.file,{source:params.source})
         return reply(res,201,{ok:true,created})
       }
+      if (req.method === 'POST' && endpoint === '/rename') {
+        // Renaming is revision-checked and never overwrites: the store refuses a
+        // stale document and a destination that is already occupied.
+        const params=await bodyJson(req)
+        if (typeof params.file!=='string' || !params.file || typeof params.next!=='string' || !params.next) {
+          return reply(res,400,{ok:false,error:'invalid-path',message:'Current and new relative paths are required'})
+        }
+        if (typeof params.baseIdentity!=='string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
+          return reply(res,428,{ok:false,error:'missing-revision',
+            message:'Open the document in a current Design Studio client before renaming it'})
+        }
+        const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const document=await store.rename(params.file,{next:params.next,
+          baseHash:params.baseHash,baseIdentity:params.baseIdentity})
+        return reply(res,200,{ok:true,document})
+      }
+      if (req.method === 'POST' && endpoint === '/delete') {
+        // Deleting is the only destructive route: exact revision required, no
+        // directory, no symlink, no hardlink, everything inside the workspace.
+        const params=await bodyJson(req)
+        if (typeof params.file!=='string' || !params.file) {
+          return reply(res,400,{ok:false,error:'invalid-path',message:'A relative workspace path is required'})
+        }
+        if (typeof params.baseIdentity!=='string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
+          return reply(res,428,{ok:false,error:'missing-revision',
+            message:'Open the document in a current Design Studio client before deleting it'})
+        }
+        const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const result=await store.delete(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity})
+        return reply(res,200,{ok:true,result})
+      }
       if (req.method === 'POST' && endpoint === '/apply') {
         const params=await bodyJson(req)
         if (typeof params.baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {

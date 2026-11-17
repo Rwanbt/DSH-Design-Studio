@@ -64,6 +64,10 @@ standalone application, no separate process, no own window/port; installation is
   optional end tags and malformed markup stay read-only.
 - SVG: no boolean operations, gradients, masks or smoothed/symmetric tangents;
   duplicated elements do not rewrite `href`/`xlink:href` references.
+- File management: renaming and deleting exist, but a confirmed delete is
+  **permanent** — there is no recycle bin, no folder operation and no undo for
+  either; a filesystem without hard links refuses to rename instead of risking
+  an overwrite (ADR-027).
 - Accessibility: verified for focus, keyboard activation, ARIA state, reduced
   motion and three widths — **not** verified with a real screen reader.
 - Performance budget: 1500-node SVG opens and saves inside the asserted budget on
