@@ -32,7 +32,7 @@ test('host bundle registers one API prefix and unregisters it on effect disposal
       },
     }
     assert.equal(name,'dsh-design-studio')
-    assert.deepEqual(inject,['webServer','agents','workingDirectory'])
+    assert.deepEqual(inject,['webServer','agents','workingDirectory','workspaceRegistry'])
     apply(ctx)
     assert.equal(subscriptions.length,1)
     const invoke=async pathname=>{

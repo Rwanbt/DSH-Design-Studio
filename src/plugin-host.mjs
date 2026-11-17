@@ -15,9 +15,17 @@ import { listCssVisualRules, cssVisualRulePatch } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
 export const name = 'dsh-design-studio'
-export const inject = ['webServer','agents','workingDirectory']
+export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
 const MAX_BODY = 9 * 1024 * 1024
+
+/** Typed route failure: the HTTP status is derived from `code`, never invented. */
+function failure(code, message, cause) {
+  const error = new Error(message)
+  error.code = code
+  if (cause !== undefined) error.cause = cause
+  return error
+}
 
 function reply(res, status, body) {
   const json = JSON.stringify(body)
@@ -50,21 +58,59 @@ async function bodyJson(req) {
   return result
 }
 
-async function workspaceFor(ctx, sessionId) {
-  if (typeof sessionId !== 'string' || !sessionId) {
-    const e=new Error('Select an active session');e.code='no-session';throw e
+/**
+ * Resolve the workspace root a request is allowed to touch.
+ *
+ * Two mutually exclusive targets, deliberately (ADR-024):
+ *  - `sessionId`: the conversation's working directory (existing behaviour);
+ *  - `workspaceId`: a DSH **workspace id**, resolved through the host registry.
+ *
+ * A client can never send a path. `workspaceId` is a registry key, so an id that
+ * is not registered is refused instead of being interpreted as a location.
+ */
+async function resolveRoot(ctx, target) {
+  const sessionId = typeof target.sessionId === 'string' ? target.sessionId : ''
+  const workspaceId = typeof target.workspaceId === 'string' ? target.workspaceId : ''
+  if (sessionId && workspaceId) {
+    throw failure('invalid-target', 'Provide either sessionId or workspaceId, not both')
   }
-  const session=ctx.agents.get(sessionId)
-  if(!session){const e=new Error('Session is unavailable');e.code='no-session';throw e}
-  return ctx.workingDirectory.ensure(session)
+  if (workspaceId) {
+    const registry = ctx.workspaceRegistry ?? (typeof ctx.get === 'function' ? ctx.get('workspaceRegistry') : undefined)
+    if (!registry) throw failure('workspace-unavailable', 'Workspace registry is not available in this host')
+    const workspace = registry.get(workspaceId)
+    if (!workspace) throw failure('unknown-workspace', 'Unknown workspace')
+    if (typeof workspace.status === 'function' && (await workspace.status()) !== 'ok') {
+      throw failure('workspace-missing', 'Workspace directory is missing; restore it before editing')
+    }
+    if (typeof workspace.path !== 'string' || !workspace.path) {
+      throw failure('unknown-workspace', 'Unknown workspace')
+    }
+    return workspace.path
+  }
+  if (sessionId) {
+    const session = ctx.agents.get(sessionId)
+    if (!session) throw failure('no-session', 'Session is unavailable')
+    return ctx.workingDirectory.ensure(session)
+  }
+  throw failure('no-session', 'Select an active session')
 }
 
-async function storeFor(ctx, sessionId) {
-  if (typeof sessionId !== 'string' || !sessionId) { const e=new Error('Select an active session'); e.code='no-session'; throw e }
-  const session = ctx.agents.get(sessionId)
-  if (!session) { const e=new Error('Session is unavailable'); e.code='no-session'; throw e }
-  const root = await ctx.workingDirectory.ensure(session)
-  return createNativeFileStore(root)
+async function workspaceFor(ctx, target) {
+  return resolveRoot(ctx, target)
+}
+
+async function storeFor(ctx, target) {
+  return createNativeFileStore(await resolveRoot(ctx, target))
+}
+
+/** Public projection of a workspace: no path is returned, ids and titles only. */
+async function workspaceCard(workspace) {
+  let status = 'ok'
+  if (typeof workspace.status === 'function') {
+    try { status = await workspace.status() } catch { status = 'unknown' }
+  }
+  return { id: workspace.id, title: typeof workspace.title === 'string' ? workspace.title : '',
+    status: status === 'ok' || status === 'missing-dir' ? status : 'unknown' }
 }
 
 export function createRouteHandler(ctx) {
@@ -73,14 +119,29 @@ export function createRouteHandler(ctx) {
       const url = new URL(req.url || '/', 'http://dsh.local')
       const endpoint = url.pathname.slice(PREFIX.length).replace(/\/+$/, '')
       if (req.method === 'GET' && endpoint === '/health') return reply(res,200,{ok:true,editor:'native-prototype',version:1})
+      // The registry projection the sidebar panel needs: ids and titles only,
+      // so no filesystem path ever reaches the client through this route.
+      if (req.method === 'GET' && endpoint === '/workspaces') {
+        const registry = ctx.workspaceRegistry ?? (typeof ctx.get === 'function' ? ctx.get('workspaceRegistry') : undefined)
+        if (!registry) return reply(res,200,{ok:true,workspaces:[],available:false})
+        const workspaces = []
+        for (const workspace of registry.list()) workspaces.push(await workspaceCard(workspace))
+        return reply(res,200,{ok:true,workspaces,available:true})
+      }
       if (req.method === 'GET' && endpoint === '/files') {
-        const root = await workspaceFor(ctx,url.searchParams.get('sessionId'))
+        const root = await workspaceFor(ctx,{
+          sessionId:url.searchParams.get('sessionId'),
+          workspaceId:url.searchParams.get('workspaceId'),
+        })
         const result = await listWorkspaceDocuments(root)
         return reply(res,200,{ok:true,...result})
       }
       if (req.method === 'GET' && endpoint === '/document') {
         const file=url.searchParams.get('file') || ''
-        const store=await storeFor(ctx,url.searchParams.get('sessionId'))
+        const store=await storeFor(ctx,{
+          sessionId:url.searchParams.get('sessionId'),
+          workspaceId:url.searchParams.get('workspaceId'),
+        })
         const document=await store.read(file)
         let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
@@ -140,7 +201,7 @@ export function createRouteHandler(ctx) {
         if (typeof params.source !== 'string') {
           return reply(res,400,{ok:false,error:'invalid-source',message:'New file content must be a string'})
         }
-        const store=await storeFor(ctx,params.sessionId)
+        const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const created=await store.create(params.file,{source:params.source})
         return reply(res,201,{ok:true,created})
       }
@@ -150,7 +211,7 @@ export function createRouteHandler(ctx) {
           return reply(res,428,{ok:false,error:'missing-revision',
             message:'Reopen document in a current Design Studio client before saving'})
         }
-        const store=await storeFor(ctx,params.sessionId)
+        const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const doc=await store.read(params.file)
         if (doc.hash !== params.baseHash || doc.identity !== params.baseIdentity) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
@@ -255,7 +316,8 @@ export function createRouteHandler(ctx) {
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
       const code=e.code || 'internal-error'
-      const status=code==='stale-revision'||code==='already-exists'?409:code==='file-busy'?423:code==='too-large'?413:
+      const status=code==='stale-revision'||code==='already-exists'||code==='workspace-missing'?409:
+        code==='file-busy'?423:code==='too-large'?413:code==='workspace-unavailable'?503:
         ['internal-error','lock-release-failed','lock-changed'].includes(code)?500:400
       return reply(res,status,{ok:false,error:code,message:code==='internal-error'?'Request failed':String(e.message).slice(0,220)})
     }

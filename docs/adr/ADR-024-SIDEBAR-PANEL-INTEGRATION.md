@@ -41,7 +41,7 @@ Un resolver **par espace de travail**, à côté du resolver par session existan
 ## Tranches de livraison (chacune livrable et testable seule)
 
 1. **ADR-024** (ce document) — la décision et les contrats.
-2. **Host** : resolver `workspaceId` + routes `files`/`document`/`apply` cadrées espace de travail, avec tests unitaires (id inconnu, id d'un autre espace, échappement de chemin, verrou, révision périmée) et sans toucher aux tests session existants.
+2. **Host** — *livré* (commit `feat(host): resolve workspace ids for sidebar-panel routes`) : resolver `workspaceId` + `/workspaces`, routes `files`/`document`/`apply`/`create` cadrées espace de travail, avec tests unitaires (id inconnu, id en forme de chemin, id d'un autre espace, dossier disparu, cible ambiguë, registre absent, verrou, révision périmée) et sans modifier le comportement de la voie session — prouvé par `tests/workspace-scoped-routes.test.mjs` (8 tests) et par les 42 tests de routes existants restés verts.
 3. **Client** : enregistrement `sidebar.panellist` (id `design-studio`) + `main` (clé `design-studio`), panneau réutilisant le composant Studio avec un transport espace de travail ; état vide honnête quand aucun espace de travail n'existe ; `layout.selectPanel` pour l'ouverture.
 4. **Preuve** : gate DSH réelle — la ligne de barre latérale existe et le panneau liste un fichier réel de l'espace de travail, dans l'app Web **et** dans l'app Desktop.
 
