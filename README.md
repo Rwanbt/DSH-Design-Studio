@@ -3,7 +3,7 @@
 Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML and CSS** files manually, with AI, or in a hybrid workflow.
 
 > Status: **P0/P1 — experimental, `dev` only.** A native DeepSeek Harness Host/Client prototype edits real **SVG, HTML and CSS** files through byte-exact, revision-checked source patches, fully offline and without AI credentials: SVG primitive creation, direct manipulation with grid/snap/smart guides, hierarchical layers with group/ungroup, group dragging, visibility and lock, pivot rotation and scaling through normalised matrices, Bézier point/topology editing and a manual Pen, native SVG text and typography, HTML click-to-select in an inert preview frame with text and allowlisted attribute editing, linked-CSS inspection with selector lists and custom properties, bounded responsive previews, and cross-process write protection with exact Undo/Redo.
-> **Verification:** 397 core tests, a real Chromium + Firefox gate, and a real DeepSeek Harness installation test. The real installation proves registration, the Host routes, a real save and a refused stale revision; opening the workbench *inside* the real conversation is still **NOT_RUN** because DSH renders no view area for a blank session (see `docs/roadmap/DELIVERY-GATES-2026-11-17.md`). **Not production ready.**
+> **Verification:** 398 core tests, a real Chromium + Firefox gate (62 checks), and a real DeepSeek Harness installation test (**19/19 PASS**: profile creation, bundle registration, real web app, real session, Host routes, a real save, a refused stale revision, and — with an opt-in real assistant turn — the workbench rendered inside the real DSH conversation, screenshot in `docs/operations/evidence/`). The packaged Desktop/Electron shell is still untested, and macOS/NFS/touch remain `NOT_RUN`; see `docs/roadmap/DELIVERY-GATES-2026-11-17.md`. **Not production ready.**
 
 ## Non-negotiable principles
 
@@ -30,7 +30,7 @@ Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML a
 - Never force-push, never edit `main` without the owner's explicit approval.
 
 ```bash
-npm run check        # core suite: 397 tests, zero dependencies to install
+npm run check        # core suite: 398 tests, zero dependencies to install
 npm run test:browser # real Chromium + Firefox gate (needs npm install + browsers)
 npm run test:dsh     # real DeepSeek Harness installation, disposable profile
 npm run sbom         # regenerate docs/operations/SBOM.json

@@ -11,8 +11,8 @@ require the owner's explicit approval.
 
 | Item | State | Evidence |
 |---|---|---|
-| Core suite | **394 / 394 PASS**, 0 fail, 0 skip, no dependencies installed | `npm run check` |
-| Real browser gate | 27 specs × Chromium 145 + Firefox 146 | `npm run test:browser`, report JSON |
+| Core suite | **398 / 398 PASS**, 0 fail, 0 skip, no dependencies installed | `npm run check` |
+| Real browser gate | 31 specs × Chromium 145 + Firefox 146 = **62 PASS / 0 FAIL** | `npm run test:browser`, report JSON |
 | Real DSH gate | **19 PASS / 0 FAIL / 0 NOT_RUN** with a real assistant turn; workbench rendered inside the real conversation (`docs/operations/evidence/dsh-workbench.png`) | `npm run test:dsh`, report JSON |
 | CI — Linux | PASS | GitHub Actions `core (ubuntu-latest)` |
 | CI — Windows | every observed failure fixed (rename, lock release, POSIX bits, path separators) | GitHub Actions `core (windows-latest)` history |
