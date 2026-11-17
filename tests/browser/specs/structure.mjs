@@ -104,9 +104,10 @@ export const groupSpec = {
     assert.ok(grouped.includes('<rect id="one" x="10" y="10" width="30" height="30" fill="#bda991"/>'),
       'grouping does not rewrite the children')
 
-    await page.waitForFunction(() => /g #/.test(document.querySelector('aside')?.innerText || ''),
+    // The layers panel is the sidebar, not the left rail: query it explicitly.
+    await page.waitForFunction(() => /g #/.test(document.querySelector('.dsh-studio-sidebar')?.innerText || ''),
       null, { timeout: 15000 })
-    const tree = await page.locator('aside').first().innerText()
+    const tree = await page.locator('.dsh-studio-sidebar').innerText()
     assert.match(tree, /g #/, 'the new group appears in the layer tree')
 
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
