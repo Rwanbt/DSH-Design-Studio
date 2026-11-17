@@ -21,6 +21,7 @@ import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { checkDesktopShell } from './desktop-shell.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../..')
@@ -417,6 +418,18 @@ async function main() {
       await context.close()
     } finally {
       await browser.close()
+    }
+
+    // Same bundle, different delivery path: the real DSH Desktop (Electron)
+    // application. Opt out with DSH_E2E_DESKTOP=0 (the Web assertions above
+    // remain the gate).
+    if (process.env.DSH_E2E_DESKTOP === '0') {
+      record('boot the real DSH Desktop shell', 'NOT_RUN', 'disabled with DSH_E2E_DESKTOP=0')
+    } else {
+      const shot = process.env.DSH_E2E_SCREENSHOT
+      await checkDesktopShell({ root, binary, cli, repoRoot: repoRoot, record,
+        playwright: playwright.module, env: childEnv, hasCredentials: Boolean(credentialCopy),
+        screenshot: shot ? shot.replace(/\.png$/i, '-desktop.png') : '' })
     }
   } catch (error) {
     record('real DSH test', 'FAIL', String(error && error.message ? error.message : error).slice(0, 400))

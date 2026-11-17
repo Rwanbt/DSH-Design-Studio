@@ -13,7 +13,7 @@
     {
       "step": "create disposable profile",
       "status": "PASS",
-      "detail": "/tmp/dsh-g0-Ax9z7T/dsh-home/profiles/e2e (shipped web template)"
+      "detail": "/tmp/dsh-g0-jLdlt0/dsh-home/profiles/e2e (shipped web template)"
     },
     {
       "step": "install plugin into profile",
@@ -28,7 +28,7 @@
     {
       "step": "boot real DSH web app",
       "status": "PASS",
-      "detail": "http://127.0.0.1:42589"
+      "detail": "http://127.0.0.1:40119"
     },
     {
       "step": "load real DSH Web UI",
@@ -38,7 +38,7 @@
     {
       "step": "create a real DSH session",
       "status": "PASS",
-      "detail": "session-1028f21e-b5cb-4a69-9937-7bda4436cfb5"
+      "detail": "session-7ae68d40-edd9-4045-bf9c-1e0d24755917"
     },
     {
       "step": "plugin route /health on the real Host",
@@ -99,12 +99,67 @@
       "step": "screenshot of the real DSH workbench",
       "status": "PASS",
       "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench.png + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-element.png"
+    },
+    {
+      "step": "boot the real DSH Desktop shell",
+      "status": "PASS",
+      "detail": "Electron shell, CDP port 37875, Host http://127.0.0.1:41907"
+    },
+    {
+      "step": "the shell initializes its own desktop profile",
+      "status": "PASS",
+      "detail": "profiles: [\"desktop\",\"e2e\"]"
+    },
+    {
+      "step": "install the plugin into the Desktop profile",
+      "status": "PASS",
+      "detail": "bundles: [\"@deepseek-ai/dsh-base\",\"@deepseek-ai/dsh-web-app\",\"@rwanbt/dsh-design-studio\"]"
+    },
+    {
+      "step": "attach to the real Desktop renderer",
+      "status": "PASS",
+      "detail": "Electron 44.7.0, Chromium 152.0.7977.130, 79 client entries on dsh-app://app/"
+    },
+    {
+      "step": "the Desktop shell serves the plugin client bundle",
+      "status": "PASS",
+      "detail": "@rwanbt/dsh-design-studio plugins/??@rwanbt/dsh-design-studio/client.js&rev=1d95b76ad6e1 HTTP 200, 106855 bytes, immediately=true"
+    },
+    {
+      "step": "the plugin Host routes run in the desktop runtime",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"ok\":true,\"editor\":\"native-prototype\",\"version\":1}"
+    },
+    {
+      "step": "the workbench renders in DSH Desktop",
+      "status": "PASS",
+      "detail": "conversation.view tab opened and the workbench element is in the desktop DOM"
+    },
+    {
+      "step": "workbench painted by the host theme in DSH Desktop",
+      "status": "PASS",
+      "detail": "background=rgb(255, 255, 255), desktop --dsw-alias-bg-layer-1=rgb(255, 255, 255), box=994x658"
+    },
+    {
+      "step": "screenshot of the workbench in DSH Desktop",
+      "status": "PASS",
+      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop.png (113581 bytes) + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop-element.png (57419 bytes, 1327x879)"
+    },
+    {
+      "step": "no plugin JavaScript errors in DSH Desktop",
+      "status": "PASS",
+      "detail": "none"
+    },
+    {
+      "step": "credentials for the desktop run",
+      "status": "PASS",
+      "detail": "copied from the caller into the disposable home (mode 600, deleted with it)"
     }
   ],
   "summary": {
-    "pass": 20,
+    "pass": 31,
     "fail": 0,
     "notRun": 0
   },
-  "at": "2026-11-17T12:31:40.280Z"
+  "at": "2026-11-17T14:07:27.364Z"
 }
