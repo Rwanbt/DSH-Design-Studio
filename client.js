@@ -52,6 +52,9 @@ window.__ModuleLoader__.load({
       const previewBindingRef=React.useRef(null)
       const [htmlProperty,setHtmlProperty] = React.useState('background-color')
       const [htmlValue,setHtmlValue] = React.useState('')
+      const [htmlText,setHtmlText] = React.useState('')
+      const [htmlAttrName,setHtmlAttrName] = React.useState('class')
+      const [htmlAttrValue,setHtmlAttrValue] = React.useState('')
       const [htmlStylesheets,setHtmlStylesheets] = React.useState([])
       const [htmlPreviewCss,setHtmlPreviewCss] = React.useState('')
       const [htmlPreviewCoverage,setHtmlPreviewCoverage] = React.useState(null)
@@ -519,8 +522,17 @@ window.__ModuleLoader__.load({
         const rule=cssRules.find(item=>item.selector===cssActive)
         setCssValue(rule?.declarations?.find(item=>item.property===property)?.value||'')
       }
+      /** Exact source text of a mapped element, or '' when it is not addressable. */
+      function htmlElementText(item) {
+        if(!item || !Number.isInteger(item.textStart) || !Number.isInteger(item.textEnd)) return ''
+        if(source!==doc?.source) return ''
+        return source.slice(item.textStart,item.textEnd)
+      }
       function chooseHtmlElement(id) {
         setHtmlActive(id)
+        const picked=htmlElements.find(node=>node.id===id)
+        setHtmlText(htmlElementText(picked))
+        setHtmlAttrValue(Array.isArray(picked?.classes)?picked.classes.join(' '):'')
         const item=htmlElements.find(node=>node.id===id)
         const current=new RegExp('(?:^|;)\\s*'+htmlProperty+'\\s*:\\s*([^;]*)','i')
         setHtmlValue(current.exec(item?.style||'')?.[1]?.trim()||'')
@@ -1324,6 +1336,40 @@ window.__ModuleLoader__.load({
                     onClick:()=>void save({kind:'html-style',id:htmlActive,property:htmlProperty,value:htmlValue})
                   },'Appliquer au HTML · sans IA'),
                   h('small',{style:{opacity:.7}},'Modifie uniquement l’attribut style du nœud sélectionné, avec Undo/Redo.'),
+                  h('div',{role:'group','aria-label':'HTML text and attributes',style:{display:'grid',gap:8,
+                    padding:8,background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                    h('strong',{style:{fontSize:12,color:'#c5ae94'}},'Texte et attributs natifs'),
+                    h('label',null,'Texte de l’élément',
+                      h('input',{style:{...field,marginTop:4},'aria-label':'HTML element text',
+                        value:htmlText,placeholder:'texte affiché',
+                        onChange:e=>setHtmlText(e.target.value)})),
+                    h('button',{style:{...button,borderColor:ACCENT},
+                      'aria-label':'Apply HTML element text',
+                      disabled:busy||reloadRequired||source!==doc.source||
+                        !selectedHtml.key||htmlText.length===0||htmlText===htmlElementText(selectedHtml),
+                      onClick:()=>void save({kind:'html-text',key:selectedHtml.key,id:selectedHtml.id,
+                        value:htmlText})
+                    },'Appliquer le texte'),
+                    h('small',{role:'status',style:{color:'#aaa9a5',fontSize:11}},
+                      'Uniquement les éléments dont le contenu est du texte simple ; le balisage est refusé.'),
+                    h('label',null,'Attribut',
+                      h('select',{style:{...field,marginTop:4},'aria-label':'HTML attribute name',
+                        value:htmlAttrName,onChange:e=>setHtmlAttrName(e.target.value)},
+                        ['class','title','alt','hidden','lang','dir'].map(name=>
+                          h('option',{key:name,value:name},name)))),
+                    h('label',null,'Valeur',
+                      h('input',{style:{...field,marginTop:4},'aria-label':'HTML attribute value',
+                        value:htmlAttrValue,placeholder:'valeur autorisée',
+                        onChange:e=>setHtmlAttrValue(e.target.value)})),
+                    h('button',{style:{...button,borderColor:ACCENT},
+                      'aria-label':'Apply HTML attribute',
+                      disabled:busy||reloadRequired||source!==doc.source||!selectedHtml.key,
+                      onClick:()=>void save({kind:'html-attribute',key:selectedHtml.key,id:selectedHtml.id,
+                        attribute:htmlAttrName,value:htmlAttrValue})
+                    },'Appliquer l’attribut'),
+                    h('small',{role:'status',style:{color:'#aaa9a5',fontSize:11}},
+                      'Liste blanche : class, title, alt, hidden, lang, dir, data-*. src, href, on* et style sont refusés côté Host.')
+                  ),
                   renderLayoutControls('html',selectedHtml))):
               selected?
               h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginTop:12}},

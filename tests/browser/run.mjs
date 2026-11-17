@@ -153,7 +153,7 @@ async function main() {
                   // A deliberately refused save (409/423) is reported by the
                   // browser as a resource error; the spec asserts the outcome.
                   return !/Content[- ]Security[- ]Policy/i.test(entry) &&
-                    !/Failed to load resource: the server responded with a status of (409|423)/.test(entry)
+                    !/Failed to load resource: the server responded with a status of (400|409|423)/.test(entry)
                 }
                 return true
               })

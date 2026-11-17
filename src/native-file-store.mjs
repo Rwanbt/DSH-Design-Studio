@@ -251,6 +251,21 @@ async function readChecked(absolute, io) {
   } finally { await handle.close() }
 }
 
+/** Windows only: bounded retry for a replacement rename refused by a transient lock. */
+const WINDOWS_TRANSIENT_RENAME = new Set(['EACCES', 'EBUSY', 'EPERM'])
+async function renameWithTransientRetry(io, from, to) {
+  if (process.platform !== 'win32') return io.rename(from, to)
+  let delay = 20
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await io.rename(from, to) }
+    catch (error) {
+      if (!WINDOWS_TRANSIENT_RENAME.has(error?.code) || attempt >= 7) throw error
+      await new Promise(resolve => setTimeout(resolve, delay))
+      delay = Math.min(200, delay * 2)
+    }
+  }
+}
+
 async function fsyncDirectory(dir, io) {
   // Directory fsync is supported on POSIX, but not uniformly on Windows.
   if (process.platform === 'win32') return
@@ -350,7 +365,7 @@ export function createNativeFileStore(workspace, options = {}) {
             throw error('stale-revision','Temporary output file changed before commit')
           }
           try {
-            await io.rename(temp, target.absolute)
+            await renameWithTransientRetry(io, temp, target.absolute)
           } catch (err) { throw commitFailure(err) }
           created = false
           await fsyncDirectory(directory, io)

@@ -20,6 +20,7 @@ import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y
 import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
 import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec } from './structure.mjs'
+import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 
 export const specs = [
   mountSpec,
@@ -33,6 +34,9 @@ export const specs = [
   groupSpec,
   ungroupSpec,
   transformSpec,
+  htmlTextSpec,
+  htmlAttributeSpec,
+  htmlTextRefusalSpec,
   htmlSelectSpec,
   htmlClickInvalidationSpec,
   htmlLayoutSpec,

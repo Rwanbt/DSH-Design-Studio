@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const root = new URL('..', import.meta.url)
 const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'))
@@ -16,9 +16,9 @@ test('the client entry is resolvable by the path DSH actually requests', async (
   assert.equal(manifest.exports['./client'], './client.js')
   assert.equal(manifest.exports['./client.js'], './client.js')
   assert.equal(require.resolve('@rwanbt/dsh-design-studio/client.js'),
-    path.resolve(new URL('client.js', root).pathname))
+    fileURLToPath(new URL('client.js', root)))
   assert.equal(require.resolve('@rwanbt/dsh-design-studio/client'),
-    path.resolve(new URL('client.js', root).pathname))
+    fileURLToPath(new URL('client.js', root)))
   const info = await stat(new URL('client.js', root))
   assert.ok(info.size > 0, 'the client bundle must exist')
 })
