@@ -308,3 +308,53 @@ test('HTML-to-CSS file navigation is disabled while source contains unsaved chan
   html:'<link rel="stylesheet" href="theme.css"><h1 id="title">Hello</h1>',
   css:{'theme.css':'#title{color:red}'}
 }))
+
+
+test('responsive preview switches width presets without saving native source',()=>harness(async app=>{
+  const getFrame=()=>find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const original=getFrame()
+  assert.equal(original.props.style.width,'100%')
+  assert.equal(original.props.sandbox,'allow-same-origin')
+  assert.ok(original.props.srcDoc.includes('<meta name="viewport" content="width=device-width, initial-scale=1">'))
+  assert.ok(find(app.render(),n=>n.props?.['aria-label']==='HTML responsive viewport'))
+  const screens=[['mobile','390px'],['tablet','768px'],['desktop','1280px'],['auto','100%']]
+  for(const [mode,width] of screens) {
+    const control=find(app.render(),n=>n.props?.['aria-label']==='HTML viewport '+mode)
+    assert.ok(control,'Responsive viewport control '+mode)
+    control.props.onClick()
+    const frame=getFrame()
+    assert.equal(frame.props.style.width,width)
+    assert.equal(find(app.render(),n=>n.props?.['aria-label']==='HTML viewport '+mode).props['aria-pressed'],true)
+    assert.ok(frame.props.srcDoc.includes("script-src 'none'"))
+    assert.equal(frame.props.sandbox.includes('allow-scripts'),false)
+  }
+  assert.equal(await readFile(app.file,'utf8'),app.source)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}))
+test('HTML iframe contains only safe projected local CSS while retaining scriptless CSP',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.ok(frame.props.srcDoc.includes('data-dsh-preview-subset="partial"'))
+  assert.ok(frame.props.srcDoc.includes('#title{color:#bda991;display:flex;}'))
+  assert.ok(frame.props.srcDoc.includes('.card{gap:8px;}'))
+  assert.equal(frame.props.srcDoc.includes('url(https://evil.invalid'),false)
+  assert.equal(frame.props.srcDoc.includes('background-image:url'),false)
+  assert.ok(frame.props.srcDoc.includes("connect-src 'none'"))
+  assert.ok(frame.props.srcDoc.includes("frame-src 'none'"))
+  assert.ok(find(app.render(),n=>n.props?.className==='dsh-studio-responsive-preview'))
+  assert.equal(await readFile(app.file,'utf8'),app.source)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}, {
+  html:'<link rel="stylesheet" href="theme.css"><h1 id="title" class="card">Hello</h1>',
+  css:{'theme.css':'#title{color:#bda991;display:flex;background-image:url(https://evil.invalid)}\n.card{gap:8px;}'}
+}))
+test('HTML preview warns of partial CSS rendering and omits conditional CSS links',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.equal(frame.props.srcDoc.includes('display:none'),false)
+  const warning=find(app.render(),n=>n.props?.role==='status'&&typeof n.children?.[0]==='string'&&n.children[0].includes('Aperçu partiel'))
+  assert.ok(warning)
+  assert.ok(String(warning.children[0]).includes('0 déclarations compatibles'))
+  assert.equal(await readFile(app.file,'utf8'),app.source)
+}, {
+  html:'<link rel="stylesheet" href="theme.css" media="print"><main id="app">Text</main>',
+  css:{'theme.css':'#app{display:none}'}
+}))
