@@ -85,3 +85,57 @@ test('a failed edit releases the cross-process lock and allows the next save',()
   assert.equal(await readFile(file,'utf8'),'<p>new</p>')
   await assert.rejects(lstat(path.join(root,'.page.html.dsh-native.lock')),{code:'ENOENT'})
 }))
+
+test('a vanished parent while acquiring the lock is a typed stale-revision',()=>fixture(async root=>{
+  const file=path.join(root,'page.html')
+  await writeFile(file,'<p>old</p>')
+  let executed=false
+  await assert.rejects(withNativeWriteLock(file,async()=>{executed=true},{
+    io:{mkdir:async()=>{const err=new Error('parent gone');err.code='ENOENT';throw err}}
+  }),(err)=>{
+    assert.equal(err.code,'stale-revision')
+    assert.equal(err.cause?.code,'ENOENT')
+    return true
+  })
+  assert.equal(executed,false)
+  assert.equal(await readFile(file,'utf8'),'<p>old</p>')
+}))
+
+test('a lock replaced while held is never deleted blindly',()=>fixture(async root=>{
+  const file=path.join(root,'page.html')
+  const lockPath=path.join(root,'.page.html.dsh-native.lock')
+  await writeFile(file,'<p>old</p>')
+  let executed=false
+  let calls=0
+  const io={
+    lstat:async(target,options)=>{
+      const real=await lstat(target,options)
+      calls+=1
+      if(calls===1)return real
+      return {dev:real.dev,ino:BigInt(real.ino)+1n,isDirectory:()=>true}
+    }
+  }
+  await assert.rejects(withNativeWriteLock(file,async()=>{executed=true},{io}),(err)=>{
+    assert.equal(err.code,'lock-release-failed')
+    assert.equal(err.cause?.code,'lock-changed')
+    return true
+  })
+  assert.equal(executed,true)
+  assert.equal((await lstat(lockPath)).isDirectory(),true,'replaced lock is left for manual inspection')
+  assert.equal(await readFile(file,'utf8'),'<p>old</p>')
+  await rmdir(lockPath)
+}))
+
+test('a release failure after a successful action is reported, not hidden',()=>fixture(async root=>{
+  const file=path.join(root,'page.html')
+  const lockPath=path.join(root,'.page.html.dsh-native.lock')
+  await writeFile(file,'<p>old</p>')
+  const io={rmdir:async()=>{const err=new Error('denied');err.code='EACCES';throw err}}
+  await assert.rejects(withNativeWriteLock(file,async()=>'committed',{io}),(err)=>{
+    assert.equal(err.code,'lock-release-failed')
+    assert.equal(err.cause?.code,'EACCES')
+    return true
+  })
+  assert.equal((await lstat(lockPath)).isDirectory(),true,'failed cleanup leaves the lock visible')
+  await rmdir(lockPath)
+}))

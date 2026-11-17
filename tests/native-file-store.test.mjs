@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, symlink, chmod, stat, rm, link, rename } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, symlink, chmod, stat, rm, link, rename, utimes } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createNativeFileStore } from '../src/native-file-store.mjs'
@@ -159,4 +159,110 @@ test('replacing a parent directory while a write waits for lock never writes to 
   await assert.rejects(pending,{code:'stale-revision'})
   assert.equal(await readFile(path.join(sub,'page.html'),'utf8'),original)
   assert.equal(await readFile(path.join(root,'pages-original','page.html'),'utf8'),original)
+}))
+
+test('identical bytes and identical mtime from a new inode are still refused',()=>workspace(async(root,store)=>{
+  const file=path.join(root,'swap.svg')
+  const content='<svg><rect id="one"/></svg>'
+  const stamp=new Date('2024-01-02T03:04:05.000Z')
+  await writeFile(file,content)
+  await utimes(file,stamp,stamp)
+  const doc=await store.read('swap.svg')
+  const before=await stat(file,{bigint:true})
+  const replacement=path.join(root,'replacement.svg')
+  await writeFile(replacement,content)
+  await utimes(replacement,stamp,stamp)
+  await rename(replacement,file)
+  const after=await stat(file,{bigint:true})
+  assert.equal(after.mtimeNs,before.mtimeNs,'mtime is deliberately identical')
+  const fresh=await store.read('swap.svg')
+  assert.equal(fresh.hash,doc.hash,'bytes are deliberately identical')
+  assert.notEqual(fresh.identity,doc.identity,'inode/ctime identity still changed')
+  await assert.rejects(store.apply('swap.svg',{
+    baseHash:doc.hash,baseIdentity:doc.identity,
+    patches:patchFor(content,'one','two')
+  }),{code:'stale-revision'})
+  assert.equal(await readFile(file,'utf8'),content)
+  const saved=await store.apply('swap.svg',{
+    baseHash:fresh.hash,baseIdentity:fresh.identity,
+    patches:patchFor(content,'one','two')
+  })
+  assert.equal(saved.changed,true)
+  assert.equal((await store.read('swap.svg')).source,'<svg><rect id="two"/></svg>')
+}))
+
+test('apply refuses a file that became a symlink after it was read',(t)=>workspace(async(root,store)=>{
+  const file=path.join(root,'swap.svg')
+  const outside=path.join(root,'outside.svg')
+  const content='<svg><rect id="one"/></svg>'
+  await writeFile(file,content)
+  await writeFile(outside,'<svg><rect id="outside"/></svg>')
+  const doc=await store.read('swap.svg')
+  await rename(file,path.join(root,'moved.svg'))
+  try {
+    await symlink('outside.svg',file)
+  } catch (err) {
+    if (err.code==='EPERM'||err.code==='EACCES'||err.code==='UNKNOWN') {
+      t.skip('creating symlinks is not permitted in this environment')
+      return
+    }
+    throw err
+  }
+  await assert.rejects(store.apply('swap.svg',{
+    baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(content,'one','two')
+  }),{code:'symlink-forbidden'})
+  assert.equal(await readFile(outside,'utf8'),'<svg><rect id="outside"/></svg>')
+}))
+
+test('apply refuses a file that became hardlinked after it was read',()=>workspace(async(root,store)=>{
+  const file=path.join(root,'linked.svg')
+  const content='<svg/>'
+  await writeFile(file,content)
+  const doc=await store.read('linked.svg')
+  await link(file,path.join(root,'linked-copy.svg'))
+  await assert.rejects(store.apply('linked.svg',{
+    baseHash:doc.hash,baseIdentity:doc.identity,patches:[]
+  }),{code:'invalid-file'})
+  assert.equal(await readFile(file,'utf8'),content)
+  assert.equal(await readFile(path.join(root,'linked-copy.svg'),'utf8'),content)
+}))
+
+test('apply refuses a parent directory replaced with identical bytes before saving',()=>workspace(async(root,store)=>{
+  const sub=path.join(root,'pages')
+  await mkdir(sub)
+  const content='<p>original</p>'
+  await writeFile(path.join(sub,'page.html'),content)
+  const doc=await store.read('pages/page.html')
+  await rename(sub,path.join(root,'pages-old'))
+  await mkdir(sub)
+  await writeFile(path.join(sub,'page.html'),content)
+  await assert.rejects(store.apply('pages/page.html',{
+    baseHash:doc.hash,baseIdentity:doc.identity,patches:patchFor(content,'original','edited')
+  }),{code:'stale-revision'})
+  assert.equal(await readFile(path.join(sub,'page.html'),'utf8'),content,'replacement untouched')
+  assert.equal(await readFile(path.join(root,'pages-old','page.html'),'utf8'),content,'original untouched')
+}))
+
+test('apply reuses the read path-alias and reserved-name refusals',()=>workspace(async(root,store)=>{
+  const file=path.join(root,'page.html')
+  const content='<p>old</p>'
+  await writeFile(file,content)
+  const baseHash='b'.repeat(64)
+  const baseIdentity='a'.repeat(64)
+  const cases=[
+    ['../page.html','invalid-path'],
+    ['./page.html','invalid-path'],
+    ['nested//page.html','invalid-path'],
+    ['nested\\page.html','invalid-path'],
+    ['/absolute/page.html','invalid-path'],
+    ['C:/absolute/page.html','invalid-path'],
+    ['page.html\0','invalid-path'],
+    ['CON.html','invalid-path'],
+    ['page.html.','invalid-path'],
+    ['notes.txt','unsupported-format'],
+  ]
+  for (const [alias,code] of cases) {
+    await assert.rejects(store.apply(alias,{baseHash,baseIdentity,patches:[]}),{code},alias)
+  }
+  assert.equal(await readFile(file,'utf8'),content)
 }))

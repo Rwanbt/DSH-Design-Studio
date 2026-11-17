@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
+import * as nodeFs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { applyNativePatches, sourceHash } from './native-patch.mjs'
@@ -9,10 +9,112 @@ const MAX_BYTES = 8 * 1024 * 1024
 const FORMATS = new Set(['svg', 'html', 'htm', 'css'])
 const locks = new Map()
 
-function error(code, message) {
+/**
+ * Exact, revision-checked source storage for real SVG/HTML/CSS files.
+ *
+ * WRITE PROTOCOL (cooperating Design Studio processes):
+ *   1. the caller must present the `hash` and `identity` returned by read();
+ *   2. a cross-process advisory lock (`.NAME.dsh-native.lock` directory) is
+ *      acquired; the atomic mkdir serializes cooperating writers;
+ *   3. the path tree, content SHA-256 and filesystem identity are re-checked
+ *      inside the critical section;
+ *   4. output is written to a same-directory temporary file, fsynced, and the
+ *      target is re-validated immediately before the atomic rename;
+ *   5. after rename the directory is fsynced (POSIX) and the committed file is
+ *      read back to verify inode key and content SHA-256.
+ *
+ * In one sentence: a cooperative advisory lock + pre-rename re-validation +
+ * post-commit verification. This is NOT a universal filesystem CAS.
+ *
+ * GUARANTEES for cooperating writers:
+ *   - two processes starting from the same revision never both commit;
+ *   - stale content, replaced files, moved/replaced parents, symlinks and
+ *     hardlinks are refused with a typed `code`;
+ *   - every failure before the atomic rename leaves the original file
+ *     untouched, unlinks the temporary file and releases the lock;
+ *   - a failure after the rename (directory fsync or post-commit read-back)
+ *     is surfaced as `commit-failed`/`stale-revision` and forces a reload of
+ *     the committed bytes; it is never reported as a silent success.
+ *
+ * NON-GUARANTEES (do not describe this as a universal filesystem CAS):
+ *   - external editors do not honor the lock. Node exposes no portable
+ *     atomic compare-and-rename primitive, so an unavoidable TOCTOU window
+ *     remains between the final validation and rename(). A non-cooperating
+ *     writer that writes inside that window can be overwritten. Hash and
+ *     identity re-validation reject stale bases; they cannot eliminate it.
+ *   - a crash between lock acquisition and release leaves the lock directory
+ *     (and possibly `.NAME.UUID.tmp`) behind. Nothing is auto-evicted or
+ *     auto-resumed; recovery is explicit and manual, after checking that no
+ *     live writer owns the lock.
+ *   - Windows: directory fsync is skipped and an external process holding the
+ *     target open can make rename() fail (`commit-failed`) instead of
+ *     corrupting it. No Windows CI result is claimed by this module.
+ *   - network filesystems (NFS/SMB) may not offer atomic mkdir/rename or
+ *     stable inode/ctime identity across clients. On filesystems that report
+ *     ino 0 or coarse timestamps (some FAT/exotic mounts), identity is weaker:
+ *     an identical-bytes replacement with identical timestamps can only be
+ *     caught by re-reading the content, not by the identity token alone.
+ *
+ * `createNativeFileStore(workspace, { io, lock })` exposes a narrow test seam:
+ * `io` may replace open/lstat/realpath/rename/unlink and `lock` forwards
+ * waitMs/pollMs/io to the advisory lock. Defaults are the real fs functions,
+ * so production callers keep using `createNativeFileStore(workspace)`.
+ */
+const DEFAULT_IO = Object.freeze({
+  open: nodeFs.open,
+  lstat: nodeFs.lstat,
+  realpath: nodeFs.realpath,
+  rename: nodeFs.rename,
+  unlink: nodeFs.unlink,
+})
+
+function error(code, message, cause) {
   const err = new Error(message)
   err.code = code
+  if (cause !== undefined) err.cause = cause
   return err
+}
+
+function resolveIo(overrides) {
+  if (overrides === undefined) return DEFAULT_IO
+  if (overrides === null || typeof overrides !== 'object' || Array.isArray(overrides)) {
+    throw error('invalid-option', 'io overrides must be an object')
+  }
+  for (const key of Object.keys(overrides)) {
+    if (!Object.hasOwn(DEFAULT_IO, key)) throw error('invalid-option', 'Unsupported io override: ' + key)
+    if (typeof overrides[key] !== 'function') throw error('invalid-option', 'io override must be a function: ' + key)
+  }
+  return Object.freeze({ ...DEFAULT_IO, ...overrides })
+}
+
+function pathFailure(err, message) {
+  if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+    return error('stale-revision', message, err)
+  }
+  if (err && err.code === 'ELOOP') {
+    return error('symlink-forbidden', 'Symlinked path component is not editable', err)
+  }
+  return err
+}
+
+function tempCreateFailure(err) {
+  if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+    return error('stale-revision', 'Parent directory disappeared before temporary output was created; reload before saving', err)
+  }
+  if (err && err.code === 'EEXIST') {
+    return error('stale-revision', 'Temporary output name was taken by another writer; reload before saving', err)
+  }
+  return error('temp-write-failed', 'Could not create temporary output file; original file preserved', err)
+}
+
+function commitFailure(err) {
+  if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+    return error('stale-revision', 'File or parent directory disappeared before commit; original file preserved', err)
+  }
+  if (err && (err.code === 'EBUSY' || err.code === 'ETXTBSY')) {
+    return error('file-busy', 'File is busy in another application; close it and retry', err)
+  }
+  return error('commit-failed', 'Atomic replacement failed; original file preserved', err)
 }
 
 function lock(key, action) {
@@ -62,16 +164,26 @@ function assertSameTree(before, after) {
   }
 }
 
-async function ensureSafeFile(workspace, file) {
+async function ensureSafeFile(workspace, file, io) {
   const { parts, format } = validateRelativePath(file)
-  const root = await realpath(workspace)
-  const rootInfo = await lstat(root,{bigint:true})
+  let root, rootInfo
+  try {
+    root = await io.realpath(workspace)
+    rootInfo = await io.lstat(root,{bigint:true})
+  } catch (err) {
+    throw pathFailure(err, 'Workspace root disappeared or became unreadable; reload workspace')
+  }
   if (!rootInfo.isDirectory()) throw error('invalid-path','Workspace root is not a directory')
   const entries = [{path:root,key:nodeKey(rootInfo)}]
   let current = root
   for (let i = 0; i < parts.length; i += 1) {
     current = path.join(current, parts[i])
-    const info = await lstat(current,{bigint:true})
+    let info
+    try {
+      info = await io.lstat(current,{bigint:true})
+    } catch (err) {
+      throw pathFailure(err, 'File or parent directory disappeared; reload before saving')
+    }
     entries.push({path:current,key:nodeKey(info)})
     if (info.isSymbolicLink()) throw error('symlink-forbidden', 'Symlinks inside the workspace are not editable')
     if (i < parts.length - 1 && !info.isDirectory()) throw error('invalid-path', 'Parent is not a directory')
@@ -79,7 +191,12 @@ async function ensureSafeFile(workspace, file) {
       throw error('invalid-file', 'Only regular, non-hardlinked files are editable')
     }
   }
-  const parent = await realpath(path.dirname(current))
+  let parent
+  try {
+    parent = await io.realpath(path.dirname(current))
+  } catch (err) {
+    throw pathFailure(err, 'File parent directory disappeared; reload before saving')
+  }
   if (parent !== root && !parent.startsWith(root + path.sep)) {
     throw error('invalid-path', 'File escapes workspace')
   }
@@ -101,8 +218,13 @@ function decodeUtf8(bytes) {
   catch { throw error('invalid-encoding', 'File must contain valid UTF-8') }
 }
 
-async function readChecked(absolute) {
-  const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+async function readChecked(absolute, io) {
+  let handle
+  try {
+    handle = await io.open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  } catch (err) {
+    throw pathFailure(err, 'File disappeared while being opened; reload before saving')
+  }
   try {
     const info = await handle.stat({bigint:true})
     if (!info.isFile() || info.nlink !== 1n) throw error('invalid-file', 'File must be regular and not hardlinked')
@@ -129,20 +251,38 @@ async function readChecked(absolute) {
   } finally { await handle.close() }
 }
 
-async function fsyncDirectory(dir) {
+async function fsyncDirectory(dir, io) {
   // Directory fsync is supported on POSIX, but not uniformly on Windows.
   if (process.platform === 'win32') return
-  const handle = await open(dir, 'r')
-  try { await handle.sync() } finally { await handle.close() }
+  let handle
+  try {
+    handle = await io.open(dir, 'r')
+  } catch (err) {
+    throw error('commit-failed', 'Content committed but the directory could not be synced; reload before continuing', err)
+  }
+  try {
+    await handle.sync()
+  } catch (err) {
+    throw error('commit-failed', 'Content committed but the directory could not be synced; reload before continuing', err)
+  } finally { await handle.close() }
 }
 
-export function createNativeFileStore(workspace) {
+export function createNativeFileStore(workspace, options = {}) {
   if (typeof workspace !== 'string' || !workspace) throw error('invalid-path', 'Workspace root required')
+  if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+    throw error('invalid-option', 'Store options must be an object')
+  }
+  const io = resolveIo(options.io)
+  const lockOptions = options.lock
+  if (lockOptions !== undefined &&
+      (lockOptions === null || typeof lockOptions !== 'object' || Array.isArray(lockOptions))) {
+    throw error('invalid-option', 'lock options must be an object')
+  }
   return {
     async read(file) {
-      const target = await ensureSafeFile(workspace, file)
-      const current = await readChecked(target.absolute)
-      const verified = await ensureSafeFile(workspace,file)
+      const target = await ensureSafeFile(workspace, file, io)
+      const current = await readChecked(target.absolute, io)
+      const verified = await ensureSafeFile(workspace,file,io)
       assertSameTree(target,verified)
       if (current.key !== verified.entries.at(-1).key) {
         throw error('stale-revision','Workspace file changed during read')
@@ -154,11 +294,11 @@ export function createNativeFileStore(workspace) {
       if (typeof baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(baseIdentity)) {
         throw error('missing-revision','Open document in the current editor before saving')
       }
-      const target = await ensureSafeFile(workspace, file)
+      const target = await ensureSafeFile(workspace, file, io)
       return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
-        const checked = await ensureSafeFile(workspace, file)
+        const checked = await ensureSafeFile(workspace, file, io)
         assertSameTree(target,checked)
-        const current = await readChecked(target.absolute)
+        const current = await readChecked(target.absolute, io)
         if (current.key !== checked.entries.at(-1).key ||
             current.rawHash !== baseHash ||
             current.identity !== baseIdentity) {
@@ -170,43 +310,65 @@ export function createNativeFileStore(workspace) {
           changed: false, inverse: result.inverse }
         const output = Buffer.from(result.source, 'utf8')
         if (output.length > MAX_BYTES) throw error('too-large', 'Edited file exceeds 8 MiB')
-        const temp = path.join(path.dirname(target.absolute), '.' + path.basename(target.absolute) + '.' + randomUUID() + '.tmp')
+        const outputHash = createHash('sha256').update(output).digest('hex')
+        const directory = path.dirname(target.absolute)
+        const temp = path.join(directory, '.' + path.basename(target.absolute) + '.' + randomUUID() + '.tmp')
         let created = false
         let tempKey
         try {
-          const h = await open(temp, 'wx', current.mode)
+          let handle
+          try {
+            handle = await io.open(temp, 'wx', current.mode)
+          } catch (err) { throw tempCreateFailure(err) }
           created = true
           try {
-            await h.writeFile(output); await h.chmod(current.mode); await h.sync()
-            tempKey=nodeKey(await h.stat({bigint:true}))
-          } finally { await h.close() }
+            try {
+              await handle.writeFile(output)
+              await handle.chmod(current.mode)
+              await handle.sync()
+            } catch (err) {
+              throw error('temp-write-failed', 'Could not write temporary output file; original file preserved', err)
+            }
+            tempKey=nodeKey(await handle.stat({bigint:true}))
+          } finally { await handle.close() }
           // Check immediately before replacing: cooperating Design Studio processes also hold the lock.
           // NOTE: external editors do not honor it; this is not a universal filesystem CAS.
-          const checkedAgain = await ensureSafeFile(workspace, file)
+          const checkedAgain = await ensureSafeFile(workspace, file, io)
           assertSameTree(checked,checkedAgain)
-          const latest = await readChecked(target.absolute)
+          const latest = await readChecked(target.absolute, io)
           if (latest.key !== current.key || latest.identity !== current.identity ||
               latest.rawHash !== baseHash) {
             throw error('stale-revision','On-disk file identity or revision changed during edit; save aborted')
           }
-          const tempInfo=await lstat(temp,{bigint:true})
+          let tempInfo
+          try {
+            tempInfo = await io.lstat(temp,{bigint:true})
+          } catch (err) {
+            throw error('stale-revision','Temporary output file disappeared before commit; reload before saving', err)
+          }
           if (!tempInfo.isFile() || tempInfo.nlink!==1n || nodeKey(tempInfo)!==tempKey) {
             throw error('stale-revision','Temporary output file changed before commit')
           }
-          await rename(temp, target.absolute)
+          try {
+            await io.rename(temp, target.absolute)
+          } catch (err) { throw commitFailure(err) }
           created = false
-          await fsyncDirectory(path.dirname(target.absolute))
-          const written = await readChecked(target.absolute)
-          if (written.key !== tempKey ||
-              written.rawHash !== createHash('sha256').update(output).digest('hex')) {
+          await fsyncDirectory(directory, io)
+          let written
+          try {
+            written = await readChecked(target.absolute, io)
+          } catch (err) {
+            throw error('stale-revision','Post-commit file validation failed; reload document', err)
+          }
+          if (written.key !== tempKey || written.rawHash !== outputHash) {
             throw error('stale-revision','Post-commit file validation failed; reload document')
           }
           return { file, hash: written.rawHash, identity:written.identity,
             changed: true, inverse: result.inverse }
         } finally {
-          if (created) await unlink(temp).catch(() => {})
+          if (created) await io.unlink(temp).catch(() => {})
         }
-      }))
+      }, lockOptions))
     },
   }
 }
