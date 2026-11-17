@@ -2,7 +2,7 @@
 
 **Mise à jour :** 17 novembre 2026 · **branche :** `feat/native-file-persistence` · **PR :** #8 (DRAFT vers `dev`).
 
-**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA19-EVIDENCE.md` ; les décisions de sécurité et de rendu partiel figurent dans ADR-017, ADR-018 et ADR-019.
+**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA20-EVIDENCE.md` ; les décisions de sécurité, rendu partiel et disposition figurent dans ADR-017 à ADR-020.
 
 ## 1. État observable et découpage du travail
 
@@ -10,10 +10,10 @@
 |---|---|---|---|
 | **P0 · DSH Host/Client** | Enregistrement simulé, routes natives, viewport React simulé, isolation de prévisualisation | Installation réelle dans DSH Web/Desktop, compatibilité versions, capture et gestes réels | **BLOCKED / NOT_RUN** |
 | **P0 · Données natives** | SVG/HTML/CSS en source canonique, patches exacts, inverses, SHA et identity obligatoires, verrou coopératif entre processus, tests de remplacement | CAS universel face aux éditeurs externes, confinement fort via descripteurs OS, crash/power-loss, NFS/SMB, tests Windows/macOS | **PARTIAL** |
-| **P1 · HTML visuel** | Identification des éléments à ID unique, styles inline conservateurs et première sélection au clic dans un iframe sans scripts (test React simulé) | Validation réelle des iframes/CSP, DOM↔source robuste, texte/attributs, composants dynamiques, formulaires et responsive avancé | **PARTIAL** |
-| **P1 · CSS externe** | Alpha.16 : édition ciblée de règles uniques `#id`/`.classe` de CSS ; Alpha.18 : correspondances **possibles** depuis une sélection HTML vers des CSS locaux, navigation + édition native/Undo | Cascade CSS réelle (la projection locale filtrée alpha.19 n'est qu'un sous-ensemble), gestion des sélecteurs complexes, `@media`, variables, CSS Modules, édition multi-fichiers atomique | **PARTIAL** |
+| **P1 · HTML visuel** | Identification des éléments à ID unique, styles inline conservateurs et première sélection au clic dans un iframe sans scripts (test React simulé) | Validation réelle des iframes/CSP, DOM↔source robuste, texte/attributs, composants dynamiques, formulaires, breakpoints CSS éditables et responsive avancé | **PARTIAL** |
+| **P1 · CSS externe** | Alpha.16 : édition ciblée de règles uniques `#id`/`.classe` de CSS ; Alpha.18 : correspondances **possibles** HTML↔CSS locaux, navigation + Undo ; Alpha.20 : préréglages natifs Flex/Grid validés et annulables | Cascade CSS réelle (la projection locale filtrée alpha.19 n'est qu'un sous-ensemble), gestion des sélecteurs complexes, `@media`, variables, CSS Modules, édition multi-fichiers atomique | **PARTIAL** |
 | **P1 · SVG manuel** | Formes primitives, sélection, déplacements, texte simple, calques feuille, outil Plume, M/L/Q/C/Z explicites, grille, guides et points Bézier | Groupes, transformations composées, arcs/relatif, tangentes lissées/symétriques, masques, dégradés, effets, opérations booléennes | **PARTIAL** |
-| **P1 · Ergonomie** | Structure V3 Graphite, contrôles clavier/souris simulés, quatre largeurs responsive HTML et aperçu CSS filtré en simulation | Vérification UI réelle, sélection graphique précise, accessibilité, mobile, pinch, gros projets, thèmes | **PARTIAL / NOT_RUN** |
+| **P1 · Ergonomie** | Structure V3 Graphite, contrôles clavier/souris simulés, quatre largeurs HTML, aperçu CSS filtré et dock à un panneau via container queries en simulation | Vérification UI réelle, sélection graphique précise, accessibilité, mobile, pinch, gros projets, thèmes | **PARTIAL / NOT_RUN** |
 | **P2 · Agent humain/IA** | Protocole de modifications natives réutilisable par l'interface manuelle | Outils exposés aux agents, diffs/approbation, provenance, orchestration et conflits multiagents | **NOT_IMPLEMENTED** |
 | **P3 · Release** | CI Node 22, tests de sources et de fichiers temporaires, PR isolée | Tests OS/browser/DSH, SBOM et licences, installateur, rollback, documentation opérateur et vérification de sécurité indépendante | **NOT_RUN** |
 
@@ -68,6 +68,7 @@
 - **Alpha.16 (branche actuelle)** : styles CSS externes simples, tests exacts et états read-only.
 - **Alpha.17 (prototype implémenté)** : clic HTML direct via accès DOM par le parent dans iframe sans scripts (ADR-017) ; tests React simulés PASS, tests navigateurs réels/sécurité NOT_RUN. La stratégie par messages demeure une option non implémentée.
 - **Alpha.18 (prototype implémenté)** : liens HTML→CSS locaux et correspondances indicatives avec navigation vers un inspecteur de feuille native ; cascade, rendu CSS externe et calcul des styles non implémentés.
+- **Alpha.20 (préréglages et dock implémentés)** : boutons Flex/Grid pour HTML/CSS avec whitelist côté serveur et Undo exact ; interface compacte via container queries avec onglets. Validation React simulée PASS, DSH et gestes mobiles réels NOT_RUN. Le constructeur complet et les media queries éditables restent NON IMPLÉMENTÉS (ADR-020).
 - **Alpha.19 (projection partielle implémentée)** : quatre largeurs d'iframe + projection CSS locale conservatrice et bornée (ADR-019) ; **Flex/Grid complet et breakpoints éditables non implémentés ; tests navigateur réels NOT_RUN**.
 - **Alpha.20+** : SVG groupes/tangentes/transformations et UI mobile au vu des résultats du smoke G0.
 - **Après gates** : outillage IA et préparation de RC.
