@@ -24,7 +24,7 @@ test('safe relative link path rejects traversal, remote schemes, encoded aliases
   const rejected=['../secret.css','./../secret.css','styles/../secret.css','/etc/secret.css',
     '//host/file.css','https://host/css.css','data:text/css,body{}.css','file:///x.css',
     '%2e%2e/a.css','assets%2Ffoo.css','style.css?version=1','style.css#hash',
-    'foo\\bar.css','a//b.css','a/./b.css','',null,'C:/temp.css','hidden.css/'];
+    'foo\\bar.css','a//b.css','a/./b.css','',null,'C:/temp.css','hidden.css/', '.secret.css','folder/.hidden.css'];
   for(const href of rejected)assert.equal(resolveStylesheetPath('pages/index.html',href),null,String(href))
 })
 test('HTML id and classes associate only with flat static rules in the linked CSS file',()=>withWorkspace(async(root,store)=>{
@@ -98,4 +98,18 @@ test('bounded inspection refuses linked stylesheets beyond the eighth link',()=>
   assert.equal(result.stylesheets.length,9)
   assert.equal(result.stylesheets.at(-1).status,'limit-exceeded')
   assert.equal(result.styleMatches[0].matches.length,0)
+}))
+
+
+test('conditional, disabled and non-CSS link elements never create editable associations',()=>withWorkspace(async(root,store)=>{
+  await writeFile(path.join(root,'pages/styles/a.css'),'#app{display:none}')
+  const html='<link rel="stylesheet" href="styles/a.css" media="print">'+
+    '<link rel="stylesheet" href="styles/a.css" disabled>'+
+    '<link rel="stylesheet" href="styles/a.css" type="text/plain">'+
+    '<link rel="stylesheet" href="styles/a.css" media="all" type="text/css">'+
+    '<main id="app">Hello</main>'
+  const result=await collection(store,'pages/index.html',html)
+  assert.deepEqual(result.stylesheets.map(item=>item.status),
+    ['unsupported-link','unsupported-link','unsupported-link','inspected'])
+  assert.equal(result.styleMatches[0].matches.length,1)
 }))
