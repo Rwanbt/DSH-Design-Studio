@@ -10,7 +10,7 @@ window.__ModuleLoader__.load({
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
     function safePreview(source, format, selectedHtmlId='') {
-      const policy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
+      const policy = "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
       const marked = /^(?:[A-Za-z][\w:.-]{0,79})$/.test(selectedHtmlId)?
         '<style>[id="'+selectedHtmlId+'"]{outline:2px solid #bda991!important;outline-offset:2px!important;}</style>':''
@@ -39,6 +39,8 @@ window.__ModuleLoader__.load({
       const [nodes,setNodes] = React.useState([])
       const [htmlElements,setHtmlElements] = React.useState([])
       const [htmlActive,setHtmlActive] = React.useState('')
+      const previewContextRef=React.useRef(null)
+      const previewBindingRef=React.useRef(null)
       const [htmlProperty,setHtmlProperty] = React.useState('background-color')
       const [htmlValue,setHtmlValue] = React.useState('')
       const [cssRules,setCssRules] = React.useState([])
@@ -341,6 +343,58 @@ window.__ModuleLoader__.load({
         const escaped=property
         const current=new RegExp('(?:^|;)\\s*'+escaped+'\\s*:\\s*([^;]*)','i')
         setHtmlValue(current.exec(item?.style||'')?.[1]?.trim()||'')
+      }
+      // An HTML document is sandboxed with scripts disabled. The trusted
+      // *parent* reads its inert DOM and installs the selection event handler;
+      // no script or postMessage bridge is injected into untrusted HTML.
+      previewContextRef.current={
+        file:doc?.file,identity:doc?.identity,sessionId,
+        htmlElements,validSource:source===doc?.source,busy,reloadRequired,
+        choose:chooseHtmlElement
+      }
+      function connectHtmlPreview(event) {
+        const old=previewBindingRef.current
+        if(old) {
+          try{old.frameDoc.removeEventListener('click',old.handler,true)}catch(_){}
+          previewBindingRef.current=null
+        }
+        if(!doc || !['html','htm'].includes(doc.format))return
+        const frame=event?.currentTarget
+        let frameDoc
+        try{frameDoc=frame?.contentDocument}catch(_){return}
+        // Do not attach to a navigated iframe or any cross-origin content.
+        if(!frameDoc || frameDoc.URL!=='about:srcdoc' ||
+            typeof frameDoc.addEventListener!=='function')return
+        const expectedFile=doc.file,expectedIdentity=doc.identity,expectedSession=sessionId
+        const handler=event=>{
+          // Selection mode must also neutralize default link and form controls.
+          event.preventDefault()
+          const context=previewContextRef.current
+          if(!context || context.file!==expectedFile ||
+             context.identity!==expectedIdentity ||
+             context.sessionId!==expectedSession ||
+             !context.validSource || context.busy || context.reloadRequired)return
+          const target=event.target
+          if(!target || typeof target.closest!=='function')return
+          const element=target.closest('[id]')
+          if(!element || !frameDoc.documentElement?.contains(element))return
+          const id=element.getAttribute?.('id')
+          if(typeof id!=='string'||!(/^[A-Za-z][\\w:.-]{0,79}$/).test(id))return
+          const models=context.htmlElements.filter(item=>item.id===id)
+          if(models.length!==1 || !models[0].editable ||
+             models[0].tag!==String(element.tagName||'').toLowerCase())return
+          // The browser's parsed DOM and the source scanner must agree:
+          // malformed HTML could otherwise hide a second matching id.
+          let domMatches=0
+          for(const node of frameDoc.querySelectorAll('[id]')) {
+            if(node.getAttribute('id')===id)domMatches++
+            if(domMatches>1)break
+          }
+          if(domMatches!==1)return
+          context.choose(id)
+        }
+        frameDoc.addEventListener('click',handler,true)
+        previewBindingRef.current={frameDoc,handler}
       }
       const selectedText=textNodes.find(node=>node.id===active)
       const selectedPath=pathNodes.find(node=>node.id===active)
@@ -933,7 +987,11 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                  h('iframe',{title:'Isolated design preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,doc.format,htmlActive),style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+                  h('iframe',{title:'Isolated design preview',
+                    sandbox:['html','htm'].includes(doc.format)?'allow-same-origin':'',
+                    referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
+                    srcDoc:safePreview(source,doc.format,htmlActive),
+                    style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
           h('aside',{className:'dsh-studio-inspector',style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
             h('strong',null,'Design · Propriétés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
@@ -964,7 +1022,7 @@ window.__ModuleLoader__.load({
               selectedHtml?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedHtml.tag+' #'+selectedHtml.id),
-                h('small',{style:{color:'#a9a6a1'}},'HTML natif : propriétés inline ciblées. La prévisualisation surligne l’élément sélectionné.'),
+                h('small',{style:{color:'#a9a6a1'}},'HTML natif : clic dans l’aperçu pour sélectionner un élément à id unique. Scripts bloqués ; propriétés inline ciblées.'),
                 !selectedHtml.editable?h('small',{style:{color:'#f1b6aa'}},
                   'Lecture seule : '+(selectedHtml.reason||'structure complexe')):
                 h('div',{style:{display:'grid',gap:8}},
