@@ -25,6 +25,9 @@ Toute formulation antérieure parlant de « build Desktop » ou d'« application
 | Manifeste client | `dsh.client = {platform:'web', immediately:true, inject:['slots']}` et **`exports['./client.js']`** (DSH demande `<paquet>/client.js`) | `package.json` |
 | Slot | `ctx.slots.inject('conversation.view', …)` + `slots.register({name, id, order, label}, Studio)` | `client.js` |
 | Props | la vue reçoit `sessionId` du shell DSH ; tout appel Host l'exige | `client.js` |
+| Profil Desktop | le profil `desktop` est **créé et possédé par l'application Electron** ; la CLI refuse de le créer et exige un premier démarrage complet avant `dsh plugin --profile desktop add` | vérifié, `tests/e2e/desktop-shell.mjs` |
+| Livraison Desktop | l'application Desktop ne charge pas l'origine HTTP : elle rend `dsh-app://app/` et sert les bundles par son protocole, en URLs groupées `plugins/??<id>/client.js&rev=<hash>` | vérifié (HTTP 200, 106 855 octets) |
+| Runtime Desktop | le shell démarre son propre runtime et publie `dsh web: http://127.0.0.1:<port>/?token=…` ; les routes du plugin y répondent (401 sans authentification, 200 avec le token du shell) | vérifié |
 
 ## Contrat de thème
 
@@ -41,7 +44,19 @@ Décision :
 - **Raccourcis DSH** : Ctrl+Z/Ctrl+D sont gérés localement par le workbench ; les enregistrer via le service de raccourcis de DSH demanderait l'injection de ce service et une revue de conflits clavier.
 - **i18n** : l'interface mélange français et anglais ; DSH expose un paquet de locale qui n'est pas encore consommé.
 - **Carte de réglages / palette de commandes** : aucun point d'entrée DSH au-delà de la vue.
-- **Rendu Electron** : l'application DSH Desktop embarque le même client ; seulement le serveur Web réel a été piloté jusqu'ici (voir matrice de gates).
+- **Tour réel dans le Desktop** : la vue est rendue dans le shell, mais un tour assistant y reste non exécuté (profil `desktop` jetable sans adaptateur pour le fournisseur testé → `NO_ADAPTER`).
+- **Connexion au compte** : la fenêtre « bienvenue » et l'assistant de premier démarrage sont traversés par script dans les tests, pas validés manuellement.
+- **Cycle d'ouverture** : le renderer Electron est désormais prouvé (voir § « Desktop » ci-dessous) ; ce qui n'est pas fait relève des points ci-dessus, pas du rendu.
+
+## Desktop (Electron) — ce qui a réellement changé le diagnostic
+
+Piloter le shell a révélé **un second chemin de livraison** que les tests Web ne peuvent pas voir : la même vue est servie depuis `dsh-app://app/` par le protocole de l'application, en URLs groupées. Un bundle qui ne fonctionnerait que sur l'origine HTTP aurait passé toutes les preuves Web et cassé chez l'utilisateur Desktop.
+
+Conséquences pour tout futur point d'intégration :
+1. ne jamais supposer que l'origine est HTTP : les chemins relatifs doivent rester relatifs, jamais construits sur `location.origin` ;
+2. le profil `desktop` ne se crée pas par la CLI : l'installation utilisateur passe par un premier démarrage, puis `dsh plugin --profile desktop add` ;
+3. les routes Host du runtime desktop exigent le token du shell ; un test qui les appelle anonymement doit attendre un 401, pas contourner l'authentification ;
+4. le thème doit être lu à l'exécution (le Desktop de cette machine est en thème clair) : une valeur codée en dur reste invisible en test et fausse en production.
 
 ## Conséquences
 

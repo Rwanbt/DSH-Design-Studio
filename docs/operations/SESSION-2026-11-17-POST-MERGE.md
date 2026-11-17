@@ -72,22 +72,38 @@ One HTML↔CSS navigation test failed intermittently on Windows only. Instead of
 | Command | Result |
 |---|---|
 | `npm run check` (baseline `c97101e`) | 269 pass / 0 fail / 0 skip |
-| `npm run check` (final) | **406 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
-| `npm run test:browser` (Chromium 145 + Firefox 146) | **62 PASS / 0 FAIL** (31 specs × 2 engines); report at `tests/browser/__reports__/browser-report.json` |
-| `npm run test:dsh` (without credentials) | 14 PASS / 0 FAIL / 1 NOT_RUN (blank-session limit) |
-| `npm run test:dsh` (credentials opt-in) | **19 PASS / 0 FAIL / 0 NOT_RUN**, workbench rendered in the real conversation |
+| `npm run check` (final) | **409 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
+| `npm run test:browser` (Chromium 145 + Firefox 146) | **68 PASS / 0 FAIL** (34 specs × 2 engines); report at `tests/browser/__reports__/browser-report.json` |
+| `npm run test:dsh` (without credentials) | 16 PASS / 0 FAIL / 6 NOT_RUN (steps that need a real turn or the shell wizard) |
+| `npm run test:dsh` (credentials opt-in) | **31 PASS / 0 FAIL / 0 NOT_RUN** — real Web app **and real Desktop app**, workbench rendered in both |
 | GitHub Actions `core` (ubuntu) | PASS |
 | GitHub Actions `core` (windows-latest) | see the run history; every observed failure was fixed (rename/lock/permission/path issues), never skipped |
 | GitHub Actions `browser` (ubuntu-24.04) | PASS (Chromium + Firefox installed and executed in CI) |
-| GitHub Actions run `44007780142` | **all jobs green**: `core (ubuntu)`, `core (windows)`, `browser` |
+| GitHub Actions runs `44085456638`, `44085826244` | **all jobs green**: `core (ubuntu)`, `core (windows)`, `browser` |
 
 ### Real DSH results (`tests/e2e/real-dsh.mjs`)
 
-PASS: installation resolution, disposable profile creation from the shipped template, plugin install and bundle registration, real web app boot, real Web UI load, real session creation, `/health`, `/files`, `/document`, a real save through `/apply`, stale-revision refusal (HTTP 409), **client bundle served by the real Host** (HTTP 200, 89,771 bytes, `immediately=true`, `inject=["slots"]`), **bundle declares the `conversation.view` slot**, no JavaScript errors on the page.
+PASS: installation resolution, disposable profile creation from the shipped template, plugin install and bundle registration, real web app boot, real Web UI load, real session creation, `/health`, `/files`, `/document`, a real save through `/apply`, stale-revision refusal (HTTP 409), **client bundle served by the real Host** (HTTP 200, 106,855 bytes, `immediately=true`, `inject=["slots"]`), **bundle declares the `conversation.view` slot**, no JavaScript errors on the page.
 
 **Workbench inside the real conversation: PASS.** DSH renders no `conversation.view` area while a session is blank, so the harness now supports an opt-in real turn (`DSH_E2E_REUSE_CREDENTIALS=1` copies the caller's own credential file into the disposable, mode-600 home; `DSH_E2E_MODEL_PROVIDER`/`DSH_E2E_MODEL` add a model overlay). One short message produced a real assistant turn in 2 s, DSH rendered the view area, the registered `Design Studio` entry was clickable, and `DSH · Design Studio` appeared in the DOM of the real product.
 
-Evidence: `docs/operations/evidence/dsh-workbench.png` (1440×900, 5 779 distinct colours — verified non-blank) plus `tests/browser/__reports__/real-dsh.json`.
+Evidence: `docs/operations/evidence/dsh-workbench.png` (1440×900, 4 971 distinct colours — verified non-blank) plus `tests/browser/__reports__/real-dsh.json`.
+
+### DSH Desktop (Electron) renderer — new, and it found a second delivery path
+
+The Web app was never the whole product: the plugin ships *into* the DSH Desktop application. That half was previously `NOT_RUN`, so the gate could not be called closed. `tests/e2e/desktop-shell.mjs` now drives the real shell:
+
+1. **The desktop profile belongs to the app, not to the CLI.** `dsh plugin --profile desktop add` is refused until the application has created its own profile, so the harness boots the shell once in a disposable `HOME`/`DSH_HOME` (with `XDG_*` redirected so no real setting is touched), stops it, then installs the bundle — the documented user path.
+2. **A different renderer, a different document, a different delivery path.** The shell renders `dsh-app://app/` (not the HTTP origin) and serves client bundles over its own protocol in batched URLs: `plugins/??@rwanbt/dsh-design-studio/client.js&rev=1d95b76ad6e1` → HTTP 200, 106,855 bytes, `immediately=true`. Same byte count as the HTTP path, two independent proofs.
+3. **The Host half runs in the desktop runtime:** `/design-studio-native/health` → 200 `{"ok":true,...}`. Anonymous calls get 401 — the harness authenticates with the shell's own token URL instead of weakening the route.
+4. **The workbench renders there:** the `Design Studio` tab of `conversation.view` opens, the element is in the DOM, painted by the host theme (`rgb(255,255,255)` = the desktop's `--dsw-alias-bg-layer-1`), measured at 994×658. Captures `dsh-workbench-desktop.png` (1 707×1 005, 6 364 colours) and `dsh-workbench-desktop-element.png` (1 327×879, 1 808 colours) — image statistics are checked so a blank frame can never pass as evidence.
+5. No plugin JavaScript errors in the Electron renderer.
+
+Two things remain unproven **inside the shell** and are written down as such: a real assistant turn (the disposable desktop profile has no adapter for the tested provider — `NO_ADAPTER`; the conversation is made non-blank by the error path, which is what renders the view), and the account sign-in flow (the welcome window and the first-run wizard are clicked through by script, not tested by hand).
+
+Two false starts are recorded on purpose, because they shaped the result: the packaged Electron binary **ignores a positional main script** (it always boots its own shell), and an earlier probe assumed it could be used as a generic Electron runner. That assumption produced two honest FAILs, which were deleted rather than explained away — a FAIL from a wrong premise is not evidence either.
+
+An earlier version of the desktop phase also **overwrote** the workspace store the application owns; the run then showed "Choisir un espace de travail" instead of the seeded workspace. The fix reuses an existing registration instead of rewriting it, and the failing assertion now prints the visible button labels so the next failure diagnoses itself.
 
 Without credentials the two final steps stay `NOT_RUN`; that variant is reported as an environment limit, never as a pass.
 

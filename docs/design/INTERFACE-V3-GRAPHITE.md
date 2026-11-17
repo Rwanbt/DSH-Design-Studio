@@ -31,7 +31,7 @@ Suggested fallback palette (must be checked for contrast in DSH):
 | Text group / rich text / spans / embedded fonts | NOT_IMPLEMENTED | Requires loss-conscious parser |
 | Image/artwork transforms, Bézier editing and advanced components | NOT_IMPLEMENTED | Separate source-mapping milestones |
 | Persist undo/redo across app restart | NOT_IMPLEMENTED | Sidecar journal/transaction design |
-| Native DSH Desktop/Web operation | NOT_RUN | Manual install, screenshot and interaction evidence |
+| Native DSH Web + Desktop operation | Verified (G0) | Real Web app and real Electron shell driven by `tests/e2e/real-dsh.mjs` + `desktop-shell.mjs`; screenshots in `docs/operations/evidence/` |
 | User experience/accessibility/performance | NOT_RUN | Keyboard, screen reader and mobile scenarios |
 
 ## Implementation constraints

@@ -18,7 +18,7 @@ and workspace. The plugin is **MIT** and has **zero runtime dependencies**.
 | Node.js | 22 | `node --version` |
 | OS | Linux x64 verified | Windows verified by CI, macOS **NOT_RUN** |
 | AI provider | **none** | the editor never calls a model |
-| Shell | DSH Web or DSH Desktop | Web driven end-to-end; Desktop renderer **NOT_RUN** |
+| Shell | DSH Web or DSH Desktop | Both driven end-to-end (Web 20 steps, Desktop 11 steps, 31/31 PASS) |
 
 ## 2. Install into a disposable profile (recommended first)
 
@@ -61,6 +61,30 @@ dsh plugin --profile <your-profile> remove @rwanbt/dsh-design-studio
 Nothing outside the profile's `node_modules` and `package.json` is modified: the
 plugin writes only to the files you explicitly open, plus a cooperative
 `.<file>.dsh-native.lock` directory next to a file while a save is committed.
+
+## 3 bis. Install into the DSH Desktop application
+
+The desktop application owns its own `desktop` profile, so the order matters:
+the CLI refuses to create it and asks you to let the application do it first.
+
+```bash
+# 1. Start DSH Desktop once, let it finish first-run setup, then quit it fully.
+# 2. Install into the profile the application created:
+dsh plugin --profile desktop add link:/absolute/path/to/DSH-Design-Studio
+# 3. Start DSH Desktop again.
+```
+
+What this does *not* do: it does not add an installer, a service or a second
+window. The plugin is a bundle inside the profile the application already owns,
+and its UI is a `conversation.view` tab of the desktop window. The desktop serves
+client bundles over its own `dsh-app://` protocol in batched URLs — a different
+delivery path from the web app, both verified (see
+`docs/roadmap/DELIVERY-GATES-2026-11-17.md`, gate G0).
+
+A real assistant turn inside the desktop shell is not verified here: the
+disposable profile used for the automated run has no provider adapter
+(`NO_ADAPTER`). The workbench itself, the Host routes, the theme and the absence
+of client errors are verified in the real application.
 
 ## 4. First run checklist
 
