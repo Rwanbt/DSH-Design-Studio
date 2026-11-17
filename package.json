@@ -17,7 +17,8 @@
     "client.js",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "license": "MIT",
   "engines": {
@@ -27,7 +28,8 @@
     "test": "node --test \"tests/**/*.test.mjs\"",
     "check": "node --check src/native-patch.mjs && node --check src/native-file-store.mjs && node --check src/native-write-lock.mjs && node --check src/svg-document.mjs && node --check src/svg-attributes.mjs && node --check src/svg-geometry.mjs && node --check src/svg-shapes.mjs && node --check src/svg-text.mjs && node --check src/svg-elements.mjs && node --check src/svg-paths.mjs && node --check src/svg-groups.mjs && node --check src/svg-transform.mjs && node --check src/svg-visibility.mjs && node --check src/html-visual.mjs && node --check src/css-visual.mjs && node --check src/html-css-associations.mjs && node --check src/html-responsive-preview.mjs && node --check src/workspace-files.mjs && node --check src/plugin-host.mjs && node --check client.js && node --test \"tests/**/*.test.mjs\"",
     "test:browser": "node tests/browser/run.mjs",
-    "test:dsh": "node tests/e2e/real-dsh.mjs"
+    "test:dsh": "node tests/e2e/real-dsh.mjs",
+    "sbom": "node scripts/sbom.mjs"
   },
   "dsh": {
     "bundle": {

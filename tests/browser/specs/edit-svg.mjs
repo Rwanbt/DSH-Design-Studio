@@ -47,6 +47,10 @@ export const svgEditSpec = {
     assert.ok(moved.includes('data-note="keep-me"'), 'unfamiliar attributes survive the edit')
     assert.ok(moved.includes('<!-- editable demo; comments and unfamiliar attributes must survive -->'),
       'comments survive the edit')
+    // The disk write completes before the client finishes its reload: wait for the
+    // editor view instead of racing it.
+    await page.waitForFunction((expected) => document.querySelector('textarea')?.value === expected, moved,
+      { timeout: 15000 })
     assert.equal(await sourceOf(page), moved, 'the editor reflects the saved source')
 
     // Native Undo replays the exact inverse patch.

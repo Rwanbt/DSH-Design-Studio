@@ -11,3 +11,20 @@ Every manual editor feature must work without AI credentials or token calls. Rea
 Do not claim production ready or tests passed based on README claims alone. Update the audit matrix with direct evidence and preserve required third-party notices.
 
 Post-squash merge execution plan: `docs/roadmap/GOAL-POST-MERGE-2026-11-17.md`. Always verify the actual branch refs, source files, test commands and CI outputs. An alpha CI PASS never substitutes for real DSH Desktop/Web tests, browser security validation or safe external-editor filesystem CAS.
+
+## Verification levels (mandatory before claiming anything works)
+
+Three levels are defined in `docs/adr/ADR-021-VERIFICATION-TIERS.md`. Always name the
+level you actually executed, and never promote a lower level to a higher one:
+
+1. `npm run check` — pure modules and host logic. No dependencies needed.
+2. `npm run test:browser` — real Chromium and Firefox against the real
+   `src/plugin-host.mjs` handler and a real temporary filesystem. Only the DSH
+   client shell is simulated.
+3. `npm run test:dsh` — a real DeepSeek Harness installation in a disposable
+   `DSH_HOME`/`HOME`, real web app, real session, real Host routes. Requires an
+   installed DSH and Playwright; missing environments must be reported as
+   `NOT_RUN`, never as success.
+
+`npm run sbom` regenerates `docs/operations/SBOM.json`; the runtime dependency set
+must stay empty and the test-only devDependencies are recorded in `NOTICE`.

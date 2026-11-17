@@ -1,76 +1,60 @@
 # DSH Design Studio — Matrice de livraison et de couverture
 
-**Mise à jour :** 17 novembre 2026 · **branche d'intégration :** `dev` · **PR #8 fusionnée dans `dev` par squash** (`c2f17475`) ; **`main` inchangée**. La fermeture des gates G0–G5 reste indépendante de cette intégration.
+**Mise à jour :** 17 novembre 2026 (session autonome post-fusion) · **branche d'intégration :** `dev` · **PR #8 fusionnée par squash** (`c2f1747`) ; **`main` inchangée** ; remote limité à `main` + `dev`.
 
-**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA20-EVIDENCE.md` ; les décisions de sécurité, rendu partiel et disposition figurent dans ADR-017 à ADR-020.
+**Règle de lecture :** un test unitaire, une simulation du Host **ou un test navigateur avec shell simulé** ne remplace pas un test dans l'application réelle. Chaque promotion de gate ci-dessous cite la commande, le résultat exact et le niveau de test réellement atteint. Un `NOT_RUN` n'est jamais un `PASS`.
 
-## 1. État observable et découpage du travail
+**Preuves de cette session :** [`docs/operations/SESSION-2026-11-17-POST-MERGE.md`](../operations/SESSION-2026-11-17-POST-MERGE.md) · rapport navigateur `tests/browser/__reports__/browser-report.json` · rapport DSH réel `tests/browser/__reports__/real-dsh.json`.
 
-| Chantier | Implémenté et vérifié automatiquement | Non implémenté ou seulement partiel | Gate |
+## 1. État par chantier
+
+| Chantier | Vérifié réellement | Encore partiel / non fait | Gate |
 |---|---|---|---|
-| **P0 · DSH Host/Client** | Enregistrement simulé, routes natives, viewport React simulé, isolation de prévisualisation | Installation réelle dans DSH Web/Desktop, compatibilité versions, capture et gestes réels | **BLOCKED / NOT_RUN** |
-| **P0 · Données natives** | SVG/HTML/CSS en source canonique, patches exacts, inverses, SHA et identity obligatoires, verrou coopératif entre processus, tests de remplacement | CAS universel face aux éditeurs externes, confinement fort via descripteurs OS, crash/power-loss, NFS/SMB, tests Windows/macOS | **PARTIAL** |
-| **P1 · HTML visuel** | Identification des éléments à ID unique, styles inline conservateurs et première sélection au clic dans un iframe sans scripts (test React simulé) | Validation réelle des iframes/CSP, DOM↔source robuste, texte/attributs, composants dynamiques, formulaires, breakpoints CSS éditables et responsive avancé | **PARTIAL** |
-| **P1 · CSS externe** | Alpha.16 : édition ciblée de règles uniques `#id`/`.classe` de CSS ; Alpha.18 : correspondances **possibles** HTML↔CSS locaux, navigation + Undo ; Alpha.20 : préréglages natifs Flex/Grid validés et annulables | Cascade CSS réelle (la projection locale filtrée alpha.19 n'est qu'un sous-ensemble), gestion des sélecteurs complexes, `@media`, variables, CSS Modules, édition multi-fichiers atomique | **PARTIAL** |
-| **P1 · SVG manuel** | Formes primitives, sélection, déplacements, texte simple, calques feuille, outil Plume, M/L/Q/C/Z explicites, grille, guides et points Bézier | Groupes, transformations composées, arcs/relatif, tangentes lissées/symétriques, masques, dégradés, effets, opérations booléennes | **PARTIAL** |
-| **P1 · Ergonomie** | Structure V3 Graphite, contrôles clavier/souris simulés, quatre largeurs HTML, aperçu CSS filtré et dock à un panneau via container queries en simulation | Vérification UI réelle, sélection graphique précise, accessibilité, mobile, pinch, gros projets, thèmes | **PARTIAL / NOT_RUN** |
-| **P2 · Agent humain/IA** | Protocole de modifications natives réutilisable par l'interface manuelle | Outils exposés aux agents, diffs/approbation, provenance, orchestration et conflits multiagents | **NOT_IMPLEMENTED** |
-| **P3 · Release** | CI Node 22, tests de sources et de fichiers temporaires, PR isolée | Tests OS/browser/DSH, SBOM et licences, installateur, rollback, documentation opérateur et vérification de sécurité indépendante | **NOT_RUN** |
+| **P0 · Installation DSH** | Profil jetable créé depuis le template livré, plugin installé et enregistré comme bundle, application Web réelle démarrée, UI chargée, session réelle créée, routes `/health`, `/files`, `/document`, `/apply` répondantes, sauvegarde réelle disque, révision périmée refusée (409), **bundle client servi (200, 89 771 octets) et déclarant `conversation.view`**, aucune erreur JS | Ouverture du workbench **dans** la conversation réelle (zone non rendue pour une séance vide ; un tour exige un fournisseur LLM absent du profil jetable) | **PARTIAL** |
+| **P0 · Données natives** | Patchs exacts, inverses, `baseHash` + `baseIdentity`, verrou coopératif, **preuves multi-processus réelles**, SIGKILL, injection de pannes, refus symlink/hardlink/parent, identité refusée à octets identiques | Fenêtre TOCTOU résiduelle documentée (pas de CAS universel portable), macOS/NFS/SMB non exécutés | **PARTIAL** |
+| **P1 · HTML visuel** | Sélection au clic dans une iframe réelle sans script, édition de texte et d'attributs en liste blanche, refus fail-closed du balisage mixte, tests navigateur réels Chromium + Firefox | Cascade/computed styles, sélecteurs CSS complexes côté rendu, composants dynamiques | **PARTIAL** |
+| **P1 · CSS externe** | Édition de règles à sélecteurs simples, listes de sélecteurs et combinateurs, variables CSS, refus typés dans les at-rules, projection bornée sans `@import`/`url()` | Cascade réelle, `@media` éditables, CSS Modules, édition multi-fichiers atomique | **PARTIAL** |
+| **P1 · SVG manuel** | Hiérarchie, groupes/dégroupes, visibilité, verrouillage, rotation/échelle autour du pivot réel, géométrie transformée, plume et nœuds Bézier, Undo exact | Multi-sélection avancée (groupes hétérogènes), tangentes lissées/symétriques, arcs/relatif, dégradés, masques, booléens | **PARTIAL** |
+| **P1 · Ergonomie** | 390/768/1280 px réellement mesurés, tablist ARIA réelle, focus visible, réduction d'animation, budget 1500 nœuds exécuté | Lecteur d'écran réel, tactile matériel, thèmes | **PARTIAL** |
+| **P2 · Agent humain/IA** | Protocole natif réutilisable, révisions, provenance | Outils exposés aux agents, diff/approbation, orchestration multi-agents | **NOT_IMPLEMENTED** |
+| **P3 · Release** | CI Linux + Windows + navigateur, `npm run check` sans dépendance | SBOM, NOTICE exhaustif, packaging, installateur/rollback, GO/NO-GO | **PARTIAL** |
 
-## 2. Ordre de livraison (critères vérifiables)
+## 2. Gates
 
-### Gate G0 — Installer et utiliser l'alpha dans DSH (bloquant pour MVP)
-1. Faire un build/install dans un profil DSH de développement **jetable**, en notant DSH version, OS, commande, logs et SHA.
-2. Vérifier que le tab s'affiche, que les trois formats se chargent, que les routes Host sont joignables et que l'interface fonctionne sans credentials IA.
-3. Ouvrir des documents réels et tester sauvegarde, relance, Annuler/Rétablir, sauvegarde concurrente, zoom, pan, Plume et sélection au pointeur.
-4. Contrôler captures desktop et mobile ; relever anomalies. **Pass = preuves réelles**. Situation actuelle : **NOT_RUN (connexion au poste indisponible)**.
+### Gate G0 — Installer et utiliser l'alpha dans DSH
+**Statut : PARTIAL (étape Host et bundle PASS ; ouverture du workbench non prouvée).**
+
+Preuves exécutées (`node tests/e2e/real-dsh.mjs`, DSH 0.2.2-rc.3, Node 24, Linux x64) : 14 `PASS`, 0 `FAIL`, 1 `NOT_RUN`.
+- Profil `e2e` créé depuis le template `web` livré ; `dsh plugin --profile e2e add link:<repo>` enregistre le bundle.
+- `dsh --profile e2e --no-open` sert l'application réelle ; session réelle créée par l'UI.
+- `/design-studio-native/health` → 200 `{"ok":true,...}` ; `/files` → 200 ; `/document` → 200 avec `nodes` ; `/apply` → 200 et fichier réellement modifié ; seconde écriture avec révision périmée → **409** et fichier inchangé.
+- `window.__DSH_BOOT__.entries` contient `@rwanbt/dsh-design-studio` et le module servi (200, 89 771 octets) déclare `conversation.view`.
+- `NOT_RUN` : la zone `conversation.view` n'est pas rendue par DSH pour une séance vide ; produire un tour nécessite un fournisseur LLM, volontairement absent du profil jetable. **Aucune capture du workbench dans DSH réel n'est revendiquée.**
 
 ### Gate G1 — Stockage sans perte silencieuse
-1. Mettre au point une stratégie multi-OS de résolution des chemins par descripteurs; auditer symlinks, renommages, fichiers temporaires et scénarios de crash.
-2. Tester Windows 11, Linux et au moins un stockage distant si nécessaire. Conserver les données originales pour toutes les erreurs/interruptions.
-3. Test de concurrence entre plugin et processus externe non coopératif. Ne pas appeler le mécanisme actuel « CAS universel ».
-4. Obtenir les rapports de mutation/rollback et comparer les SHAs. **Actuellement PARTIAL**.
+**Statut : PARTIAL (fort).** Preuves : `npm run check` 394/394 ; 18 tests dédiés (multi-processus, SIGKILL, injection ENOSPC/EACCES, parent remplacé/absent, identité, symlink/hardlink). CI Linux **PASS** ; CI Windows : trois échecs réels observés puis corrigés (rename transitoire, `rmdir` du verrou, bits POSIX inexistants) — voir historique des runs. Non prouvé : macOS, NFS/SMB, fermeture du TOCTOU.
 
 ### Gate G2 — HTML/CSS utilisable de manière visuelle
-1. Sélection **directe** dans un `iframe sandbox` sans exécuter le JavaScript du document. **Prototype alpha.17 :** parent DSH lit le DOM d'un `srcDoc` avec `allow-same-origin` mais sans `allow-scripts`, avec garde session/fichier/identité, ID source unique et DOM unique. Cette décision d'architecture est explicitée dans ADR-017 ; **tests réels navigateur/XSS restent NOT_RUN**. Toute alternative avec pont `postMessage` doit être authentifiée (origine/source/session/document/révision/nonce) et revue séparément.
-2. Relier explicitement l'élément HTML aux règles CSS locales. **Prototype alpha.18 :** références locales sûres, sélecteurs simples `#id`/`.classe`, fichier, spécificité indicative, navigation vers la feuille et sauvegarde native ; **aucune cascade effective ni style calculé**. ADR-018 ; analyse complète et tests navigateur toujours NOT_RUN.
-3. Modifier propriétés, texte/attributs simples, Flex/Grid et breakpoints en conservant les fichiers HTML/CSS octet pour octet hors plages choisies.
-4. Tests de fichiers réels + navigateur réel ; `@media`/complexité inconnue toujours refusés sans avertissement trompeur. **Actuellement PARTIAL**.
+**Statut : PARTIAL, mais le point de sécurité est désormais **testé en navigateur réel** (ADR-017).** Preuves : HTML hostile avec `<script>`, `on*`, `javascript:`, `<iframe>`, `<object>`, `<form>`, CSS `@import`, `url()` distants → **aucune réponse** reçue d'une origine non fiable, aucun script exécuté (frame et parent), navigation empêchée, sélection au clic toujours fonctionnelle, CSP `script-src 'none'`/`connect-src 'none'`/`default-src 'none'`/`frame-src 'none'`, `sandbox="allow-same-origin"` sans `allow-scripts`, aperçu SVG en `sandbox=""`. Exécuté sur Chromium **et** Firefox.
 
 ### Gate G3 — SVG vectoriel robuste
-1. Supporter transformations, groupes et multi-sélection ; déduire la géométrie réellement affichée et préserver `defs`, namespaces et éléments inconnus.
-2. Étendre les chemins (relatifs/arc/smooth), tangentes Angle/Lissé/Symétrique, plume et sélection exacte.
-3. Ajouter calques structurés, verrouillage/visibilité, gradient, clipping/masques et opérations booléennes via adaptateur choisi et audité.
-4. Fixtures SVG externes, comparaisons visuelles et non-régression des sources. **Actuellement PARTIAL**.
+**Statut : PARTIAL.** Preuves : hiérarchie/groupes/dégroupes/visibilité/verrou/transformation + géométrie transformée, avec round-trip octet-exact, refus typés, et 5 specs navigateur réels (dont la coïncidence poignées/rendu à ±2 px et la rotation autour du pivot réel). Non fait : booléens, masques, dégradés, tangentes lissées.
 
 ### Gate G4 — UX, accessibilité et performance
-1. Finaliser V3 Graphite : panneau contextuel, barres rétractables, état de travail, erreurs, actions cohérentes.
-2. Adapter réellement mobile/tactile, tester clavier/focus, lecteur d'écran et dimensions d'écran.
-3. Budgets de performance et mémoire sur gros SVG/HTML/CSS, sans dépendance de modèle IA.
-4. Vérification des scénarios d'édition réels, pas seulement tests du DOM React simulé. **Actuellement NOT_RUN**.
+**Statut : PARTIAL (progrès mesurés).** Preuves navigateur : tablist ARIA réelle, focus visible calculé, activation clavier (Entrée) des contrôles, absence d'animation sous `prefers-reduced-motion`, trois largeurs réellement mesurées, budget d'ouverture/sauvegarde sur 1500 nœuds **mesuré** (< 15 s ouverture, < 8 s sauvegarde) et régression quadratique corrigée. Non fait : lecteur d'écran réel, appareil tactile, profils mémoire.
 
-### Gate G5 — IA facultative, puis release candidate
-1. Fournir aux agents les mêmes commandes validées et préconditions de révision que l'UI.
-2. Approbation/diff/annulation explicites pour les modifications IA, sans secrets transférés.
-3. Audit licences/NOTICES, SBOM, packaging DSH Web/Desktop, migration/rollback, release checklist et GO/NO-GO.
-4. Aucun tag, release, merge `main` tant que les gates G0–G4 pertinents sont ouverts.
+### Gate G5 — IA facultative puis release candidate
+**Statut : NOT_STARTED.** Aucun outil agent, aucun SBOM/NOTICE complet, aucun packaging ni checklist de release. Aucun tag ni publication.
 
 ## 3. Critères permanents
 
-- **Source canonique :** pas de conversion silencieuse SVG→JSON ou HTML→DOM sérialisé. Édition conservatrice si mappage ambigu.
-- **IA optionnelle :** édition manuelle complètement fonctionnelle hors ligne et sans tokens.
-- **Sécurité :** un `SKIP`/`NOT_RUN` n'est jamais un `PASS`; refus des sources externes dangereuses, des éléments ambigus et des conflits.
-- **Preuves :** chaque promotion de gate cite la commande, l'output complet ou résumé exact, un SHA testé, un OS et une version DSH lorsque pertinente.
-- **Ordre :** **G0 + G1** avant de qualifier l'application de MVP stable ; développement de **G2/G3** peut se faire sur branche expérimentale mais ne doit pas masquer ces deux bloqueurs.
+- **Source canonique :** aucun re-sérialisation ; chaque opération est un patch `{start,end,before,after}` avec précondition de révision.
+- **IA optionnelle :** aucun chemin d'édition manuelle n'appelle un fournisseur ; le profil de test DSH n'a volontairement aucune credential.
+- **Sécurité :** refus par défaut, liste blanche d'attributs côté Host, iframes inertes, CSP ; un `SKIP`/`NOT_RUN` n'est jamais un `PASS`.
+- **Preuves :** chaque ligne ci-dessus renvoie à une commande exécutée ; les rapports alpha antérieurs sont conservés comme preuves datées, sans réécriture.
 
-## 4. Prochaine séquence de développement proposée
+## 4. Prochaine séquence
 
-- **Alpha.16 (historique du développement) : styles CSS externes simples, tests exacts et états read-only.
-- **Alpha.17 (prototype implémenté)** : clic HTML direct via accès DOM par le parent dans iframe sans scripts (ADR-017) ; tests React simulés PASS, tests navigateurs réels/sécurité NOT_RUN. La stratégie par messages demeure une option non implémentée.
-- **Alpha.18 (prototype implémenté)** : liens HTML→CSS locaux et correspondances indicatives avec navigation vers un inspecteur de feuille native ; cascade, rendu CSS externe et calcul des styles non implémentés.
-- **Alpha.20 (préréglages et dock implémentés)** : boutons Flex/Grid pour HTML/CSS avec whitelist côté serveur et Undo exact ; interface compacte via container queries avec onglets. Validation React simulée PASS, DSH et gestes mobiles réels NOT_RUN. Le constructeur complet et les media queries éditables restent NON IMPLÉMENTÉS (ADR-020).
-- **Alpha.19 (projection partielle implémentée)** : quatre largeurs d'iframe + projection CSS locale conservatrice et bornée (ADR-019) ; **Flex/Grid complet et breakpoints éditables non implémentés ; tests navigateur réels NOT_RUN**.
-- **Alpha.20+** : SVG groupes/tangentes/transformations et UI mobile au vu des résultats du smoke G0.
-- **Après gates** : outillage IA et préparation de RC.
-
-**Pas de pourcentage fictif :** l'achèvement d'un jalon se mesure par le comportement démontré et les critères de sortie, pas par le seul nombre de tests.
+1. Fermer G0 : exécuter le harness réel sur un profil disposant d'un fournisseur et d'une séance non vide, capturer le workbench.
+2. G5 : licences/NOTICE/SBOM, packaging, migration/rollback, documentation opérateur, rapport GO/NO-GO.
+3. G2/G3 restants : cascade et `@media`, tangentes lissées, booléens — chacun derrière un refus explicite tant qu'il n'est pas prouvé.

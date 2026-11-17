@@ -1,0 +1,28 @@
+# Third-party notices — DSH Design Studio
+
+The plugin itself is MIT (see `LICENSE`). It ships **no runtime dependencies**:
+every file under `src/` and `client.js` import only Node.js built-ins and the
+DeepSeek Harness client runtime (`react`, injected by the host application).
+
+The following packages are **test-only `devDependencies`**. They are never
+bundled, imported by `src/`, or required to run the editor.
+
+| Package | Version | License | Used for | Notice |
+|---|---|---|---|---|
+| `playwright` | 1.58.2 | Apache-2.0 | Driving real Chromium and Firefox in `tests/browser/` and `tests/e2e/` | Copyright Microsoft Corporation. Licensed under the Apache License, Version 2.0 — <https://www.apache.org/licenses/LICENSE-2.0>. The browser binaries it downloads keep their own licences and are not redistributed by this repository. |
+| `react` | 18.3.1 | MIT | UMD build served to the simulated client shell in `tests/browser/harness/` (the plugin itself receives React from DSH) | Copyright Meta Platforms, Inc. and affiliates. MIT licence text in the package. |
+| `react-dom` | 18.3.1 | MIT | Same as above (rendering the workbench inside the harness shell) | Same as above. |
+
+## DeepSeek Harness
+
+`tests/e2e/real-dsh.mjs` executes a locally installed DeepSeek Harness
+(`deepseek-harness` binary + `resources/app.asar`). Nothing from that
+installation is copied, vendored or redistributed by this repository: the script
+only spawns the installed CLI and drives its public HTTP surface.
+
+## Candidate upstream projects
+
+The projects listed in `docs/audits/SOURCE-MATRIX.md` were reviewed at
+manifest/licence level only. **No code from them is included here.** Any future
+import requires a file-level licence audit, a pinned commit SHA and an entry in
+this file before it can be merged.

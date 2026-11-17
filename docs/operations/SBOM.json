@@ -1,0 +1,46 @@
+{
+  "bomFormat": "CycloneDX-like (documented subset)",
+  "specNote": "Minimal SBOM: full package graph resolution is unnecessary because the runtime dependency set is empty and verified below.",
+  "metadata": {
+    "subject": "@rwanbt/dsh-design-studio",
+    "version": "0.1.0-alpha.20",
+    "commit": "722347dd7095cc88f642e07873ff0b82374adb39",
+    "generatedAt": "2026-11-17T03:08:08.829Z",
+    "generator": "scripts/sbom.mjs",
+    "runtimeDependencyCount": 0
+  },
+  "components": [
+    {
+      "type": "application",
+      "name": "@rwanbt/dsh-design-studio",
+      "version": "0.1.0-alpha.20",
+      "license": "MIT",
+      "scope": "runtime",
+      "description": "Experimental native DSH manual editor for SVG, HTML and CSS files"
+    },
+    {
+      "type": "library",
+      "name": "playwright",
+      "version": "1.58.2",
+      "license": "Apache-2.0",
+      "scope": "test-only",
+      "note": "Declared for the real-browser gate; never imported by src/ or client.js and not required to run the editor."
+    },
+    {
+      "type": "library",
+      "name": "react",
+      "version": "18.3.1",
+      "license": "MIT",
+      "scope": "test-only",
+      "note": "Declared for the real-browser gate; never imported by src/ or client.js and not required to run the editor."
+    },
+    {
+      "type": "library",
+      "name": "react-dom",
+      "version": "18.3.1",
+      "license": "MIT",
+      "scope": "test-only",
+      "note": "Declared for the real-browser gate; never imported by src/ or client.js and not required to run the editor."
+    }
+  ]
+}
