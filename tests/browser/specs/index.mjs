@@ -15,11 +15,11 @@ import { mountSpec } from './mount.mjs'
 import { svgEditSpec, svgNavigationSpec, svgLayersSpec } from './edit-svg.mjs'
 import { htmlSelectSpec, htmlClickInvalidationSpec, htmlLayoutSpec, layoutPresetExtrasSpec, cssRuleSpec } from './edit-web.mjs'
 import { externalConflictSpec, refusedWriteSpec, unsavedSourceGuardSpec } from './conflict.mjs'
-import { htmlSecuritySpec, svgSecuritySpec, cssInjectionSpec } from './security.mjs'
+import { htmlSecuritySpec, svgSecuritySpec, svgRemoteAssetSpec, cssInjectionSpec } from './security.mjs'
 import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y.mjs'
 import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
-import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec } from './structure.mjs'
+import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 
 export const specs = [
@@ -35,6 +35,7 @@ export const specs = [
   ungroupSpec,
   transformSpec,
   groupDragSpec,
+  nestedPivotSpec,
   htmlTextSpec,
   htmlAttributeSpec,
   htmlTextRefusalSpec,
@@ -48,6 +49,7 @@ export const specs = [
   unsavedSourceGuardSpec,
   htmlSecuritySpec,
   svgSecuritySpec,
+  svgRemoteAssetSpec,
   cssInjectionSpec,
   keyboardSpec,
   panelsAccessibilitySpec,

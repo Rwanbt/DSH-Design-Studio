@@ -9,6 +9,48 @@ window.__ModuleLoader__.load({
     const pane = { background:'var(--dsw-alias-surface-1,#202124)', color:'var(--dsw-alias-content-primary,#e8e7e2)', border:'1px solid var(--dsw-alias-border,#37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
+    /** Decode numeric HTML character references, so an encoded `refresh` is seen. */
+    function decodeNumericReferences(text) {
+      return String(text)
+        .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return '' } })
+        .replace(/&#(\d+);?/g, (_, dec) => { try { return String.fromCodePoint(Number(dec)) } catch { return '' } })
+    }
+    /**
+     * Remove `<base>` and `<meta http-equiv="refresh">` from the PREVIEW copy only.
+     * A plain regex is not enough: quoted '>' inside an attribute and numeric
+     * character references both defeat it, so this scans tag ends while honouring
+     * quotes and decodes references before deciding. The file on disk is untouched.
+     */
+    function stripNavigationTags(html) {
+      let out = ''
+      let index = 0
+      while (index < html.length) {
+        const start = html.indexOf('<', index)
+        if (start < 0) { out += html.slice(index); break }
+        out += html.slice(index, start)
+        const head = html.slice(start, start + 12)
+        const tagMatch = /^<\s*(base|meta)(?=[\s/>])/i.exec(head)
+        if (!tagMatch) { out += '<'; index = start + 1; continue }
+        let cursor = start + tagMatch[0].length
+        let quote = null
+        while (cursor < html.length) {
+          const character = html[cursor]
+          if (quote) { if (character === quote) quote = null }
+          else if (character === '"' || character === "'") quote = character
+          else if (character === '>') break
+          cursor += 1
+        }
+        const tagText = html.slice(start, Math.min(cursor + 1, html.length))
+        const isBase = tagMatch[1].toLowerCase() === 'base'
+        const equiv = /http-equiv\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tagText)
+        const equivValue = decodeNumericReferences(equiv ? (equiv[1] ?? equiv[2] ?? equiv[3] ?? '') : '')
+        const looksRefreshing = /refresh/i.test(equivValue) || /refresh/i.test(decodeNumericReferences(tagText))
+        if (isBase || looksRefreshing) { index = cursor + 1; continue }
+        out += tagText
+        index = cursor + 1
+      }
+      return out
+    }
     function safePreview(source, format, selectedHtmlId='', linkedCss='') {
       const policy = "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
@@ -25,9 +67,7 @@ window.__ModuleLoader__.load({
       // relative URLs. The sandbox already neutralises both in real Chromium and
       // Firefox (measured), but relying on one layer for a security boundary is
       // not acceptable, and neither tag carries visual meaning for a preview.
-      const neutral = String(source)
-        .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '')
-        .replace(/<base\b[^>]*>/gi, '')
+      const neutral = stripNavigationTags(String(source))
       return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy +
         '"><meta name="viewport" content="width=device-width, initial-scale=1">' +
         svgLayout + projected + marked + '</head><body style="margin:' +
@@ -234,7 +274,16 @@ window.__ModuleLoader__.load({
           setError('Transformations are unavailable for this layer: its geometry is not addressable')
           return
         }
-        const pivot={x:Math.round((box.x+box.width/2)*1000)/1000,y:Math.round((box.y+box.height/2)*1000)/1000}
+        // The transform attribute of an element acts in its PARENT space, so the
+        // pivot must be mapped back through the parent chain. Using the artboard
+        // centre directly would displace any node that has a transformed ancestor.
+        const absolute={x:box.x+box.width/2,y:box.y+box.height/2}
+        const pinv=Array.isArray(box.pivotInverse)&&box.pivotInverse.length===6?box.pivotInverse:null
+        const rounded=value=>Math.round(value*1000)/1000
+        const pivot=pinv?
+          {x:rounded(pinv[0]*absolute.x+pinv[2]*absolute.y+pinv[4]),
+           y:rounded(pinv[1]*absolute.x+pinv[3]*absolute.y+pinv[5])}
+          :{x:rounded(absolute.x),y:rounded(absolute.y)}
         const operation=kind==='rotate'?{type:'rotate',angle:90,pivot}
           :kind==='scaleUp'?{type:'scale',sx:1.1,sy:1.1,pivot}
             :{type:'scale',sx:1/1.1,sy:1/1.1,pivot}

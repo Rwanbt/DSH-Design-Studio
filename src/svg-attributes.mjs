@@ -1,5 +1,5 @@
 /** Conservative SVG source-span inspector; never serializes the XML tree. */
-import { scanSvgDocument } from './svg-document.mjs'
+import { scanSvgDocument, svgLockedAncestor } from './svg-document.mjs'
 
 const TAGS = new Set(['svg','g','rect','circle','ellipse','line','polyline','polygon','path','text','use'])
 const PROPS = new Set(['fill','stroke','stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
@@ -169,6 +169,15 @@ export function svgAttributePatch(source,{id,attribute,value}) {
   if(typeof id!=='string' || typeof attribute!=='string' || !PROPS.has(attribute)) fail('invalid-target','Attribute is not editable')
   validatedValue(attribute,value)
   if(!listEditableSvgNodes(source).some(item=>item.id===id)) fail('unknown-node','SVG node id not found')
+  // A locked layer (or a locked ancestor) refuses attribute edits too, not only
+  // visibility/transform/grouping: otherwise the lock is a decoration.
+  try {
+    const node=scanSvgDocument(source).byId.get(id)
+    if(node && svgLockedAncestor(node)) fail('locked','Element is locked; unlock it before editing')
+  } catch(error) {
+    if(error?.code==='locked') throw error
+    // An unparsable document is already reported by the scanners above.
+  }
   const selected=tags(source).find(item=>item.attrs.some(a=>a.name==='id'&&a.value===id))
   const matches=selected.attrs.filter(a=>a.name===attribute)
   if(matches.length!==1) fail('unsupported-edit','This attribute must already exist and be unique')

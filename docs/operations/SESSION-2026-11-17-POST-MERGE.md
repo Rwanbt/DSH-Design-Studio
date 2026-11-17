@@ -31,6 +31,16 @@ The alpha evidence was string-level and React-simulated: **no browser had ever r
 6. **Windows: replacement rename and lock release.** Real Windows CI showed 3 then 2 failures. Fixes: bounded retry of the same `rename` on EACCES/EBUSY/EPERM, bounded retry of the lock `rmdir`, a platform-correct permission assertion instead of asserted POSIX bits, and Windows-tolerant polling deadlines.
 7. **Accessibility:** added `lang="fr"`, a `prefers-reduced-motion` rule, `prefers-contrast` support and an accessible name for the workbench. The documented canvas-owned shortcut contract (Space = temporary pan even when a control is focused) was kept and is now asserted in a browser instead of being changed silently.
 
+### Independent review and the defects it caught
+
+An independent read-only review of the whole session diff (`c97101e..HEAD`) returned **MERGE-READY WITH FIXES** and three P1 defects, all reproduced and fixed:
+
+1. **Rotation/scale pivot was in the wrong coordinate space.** The pivot came from the rendered (artboard) centre while a `transform` attribute acts in the element's *parent* space, so rotating a layer inside a translated group displaced it by the ancestor translation and saved that displacement. Handles now carry the parent-space inverse; a spec rotates a layer inside `translate(1000,0)` and asserts both the exact matrix (`0,1,-1,0,40,0`) and that the visible centre does not move.
+2. **`data-locked` was not enforced on the mutations that actually run.** Drag and property edits went through `svgAttributePatch`, and delete/duplicate through the legacy `svgElementPatch`, neither of which checked the lock. Both now refuse with `locked`, proven at the module and route level.
+3. **Nested delete/duplicate was unreachable.** The route never passed `nested:true`, so deleting a group returned `unknown-node`. The route now defaults to the nested implementation, and the old test that locked the limitation was rewritten to prove the new behaviour (delete a group, restore it byte-for-byte with the inverse, duplicate with unique ids).
+
+P2 findings also fixed: an unregistered SVG sandbox spec, a composition assertion that could not fail, an over-claiming lock comment, ungrouping silently dropping group attributes (now refused with `unsupported-group`), a regex bypass in the preview neutraliser (entity-encoded `refresh` and a quoted `>`; now a quote-aware scanner), and evidence reports that were cited but gitignored (now tracked).
+
 ### Security work beyond the plan
 
 - Measured the `<meta http-equiv="refresh">` / `<base>` vectors in real Chromium and Firefox: an isolated probe showed a body-level meta refresh DOES navigate an unsandboxed `srcDoc` frame and does NOT navigate a frame with our `sandbox="allow-same-origin"`. Rather than relying on one browser behaviour, the preview projection now also strips `meta refresh` and `base` (the file on disk is untouched). Recorded in `docs/adr/ADR-022-HTML-PREVIEW-SECURITY-VERIFIED.md`, asserted on both engines.
@@ -47,7 +57,7 @@ The alpha evidence was string-level and React-simulated: **no browser had ever r
 | Command | Result |
 |---|---|
 | `npm run check` (baseline `c97101e`) | 269 pass / 0 fail / 0 skip |
-| `npm run check` (final) | **398 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
+| `npm run check` (final) | **406 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
 | `npm run test:browser` (Chromium 145 + Firefox 146) | **62 PASS / 0 FAIL** (31 specs × 2 engines); report at `tests/browser/__reports__/browser-report.json` |
 | `npm run test:dsh` (without credentials) | 14 PASS / 0 FAIL / 1 NOT_RUN (blank-session limit) |
 | `npm run test:dsh` (credentials opt-in) | **19 PASS / 0 FAIL / 0 NOT_RUN**, workbench rendered in the real conversation |

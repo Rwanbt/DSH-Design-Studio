@@ -29,6 +29,8 @@ body { background-image: url("https://evil.invalid/bg.png") }</style>
   <form id="form" action="https://evil.invalid/post" method="post"><input name="a"><button id="submit" type="submit">send</button></form>
   <div id="handler" onclick="window.__pwned='inline-handler'">inline handler</div>
   <meta http-equiv="refresh" content="0; url=https://evil.invalid/refreshed">
+  <meta http-equiv="re&#102;resh" content="0; url=https://evil.invalid/entity-refresh">
+  <meta name="a>b" http-equiv="refresh" content="0; url=https://evil.invalid/quoted-gt">
   <base href="https://evil.invalid/">
   <link rel="dns-prefetch" href="//evil.invalid">
   <link rel="prefetch" href="https://evil.invalid/prefetch">
@@ -42,7 +44,9 @@ const SCRIPT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="
 </svg>
 `
 
-const REMOTE_ASSET_SVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="120">
+// A viewBox is required for the canvas to be addressable; without it the editor
+// refuses the artboard and the preview is never mounted.
+const REMOTE_ASSET_SVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="120" viewBox="0 0 200 120">
   <image href="https://evil.invalid/asset.png" xlink:href="https://evil.invalid/asset-xlink.png" width="10" height="10"/>
   <rect id="box" x="10" y="10" width="80" height="60" fill="#bda991"/>
 </svg>
@@ -95,6 +99,11 @@ export const htmlSecuritySpec = {
     // Depth 2: the projection itself drops navigation-priming tags, so safety does
     // not depend on a single browser behaviour.
     assert.ok(!/http-equiv=["']?refresh/i.test(srcDoc), 'the preview must not carry a meta refresh')
+    // Two documented bypasses of a naive regex: numeric character references and a
+    // '>' inside a quoted attribute value. The scanner must still remove them.
+    assert.ok(!/re&#102;resh/i.test(srcDoc), 'an entity-encoded refresh must be removed too')
+    assert.ok(!/quoted-gt/.test(srcDoc), 'a meta tag with a quoted > must be removed too')
+    assert.ok(!/entity-refresh/.test(srcDoc), 'no encoded refresh URL may survive')
     assert.ok(!/<base\b/i.test(srcDoc), 'the preview must not carry a <base> element')
     assert.match(srcDoc, /Hostile fixture/, 'stripping the navigation tags must not alter the content')
 

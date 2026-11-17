@@ -4,6 +4,7 @@ import { scanSvgDocument } from './svg-document.mjs'
 import {
   SVG_IDENTITY_MATRIX,
   applySvgMatrix,
+  invertSvgMatrix,
   invertSvgMatrixLinear,
   multiplySvgMatrices,
   parseSvgTransform,
@@ -220,6 +221,9 @@ function absoluteGeometry(source) {
     }
     const box = absoluteBox(chain.matrix, local)
     const identity = isIdentity(chain.matrix)
+    // A rotation/scale pivot must be expressed in the element's PARENT space,
+    // because that is the space its own transform attribute acts in.
+    const pivotInverse = invertSvgMatrix(node.parent ? absoluteMatrix(node.parent).matrix : [1, 0, 0, 1, 0, 0])
     const move = node.tag === 'rect'
       ? { x: 'x', y: 'y', initialX: local.x, initialY: local.y, inverse }
       : { x: 'cx', y: 'cy', initialX: local.x + local.width / 2, initialY: local.y + local.height / 2, inverse }
@@ -227,6 +231,7 @@ function absoluteGeometry(source) {
       id: node.id, tag: node.tag,
       x: box.x, y: box.y, width: box.width, height: box.height,
       local, matrix: chain.matrix.slice(), rotated: isRotated(chain.matrix),
+      pivotInverse,
       move, resizable: identity && (node.tag === 'rect' || node.tag === 'ellipse'),
       absolute: true,
     })
@@ -265,6 +270,7 @@ function absoluteGeometry(source) {
       id: textNode.id, tag: 'text',
       x: box.x, y: box.y, width: box.width, height: box.height,
       local, matrix: chain.matrix.slice(), rotated: isRotated(chain.matrix),
+      pivotInverse: invertSvgMatrix(node.parent ? absoluteMatrix(node.parent).matrix : [1, 0, 0, 1, 0, 0]),
       move: { x: 'x', y: 'y', initialX: x, initialY: baseline, inverse },
       resizable: false, text: true, absolute: true, approximate: true,
     })

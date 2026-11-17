@@ -58,11 +58,13 @@ export const lockSpec = {
       { label: 'lock' })
     assert.match(locked, /<rect id="loose"[^>]*data-locked="true"/, 'the lock marker is a real attribute')
 
-    // The UI must now offer to unlock and refuse visibility edits (server-side too).
+    // The UI must now offer to unlock and refuse the action locally. The
+    // server-side refusal is proven separately in tests/host-editor-routes.test.mjs
+    // ("a locked layer refuses drag-style attribute edits and layer deletion").
     const unlock = page.getByRole('button', { name: 'Unlock selected layer' })
     await unlock.waitFor({ state: 'visible' })
     assert.equal(await page.getByRole('button', { name: 'Hide selected layer' }).isDisabled(), true,
-      'a locked layer cannot be hidden from the inspector')
+      'the inspector disables the action for a locked layer (client gate)')
     assert.equal(await harness.read('lock.svg'), locked, 'the refused action must not touch the file')
 
     await unlock.click()
@@ -159,8 +161,14 @@ export const transformSpec = {
     const other = /<rect id="loose"[^>]*transform="matrix\(([^)]+)\)"/.exec(scaled)
     assert.ok(other, 'scaling composes onto the existing transform of the same layer')
     const composed = other[1].split(',').map(Number)
-    assert.ok(Math.abs(composed[0] - 1.1 * matrix[0]) < 1e-3 || Math.abs(composed[0]) < 1e-6,
-      'the new matrix composes the scale onto the previous rotation')
+    // Rotation then scale-by-1.1 about the centre: the linear part must scale by
+    // exactly 1.1 while staying a rotation ([0,1,-1,0] → [0,1.1,-1.1,0]).
+    assert.ok(Math.abs(composed[1] - 1.1) < 1e-3,
+      `the composed scale must be visible in b (got ${composed[1]})`)
+    assert.ok(Math.abs(composed[2] + 1.1) < 1e-3,
+      `the composed scale must be visible in c (got ${composed[2]})`)
+    assert.ok(Math.abs(composed[0]) < 1e-6 && Math.abs(composed[3]) < 1e-6,
+      'the composed matrix stays a pure scale-rotation')
     assert.equal((scaled.match(/transform="matrix\(/g) || []).length, 1,
       'each layer keeps a single transform attribute')
 
@@ -213,5 +221,48 @@ export const groupDragSpec = {
     const restored = await waitForDisk(harness, 'groupdrag.svg', (content) => content === grouped,
       { label: 'undo group drag' })
     assert.equal(restored, grouped, 'undo restores the byte-identical original')
+  },
+}
+
+export const nestedPivotSpec = {
+  name: 'structure: rotating a layer inside a translated group keeps its centre fixed',
+  async run({ page, harness, assert }) {
+    // The parent shifts artwork by 1000 units: a pivot computed in artboard space
+    // would displace the shape by the same amount and save that displacement.
+    const nested = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 2000 2000">
+  <g id="offset" transform="translate(1000,0)">
+    <rect id="inner" x="10" y="10" width="20" height="20" fill="#bda991"/>
+  </g>
+</svg>
+`
+    await harness.write('pivot.svg', nested)
+    await openWorkspaceFile(page, 'pivot.svg', { expect: 'svg' })
+    await page.getByRole('button', { name: 'Select layer rect #inner' }).click()
+    const before = await page.getByRole('button', { name: 'Drag rect inner' }).boundingBox()
+    await page.getByRole('button', { name: 'Rotate selected layer 90 degrees' }).click()
+
+    const rotated = await waitForDisk(harness, 'pivot.svg', (content) => content.includes('transform="matrix('),
+      { label: 'nested rotate' })
+    const matrix = /<rect id="inner"[^>]*transform="matrix\(([^)]+)\)"/.exec(rotated)
+    assert.ok(matrix, 'the layer received its own transform')
+    const values = matrix[1].split(',').map(Number)
+    assert.deepEqual(values.map((value) => Math.round(value * 1e6) / 1e6), [0, 1, -1, 0, 40, 0],
+      'the pivot was expressed in the parent space, not in artboard space')
+    assert.ok(rotated.includes('<g id="offset" transform="translate(1000,0)">'),
+      'the ancestor transform is untouched')
+
+    // The rendered centre must not move, which is what a user perceives.
+    const after = await page.getByRole('button', { name: 'Drag rect inner' }).boundingBox()
+    const centreBefore = { x: before.x + before.width / 2, y: before.y + before.height / 2 }
+    const centreAfter = { x: after.x + after.width / 2, y: after.y + after.height / 2 }
+    assert.ok(Math.abs(centreBefore.x - centreAfter.x) <= 2,
+      `the visible centre must stay put horizontally (${centreBefore.x} → ${centreAfter.x})`)
+    assert.ok(Math.abs(centreBefore.y - centreAfter.y) <= 2,
+      `the visible centre must stay put vertically (${centreBefore.y} → ${centreAfter.y})`)
+
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    const restored = await waitForDisk(harness, 'pivot.svg', (content) => content === nested,
+      { label: 'undo nested rotate' })
+    assert.equal(restored, nested, 'undo restores the original bytes')
   },
 }

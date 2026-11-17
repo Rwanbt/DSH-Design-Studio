@@ -114,6 +114,15 @@ export function svgUngroupPatch(source, { id } = {}) {
   if (node.readOnly) fail('read-only', 'Referenced SVG content cannot be ungrouped')
   if (svgLockedAncestor(node)) fail('locked', 'Group is locked')
   if (node.end == null) fail('invalid-svg', 'SVG group must be well-formed and closed')
+  // Dropping the wrapper also drops its attributes. `transform`, `opacity`,
+  // `style`, `filter`, `mask` and `clip-path` change how the children look, so
+  // ungrouping them would silently move/restyle the artwork. Refuse instead of
+  // pretending the operation is lossless.
+  const LOSSY = ['transform', 'opacity', 'style', 'filter', 'mask', 'clip-path']
+  const lossy = LOSSY.filter((name) => node.attributes.has(name))
+  if (lossy.length > 0) {
+    fail('unsupported-group', 'Ungrouping would drop group attributes: ' + lossy.join(', '))
+  }
   if (node.selfClosing) {
     const before = source.slice(node.start, node.end)
     return { patches: [{ start: node.start, end: node.end, before, after: '' }], id, empty: true }

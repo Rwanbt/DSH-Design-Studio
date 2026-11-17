@@ -174,16 +174,26 @@ test('delete SVG text layer and undo; refuse stale file instead of overwriting',
   assert.equal(stale.status,409)
   assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),'<svg viewBox="0 0 150 100"><rect id="external" x="2" y="3" width="5" height="7"/></svg>')
 }))
-test('nested SVG layers cannot be deleted by incomplete source mapper',()=>fixture(async(invoke,root)=>{
+test('nested SVG layers are deleted by exact span and restored by the inverse',()=>fixture(async(invoke,root)=>{
+  // The historical limitation ("nested layers cannot be deleted") is lifted: the
+  // route now uses the nested implementation, which deletes exactly the node span
+  // and returns an inverse able to restore the file byte for byte.
   const original='<svg viewBox="0 0 100 100"><g><rect id="child" x="2" y="2" width="3" height="3"/></g></svg>'
   await writeFile(path.join(root,'icon.svg'),original)
   const doc=(await invoke('GET',url)).json.document
   const result=await invoke('POST','/design-studio-native/apply',{
     sessionId:'known',file:'icon.svg',baseHash:doc.hash,baseIdentity:doc.identity,kind:'svg-layer',id:'child',operation:'delete'
   })
-  assert.equal(result.status,400)
-  assert.equal(result.json.error,'unsupported-svg')
-  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original)
+  assert.equal(result.status,200,JSON.stringify(result.json))
+  const deleted=await readFile(path.join(root,'icon.svg'),'utf8')
+  assert.ok(!deleted.includes('id="child"'),'the nested layer is gone')
+  assert.equal(deleted,original.replace(/<rect id="child"[^>]*\/>/,''),'only the node span was removed')
+  const undo=await invoke('POST','/design-studio-native/apply',{
+    sessionId:'known',file:'icon.svg',baseHash:result.json.result.hash,baseIdentity:result.json.result.identity,
+    kind:'patches',patches:result.json.result.inverse
+  })
+  assert.equal(undo.status,200,JSON.stringify(undo.json))
+  assert.equal(await readFile(path.join(root,'icon.svg'),'utf8'),original,'the inverse restores the exact bytes')
 }))
 
 test('GET /files lists only supported workspace files and hides symlinks and excluded directories',()=>fixture(async(invoke,root)=>{

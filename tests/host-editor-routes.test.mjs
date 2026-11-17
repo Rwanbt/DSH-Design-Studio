@@ -207,3 +207,69 @@ test('every new operation still requires a matching revision', async () => {
     assert.equal(await host.read('scene.svg'), SVG, 'no refused operation may touch the file')
   } finally { await host.close() }
 })
+
+test('a locked layer refuses drag-style attribute edits and layer deletion', async () => {
+  const host = await mount()
+  try {
+    const locked = SVG.replace('<rect id="a"', '<rect id="a" data-locked="true"')
+    await host.write('locked.svg', locked)
+    const opened = await host.open('locked.svg')
+    const revision = host.revision(opened)
+
+    // Dragging sends a batch of attribute edits: the lock must stop it server-side.
+    const drag = await host.apply({ ...revision, kind: 'svg-attributes',
+      edits: [{ id: 'a', attribute: 'x', value: '99' }] })
+    assert.equal(drag.status, 400)
+    assert.equal(drag.body.error, 'locked')
+    assert.equal(await host.read('locked.svg'), locked, 'a locked layer must never move')
+
+    const removal = await host.apply({ ...revision, kind: 'svg-layer', id: 'a', operation: 'delete' })
+    assert.equal(removal.status, 400)
+    assert.equal(removal.body.error, 'locked')
+    assert.equal(await host.read('locked.svg'), locked, 'a locked layer must never be deleted')
+
+    // Unlocking is the only way forward, and it is a normal reversible edit.
+    const unlocked = await host.apply({ ...revision, kind: 'svg-lock', id: 'a', locked: false })
+    assert.equal(unlocked.status, 200, JSON.stringify(unlocked.body))
+    const opened2 = await host.open('locked.svg')
+    const moved = await host.apply({ ...host.revision(opened2), kind: 'svg-attributes',
+      edits: [{ id: 'a', attribute: 'x', value: '99' }] })
+    assert.equal(moved.status, 200, JSON.stringify(moved.body))
+    assert.match(await host.read('locked.svg'), /<rect id="a"[^>]*x="99"/)
+  } finally { await host.close() }
+})
+
+test('grouped layers can be deleted and duplicated through the route with exact inverses', async () => {
+  const host = await mount()
+  try {
+    const grouped = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120">
+  <g id="pair">
+    <rect id="a" x="10" y="10" width="40" height="30" fill="#bda991"/>
+    <rect id="b" x="60" y="10" width="40" height="30" fill="#8a9a7b"/>
+  </g>
+</svg>
+`
+    await host.write('grouped.svg', grouped)
+    let opened = await host.open('grouped.svg')
+
+    const removed = await host.apply({ ...host.revision(opened), kind: 'svg-layer', id: 'pair', operation: 'delete' })
+    assert.equal(removed.status, 200, JSON.stringify(removed.body))
+    const afterDelete = await host.read('grouped.svg')
+    assert.ok(!afterDelete.includes('id="pair"'), 'the whole group is gone')
+    assert.ok(!afterDelete.includes('id="a"'), 'its children are gone with it')
+    const undo = await host.apply({ file: 'grouped.svg', baseHash: removed.body.result.hash,
+      baseIdentity: removed.body.result.identity, kind: 'patches', patches: removed.body.result.inverse })
+    assert.equal(undo.status, 200, JSON.stringify(undo.body))
+    assert.equal(await host.read('grouped.svg'), grouped, 'the inverse restores the group byte for byte')
+
+    opened = await host.open('grouped.svg')
+    const copied = await host.apply({ ...host.revision(opened), kind: 'svg-layer', id: 'pair', operation: 'duplicate' })
+    assert.equal(copied.status, 200, JSON.stringify(copied.body))
+    const afterCopy = await host.read('grouped.svg')
+    const ids = [...afterCopy.matchAll(/id="([^"]+)"/g)].map((match) => match[1])
+    assert.equal(new Set(ids).size, ids.length, 'a duplicated group never creates duplicate ids')
+    assert.ok(ids.length >= 6, 'the clone carries the group and its children')
+    assert.ok(afterCopy.includes('id="a-copy"') || afterCopy.includes('id="a-copy-2"'),
+      'child ids are rewritten in the clone')
+  } finally { await host.close() }
+})

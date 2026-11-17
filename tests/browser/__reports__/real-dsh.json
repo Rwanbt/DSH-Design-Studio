@@ -1,0 +1,105 @@
+{
+  "results": [
+    {
+      "step": "resolve DSH installation",
+      "status": "PASS",
+      "detail": "/mnt/Stockage/App/DeepSeekHarness/deepseek-harness (228605256 bytes), archive present"
+    },
+    {
+      "step": "reuse caller credentials for a real turn",
+      "status": "PASS",
+      "detail": "copied into the disposable DSH_HOME (mode 600, deleted at the end)"
+    },
+    {
+      "step": "create disposable profile",
+      "status": "PASS",
+      "detail": "/tmp/dsh-g0-cRTMWS/dsh-home/profiles/e2e (shipped web template)"
+    },
+    {
+      "step": "install plugin into profile",
+      "status": "PASS",
+      "detail": "bundles: [\"@deepseek-ai/dsh-base\",\"@deepseek-ai/dsh-web-app\",\"@rwanbt/dsh-design-studio\"]"
+    },
+    {
+      "step": "model overlay for a real turn",
+      "status": "PASS",
+      "detail": "opencode-go/deepseek-v4.1-flash (no secret is logged)"
+    },
+    {
+      "step": "boot real DSH web app",
+      "status": "PASS",
+      "detail": "http://127.0.0.1:33337"
+    },
+    {
+      "step": "load real DSH Web UI",
+      "status": "PASS",
+      "detail": "\"Version locale de DSH\""
+    },
+    {
+      "step": "create a real DSH session",
+      "status": "PASS",
+      "detail": "session-cd74e027-ad84-49ef-b56f-5086330d7af3"
+    },
+    {
+      "step": "plugin route /health on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"ok\":true,\"editor\":\"native-prototype\",\"version\":1}"
+    },
+    {
+      "step": "plugin route /files on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 0 files"
+    },
+    {
+      "step": "open a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 nodes=1"
+    },
+    {
+      "step": "save a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 \"ok\" bytes=143"
+    },
+    {
+      "step": "stale revision refused on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 409"
+    },
+    {
+      "step": "one real assistant turn",
+      "status": "PASS",
+      "detail": "turn completed in 2s"
+    },
+    {
+      "step": "client bundle served by the real Host",
+      "status": "PASS",
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 99367 bytes, immediately=true, inject=[\"slots\"]"
+    },
+    {
+      "step": "client bundle registers the conversation view",
+      "status": "PASS",
+      "detail": "bundle declares conversation.view"
+    },
+    {
+      "step": "design studio workbench opens inside real DSH",
+      "status": "PASS",
+      "detail": "workbench rendered in the real conversation"
+    },
+    {
+      "step": "no plugin JavaScript errors in the real DSH page",
+      "status": "PASS",
+      "detail": "none from the plugin; environment-only: [deepseek-account] account read failed {field: profile}"
+    },
+    {
+      "step": "screenshot of the real DSH workbench",
+      "status": "PASS",
+      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench.png"
+    }
+  ],
+  "summary": {
+    "pass": 19,
+    "fail": 0,
+    "notRun": 0
+  },
+  "at": "2026-11-17T03:12:29.993Z"
+}

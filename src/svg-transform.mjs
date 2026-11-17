@@ -88,6 +88,25 @@ export function applySvgMatrix(matrix, point) {
  * map a parent-space *delta* into local space), or null for a degenerate
  * matrix. Callers must refuse rather than emit wrong coordinates.
  */
+/**
+ * Full affine inverse `[a,b,c,d,e,f]` of a 2x3 matrix, or null when singular.
+ * Used to map a pivot expressed in artboard space into an element's parent space.
+ */
+export function invertSvgMatrix(matrix) {
+  const [a, b, c, d, e, f] = assertMatrix(matrix, 'matrix')
+  const det = a * d - b * c
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null
+  const ia = d / det
+  const ib = -b / det
+  const ic = -c / det
+  const id = a / det
+  // Normalise negative zero: it is mathematically equivalent but would make
+  // identity comparisons (and JSON snapshots) unstable.
+  const clean = (value) => (Object.is(value, -0) ? 0 : value)
+  return [clean(ia), clean(ib), clean(ic), clean(id),
+    clean(-(ia * e + ic * f)), clean(-(ib * e + id * f))]
+}
+
 export function invertSvgMatrixLinear(matrix) {
   assertMatrix(matrix, 'matrix')
   const determinant = matrix[0] * matrix[3] - matrix[1] * matrix[2]

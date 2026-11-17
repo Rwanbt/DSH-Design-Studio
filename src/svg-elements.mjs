@@ -136,6 +136,13 @@ export function svgElementPatch(source, { id, operation, nested = false }) {
       !['duplicate', 'delete'].includes(operation)) {
     fail('invalid-target', 'Select an SVG element and a supported operation')
   }
+  // The lock must hold for every mutation, including the legacy leaf path.
+  try {
+    const scanned = scanSvgDocument(source).byId.get(id)
+    if (scanned && svgLockedAncestor(scanned)) fail('locked', 'Element is locked; unlock it before editing')
+  } catch (error) {
+    if (error?.code === 'locked') throw error
+  }
   if (nested === true) return nestedElementPatch(source, { id, operation })
   const {nodes, ids} = scannedElements(source)
   const node = nodes.find(node => node.id === id && EDITABLE.has(node.tag))

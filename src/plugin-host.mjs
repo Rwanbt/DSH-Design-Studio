@@ -150,7 +150,10 @@ export function createRouteHandler(ctx) {
           patches=[htmlVisualStylePatch(doc.source,{id:params.id,property:params.property,value:params.value})]
         } else if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          const operation = svgElementPatch(doc.source,{id:params.id,operation:params.operation})
+          // Nested/grouped layers are the normal case now: default to the nested
+          // implementation, which returns exact inverses and unique clone ids.
+          const operation = svgElementPatch(doc.source,{id:params.id,operation:params.operation,
+            nested:params.nested!==false})
           patches=[operation.patch]
           createdId=operation.selectedId
         } else if (params.kind === 'svg-add-shape') {
