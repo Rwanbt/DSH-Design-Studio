@@ -1,15 +1,27 @@
 import path from 'node:path'
 import { listHtmlVisualElements, listHtmlStylesheetLinks } from './html-visual.mjs'
-import { listCssVisualRules } from './css-visual.mjs'
+import { listCssVisualRuleDetails, parseCssSelectorList } from './css-visual.mjs'
 import { buildSafeLinkedPreviewCss } from './html-responsive-preview.mjs'
 
 const MAX_LINKS=8
 const MAX_CSS_SOURCE=512*1024
 
 /**
- * Read-only association between static HTML IDs/classes and nearby CSS files.
- * Intentionally NOT a CSS cascade resolver: these are *candidate rules*, not
- * browser computed styles and not evidence that a declaration takes effect.
+ * Read-only association between static HTML elements and nearby local CSS files.
+ *
+ * This is deliberately NOT a CSS cascade resolver and NOT a computed-style
+ * engine. Matches are labelled `certainty: 'possible'`: a structurally
+ * matching top-level rule in a local stylesheet, with an indicative static
+ * specificity. Inline styles, inheritance, `!important`, stylesheet order,
+ * conditional/at-rule rules, pseudo-classes and framework CSS can all change
+ * the value a browser finally applies; nothing here claims otherwise.
+ *
+ * Only structural selectors (type, `#id`, `.class`, compounds of those) are
+ * matched. Descendant/child/adjacent/sibling combinators, universal
+ * selectors, unsupported selector syntax and rules nested inside at-rules
+ * are refused with typed `ambiguousSelectors` entries instead of being
+ * guessed. External stylesheets, `@import` resolution, framework/preprocessor
+ * CSS and source maps are out of scope.
  */
 export function resolveStylesheetPath(htmlFile,href) {
   if(typeof htmlFile!=='string'||typeof href!=='string'||!href||href.length>256 ||
@@ -26,11 +38,51 @@ export function resolveStylesheetPath(htmlFile,href) {
   return resolved
 }
 
+function memberMatchesElement(member,element) {
+  if(member.hasCombinators||member.universalOnly)return false
+  const compound=member.compounds[0]
+  for(const token of compound.tokens){
+    if(token.kind==='tag'&&token.name!==element.tag)return false
+    if(token.kind==='id'&&token.name!==element.id)return false
+    if(token.kind==='class'&&!element.classes.includes(token.name))return false
+  }
+  return true
+}
+
+function memberIsApproximate(member) {
+  return !member.simple||member.compounds[0].tokens.length>1
+}
+
+function sheetAmbiguities(details) {
+  const found=[],seen=new Set()
+  const add=(selector,reason,extra={})=>{
+    const key=selector+'|'+reason
+    if(seen.has(key))return
+    seen.add(key)
+    found.push({selector,reason,...extra})
+  }
+  for(const rule of details){
+    if(rule.scope!=='top-level'){
+      add(rule.selector,'inside-at-rule',{atRule:rule.atRule||'unknown'})
+      continue
+    }
+    const parsed=parseCssSelectorList(rule.selector)
+    if(!parsed.ok){add(rule.selector,'unsupported-selector');continue}
+    for(const member of parsed.members){
+      if(member.hasCombinators)add(member.selector,'combinator-not-evaluated')
+      else if(member.universalOnly)add(member.selector,'universal-selector-not-evaluated')
+    }
+  }
+  return found
+}
+
 export async function collectHtmlCssCandidates(store,htmlDocument) {
   const elements=listHtmlVisualElements(htmlDocument.source)
   const refs=listHtmlStylesheetLinks(htmlDocument.source)
-  const stylesheets=[],styleMatches=elements.map(el=>({id:el.id,matches:[]}))
-  const byId=new Map(styleMatches.map(entry=>[entry.id,entry]))
+  const stylesheets=[]
+  const styleMatches=elements.map(element=>({
+    id:element.id,key:element.key,path:element.path,matches:[],
+  }))
   const visited=new Set()
   const permittedSelectors=new Set()
   const previewParts=[]
@@ -70,10 +122,13 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       stylesheets.push({file,status:'too-large'})
       continue
     }
-    const rules=listCssVisualRules(sheet.source)
+    const details=listCssVisualRuleDetails(sheet.source)
+    const parsedRules=details.map(rule=>({
+      rule,parsed:rule.scope==='top-level'?parseCssSelectorList(rule.selector):null,
+    }))
     // Account for the newline that joins successive linked sheets as well.
     const separator=previewParts.length?1:0
-    const safePreview=buildSafeLinkedPreviewCss(rules,permittedSelectors,previewLength+separator)
+    const safePreview=buildSafeLinkedPreviewCss(details,permittedSelectors,previewLength+separator)
     if(safePreview.css) {
       previewParts.push(safePreview.css)
       previewLength+=safePreview.css.length+separator
@@ -81,19 +136,37 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
     previewDeclarations+=safePreview.included
     previewOmitted+=safePreview.omitted
     previewTruncated ||= safePreview.truncated
-    stylesheets.push({file,status:'inspected',identity:sheet.identity,
-      ruleCount:rules.length})
-    for(const item of elements){
-      if(!item.editable)continue
-      for(const rule of rules){
-        if(rule.selector!=='#'+item.id &&
-           !(rule.selector.startsWith('.') && item.classes.includes(rule.selector.slice(1))))continue
-        byId.get(item.id).matches.push({
+    const ambiguousSelectors=sheetAmbiguities(details)
+    const summary={file,status:'inspected',identity:sheet.identity,
+      ruleCount:details.filter(rule=>rule.scope==='top-level').length}
+    if(ambiguousSelectors.length)summary.ambiguousSelectors=ambiguousSelectors
+    stylesheets.push(summary)
+    for(let elementIndex=0;elementIndex<elements.length;elementIndex+=1){
+      const element=elements[elementIndex]
+      if(!element.editable)continue
+      for(const {rule,parsed} of parsedRules){
+        if(rule.scope!=='top-level'||!parsed?.ok)continue
+        const matched=parsed.members.filter(member=>memberMatchesElement(member,element))
+        if(!matched.length)continue
+        const candidate={
           file,selector:rule.selector,cssIdentity:sheet.identity,
-          specificity:rule.selector.startsWith('#')?100:10,
-          editable:rule.editable,reason:rule.reason,
-          declarations:rule.declarations
-        })
+          matchedSelector:matched[0].selector,
+          specificity:Math.max(...matched.map(member=>member.specificity)),
+          specificityApproximate:matched.length>1||
+            matched.some(member=>memberIsApproximate(member)),
+          // A duplicated selector cannot be presented as one possible rule:
+          // the target declaration block is ambiguous, so it is refused.
+          certainty:rule.reasonCode==='duplicate-selector'?'ambiguous':'possible',
+          editable:rule.editable,reason:rule.reason,reasonCode:rule.reasonCode,
+          declarations:rule.declarations.map(({property,value})=>({property,value})),
+        }
+        if(matched.length>1)
+          candidate.matchedSelectors=matched.map(member=>member.selector)
+        const unresolved=parsed.members.filter(member=>
+          member.hasCombinators||member.universalOnly)
+        if(unresolved.length)
+          candidate.unresolvedSelectors=unresolved.map(member=>member.selector)
+        styleMatches[elementIndex].matches.push(candidate)
       }
     }
   }
