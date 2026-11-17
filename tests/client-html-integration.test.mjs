@@ -14,6 +14,14 @@ function find(node,predicate){
   return find(node.children||[],predicate)
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,25))
+async function until(predicate,message) {
+  const deadline=Date.now()+2500
+  while(Date.now()<deadline){
+    if(await predicate())return
+    await new Promise(resolve=>setTimeout(resolve,20))
+  }
+  assert.fail(message)
+}
 async function harness(run) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-html-client-'))
   const source='<!doctype html><html><body><main id="app" style="display: block;">'+
@@ -55,11 +63,11 @@ async function harness(run) {
     const render=()=>{index=0;return component({sessionId:'known'})}
     // Open default path, then choose a file in the same active workspace.
     await find(render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()
-    await settle()
-    const picked=find(render(),n=>n.props?.['aria-label']==='Open file page.html')
-    assert.ok(picked)
-    picked.props.onClick()
-    await settle()
+    await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Open file page.html'),
+      'Workspace HTML entry did not load')
+    find(render(),n=>n.props?.['aria-label']==='Open file page.html').props.onClick()
+    await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Select HTML element title'),
+      'HTML document did not open')
     await run({render,source,file,calls:()=>calls})
   }finally{await rm(root,{recursive:true,force:true})}
 }
@@ -85,9 +93,13 @@ test('HTML inspector edits native style and allows exact Undo without invoking a
   const apply=find(app.render(),n=>n.props?.['aria-label']==='Apply HTML visual style')
   assert.ok(apply)
   apply.props.onClick()
-  await settle()
+  const expected=app.source.replace('color: red','color: #bda991')
+  await until(async()=>await readFile(app.file,'utf8')===expected,
+    'Native HTML style change did not commit')
   const modified=await readFile(app.file,'utf8')
-  assert.equal(modified,app.source.replace('color: red','color: #bda991'))
+  assert.equal(modified,expected)
+  await until(()=>find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit')?.props.disabled===false,
+    'Undo history was not ready')
   const writes=app.calls().filter(c=>c.method==='POST')
   assert.equal(writes.length,1)
   assert.equal(writes[0].body.kind,'html-style')
@@ -97,7 +109,7 @@ test('HTML inspector edits native style and allows exact Undo without invoking a
   const undo=find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit')
   assert.ok(undo)
   undo.props.onClick()
-  await settle()
+  await until(async()=>await readFile(app.file,'utf8')===app.source,'HTML undo did not restore source')
   assert.equal(await readFile(app.file,'utf8'),app.source)
 }))
 test('visual HTML editor cannot save when unsaved source differs from the opened revision',()=>harness(async app=>{
@@ -195,9 +207,13 @@ test('HTML click handler refuses stale document identity after a native save',()
   find(app.render(),n=>n.props?.['aria-label']==='HTML style value')
     .props.onChange({target:{value:'#aabbcc'}})
   find(app.render(),n=>n.props?.['aria-label']==='Apply HTML visual style').props.onClick()
-  await settle()
-  const actual=(await readFile(app.file,'utf8'))
-  assert.ok(actual.includes('#aabbcc'))
+  await until(async()=>(await readFile(app.file,'utf8')).includes('#aabbcc'),
+    'Style change not saved before stale-frame guard test')
+  await until(()=>{
+    const tree=app.render(),frame=find(tree,n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+    const applying=find(tree,n=>n.props?.['aria-label']==='Apply HTML visual style')
+    return frame?.props.srcDoc.includes('#aabbcc') && !applying?.props.disabled
+  },'Preview did not render new native revision')
   browser.fire(browser.targetTitle)
   const newFrame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
   assert.equal(newFrame.props.srcDoc.includes('[id="title"]{outline:'),false,
@@ -209,6 +225,7 @@ test('HTML preview refuses click mapping during an unsaved source draft',()=>har
   frame.props.onLoad({currentTarget:browser.frame})
   find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
     .props.onChange({target:{value:app.source+'<!-- draft -->'}})
+  app.render() // Simulated React flush: refresh live event-handler context.
   browser.fire(browser.targetTitle)
   const updated=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
   assert.equal(updated.props.srcDoc.includes('[id="title"]{outline:'),false)
