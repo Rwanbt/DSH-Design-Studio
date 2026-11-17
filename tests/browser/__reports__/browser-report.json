@@ -1,7 +1,7 @@
 {
-  "build": "ef609a9ef6e8572e13f27244bfb1cf82ed018039",
+  "build": "4bd6995e78fdc2cdec270f58decc49ad8aa0bcfe",
   "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
-  "startedAt": "2026-11-17T03:19:20.161Z",
+  "startedAt": "2026-11-17T03:41:30.373Z",
   "browsers": {
     "chromium": {
       "version": "145.0.7632.6",
@@ -78,7 +78,7 @@
         },
         {
           "name": "structure: rotate and scale write one normalised matrix about the shape centre",
-          "checks": 10,
+          "checks": 12,
           "failures": [],
           "consoleErrors": [],
           "status": "PASS"
@@ -91,14 +91,21 @@
           "status": "PASS"
         },
         {
+          "name": "structure: rotating a layer inside a translated group keeps its centre fixed",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
           "name": "html: element text is edited in place and undo restores the exact bytes",
           "checks": 8,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:33219/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33219/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33219/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33219/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+            "console: Loading the stylesheet 'http://127.0.0.1:41201/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:41201/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:41201/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:41201/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
           ],
           "status": "PASS"
         },
@@ -107,10 +114,10 @@
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:41441/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:41441/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:41441/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:41441/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+            "console: Loading the stylesheet 'http://127.0.0.1:35803/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35803/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35803/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35803/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
           ],
           "status": "PASS"
         },
@@ -128,10 +135,10 @@
           "checks": 9,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:37765/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:37765/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:37765/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:37765/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+            "console: Loading the stylesheet 'http://127.0.0.1:39359/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39359/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39359/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39359/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
           ],
           "status": "PASS"
         },
@@ -147,12 +154,12 @@
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33791/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34901/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
           ],
           "status": "PASS"
         },
@@ -161,14 +168,14 @@
           "checks": 6,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
-            "console: Loading the stylesheet 'http://127.0.0.1:33481/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36733/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
           ],
           "status": "PASS"
         },
@@ -206,7 +213,7 @@
         },
         {
           "name": "security: untrusted HTML stays inert and offline inside the preview frame",
-          "checks": 22,
+          "checks": 30,
           "failures": [],
           "consoleErrors": [
             "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
@@ -214,6 +221,17 @@
             "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
             "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
             "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
+            "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked.",
+            "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
+            "console: Loading the stylesheet 'https://evil.invalid/import.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
             "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
             "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
             "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
@@ -224,15 +242,7 @@
             "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
             "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
             "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
-            "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
-            "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
-            "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked.",
-            "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
-            "console: Loading the stylesheet 'https://evil.invalid/import.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's",
-            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
-            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
-            "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
-            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
             "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
             "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
             "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked."
@@ -250,12 +260,21 @@
           "status": "PASS"
         },
         {
+          "name": "security: an SVG referencing remote assets previews with an inert empty sandbox",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the image 'https://evil.invalid/asset.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked."
+          ],
+          "status": "PASS"
+        },
+        {
           "name": "security: linked CSS projection keeps validated rules and drops @import/url() resources",
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:38957/ok.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'sty",
-            "console: Loading the stylesheet 'http://127.0.0.1:38957/evil.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's"
+            "console: Loading the stylesheet 'http://127.0.0.1:39123/ok.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'sty",
+            "console: Loading the stylesheet 'http://127.0.0.1:39123/evil.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's"
           ],
           "status": "PASS"
         },
@@ -285,7 +304,7 @@
           "checks": 4,
           "failures": [],
           "consoleErrors": [
-            "console: Loading the stylesheet 'http://127.0.0.1:45497/r.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'styl"
+            "console: Loading the stylesheet 'http://127.0.0.1:33685/r.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'styl"
           ],
           "status": "PASS"
         },
@@ -374,7 +393,7 @@
         },
         {
           "name": "structure: rotate and scale write one normalised matrix about the shape centre",
-          "checks": 10,
+          "checks": 12,
           "failures": [],
           "consoleErrors": [],
           "status": "PASS"
@@ -387,14 +406,21 @@
           "status": "PASS"
         },
         {
+          "name": "structure: rotating a layer inside a translated group keeps its centre fixed",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
           "name": "html: element text is edited in place and undo restores the exact bytes",
           "checks": 8,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35825/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35825/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35825/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35825/styles.css from being applied because it violates the following directive: “"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:45201/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:45201/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:45201/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:45201/styles.css from being applied because it violates the following directive: “"
           ],
           "status": "PASS"
         },
@@ -403,10 +429,10 @@
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:41123/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:41123/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:41123/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:41123/styles.css from being applied because it violates the following directive: “"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:43915/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:43915/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:43915/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:43915/styles.css from being applied because it violates the following directive: “"
           ],
           "status": "PASS"
         },
@@ -422,10 +448,10 @@
           "checks": 9,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:42721/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:42721/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:42721/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:42721/styles.css from being applied because it violates the following directive: “"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44173/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44173/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44173/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44173/styles.css from being applied because it violates the following directive: “"
           ],
           "status": "PASS"
         },
@@ -441,11 +467,12 @@
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35937/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35937/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35937/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35937/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:35937/styles.css from being applied because it violates the following directive: “"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:33387/styles.css from being applied because it violates the following directive: “"
           ],
           "status": "PASS"
         },
@@ -454,14 +481,14 @@
           "checks": 6,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39503/styles.css from being applied because it violates the following directive: “"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44517/styles.css from being applied because it violates the following directive: “"
           ],
           "status": "PASS"
         },
@@ -495,23 +522,26 @@
         },
         {
           "name": "security: untrusted HTML stays inert and offline inside the preview frame",
-          "checks": 18,
+          "checks": 25,
           "failures": [],
           "consoleErrors": [
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://evil.invalid/sheet.css from being applied because it violates the following directive: “sty",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://evil.invalid/import.css from being applied because it violates the following directive: “st",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (default-src) at https://evil.invalid/prefetch because it violates the following directive: “default-",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (img-src) at https://evil.invalid/pixel.png because it violates the following directive: “img-src dat",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (object-src) at https://evil.invalid/obj because it violates the following directive: “object-src 'no",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://evil.invalid/frame because it violates the following directive: “frame-src 'no",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (img-src) at https://evil.invalid/bg.png because it violates the following directive: “img-src data:”",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://evil.invalid/frame because it violates the following directive: “frame-src 'no",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://evil.invalid/sheet.css from being applied because it violates the following directive: “sty",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (img-src) at https://evil.invalid/pixel.png because it violates the following directive: “img-src dat",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (object-src) at https://evil.invalid/obj because it violates the following directive: “object-src 'no",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://evil.invalid/frame because it violates the following directive: “frame-src 'no",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (default-src) at https://evil.invalid/prefetch because it violates the following directive: “default-",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://evil.invalid/sheet.css from being applied because it violates the following directive: “sty",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (img-src) at https://evil.invalid/pixel.png because it violates the following directive: “img-src dat",
             "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (object-src) at https://evil.invalid/obj because it violates the following directive: “object-src 'no",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://evil.invalid/frame because it violates the following directive: “frame-src 'no"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://evil.invalid/frame because it violates the following directive: “frame-src 'no",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (default-src) at https://evil.invalid/prefetch because it violates the following directive: “default-"
           ],
           "status": "PASS"
         },
@@ -523,12 +553,21 @@
           "status": "PASS"
         },
         {
+          "name": "security: an SVG referencing remote assets previews with an inert empty sandbox",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked the loading of a resource (img-src) at https://evil.invalid/asset.png because it violates the following directive: “img-src dat"
+          ],
+          "status": "PASS"
+        },
+        {
           "name": "security: linked CSS projection keeps validated rules and drops @import/url() resources",
           "checks": 5,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44643/ok.css from being applied because it violates the following directive: “styl",
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:44643/evil.css from being applied because it violates the following directive: “st"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39905/ok.css from being applied because it violates the following directive: “styl",
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:39905/evil.css from being applied because it violates the following directive: “st"
           ],
           "status": "PASS"
         },
@@ -558,7 +597,7 @@
           "checks": 4,
           "failures": [],
           "consoleErrors": [
-            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:46775/r.css from being applied because it violates the following directive: “style"
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:34069/r.css from being applied because it violates the following directive: “style"
           ],
           "status": "PASS"
         },
@@ -574,9 +613,9 @@
     }
   },
   "summary": {
-    "pass": 62,
+    "pass": 66,
     "fail": 0,
     "notRun": 0
   },
-  "finishedAt": "2026-11-17T03:21:05.882Z"
+  "finishedAt": "2026-11-17T03:43:24.290Z"
 }

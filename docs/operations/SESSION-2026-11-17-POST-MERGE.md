@@ -41,6 +41,10 @@ An independent read-only review of the whole session diff (`c97101e..HEAD`) retu
 
 P2 findings also fixed: an unregistered SVG sandbox spec, a composition assertion that could not fail, an over-claiming lock comment, ungrouping silently dropping group attributes (now refused with `unsupported-group`), a regex bypass in the preview neutraliser (entity-encoded `refresh` and a quoted `>`; now a quote-aware scanner), and evidence reports that were cited but gitignored (now tracked).
 
+### Windows intermittent failure: diagnosed, not papered over
+
+One HTML↔CSS navigation test failed intermittently on Windows only. Instead of raising a timeout again, the failure now reports the client's own state; the next failing run returned `{"alert":null,"hasReturnButton":true,"hasLinkedCssButton":false}` — proving the "return to HTML" click was a no-op because the client was still busy after the undo, not that the Host had failed. The test now waits until the button is actionable, and the same class of race is already guarded in the CSS integration tests.
+
 ### Security work beyond the plan
 
 - Measured the `<meta http-equiv="refresh">` / `<base>` vectors in real Chromium and Firefox: an isolated probe showed a body-level meta refresh DOES navigate an unsandboxed `srcDoc` frame and does NOT navigate a frame with our `sandbox="allow-same-origin"`. Rather than relying on one browser behaviour, the preview projection now also strips `meta refresh` and `base` (the file on disk is untouched). Recorded in `docs/adr/ADR-022-HTML-PREVIEW-SECURITY-VERIFIED.md`, asserted on both engines.

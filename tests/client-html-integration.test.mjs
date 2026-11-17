@@ -307,6 +307,11 @@ test('HTML CSS candidate navigation uses the real CSS inspector and native Undo,
   find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit').props.onClick()
   await until(async()=>await readFile(cssFile,'utf8')==='#title{color:red}\n.card{gap:8px}\n',
     'Native stylesheet Undo failed')
+  // Clicking while the client is still busy is a no-op in the component (and the
+  // real button is disabled then): wait until it is actionable, otherwise the
+  // test races the reload that the undo already triggered.
+  await until(()=>find(app.render(),n=>n.props?.['aria-label']==='Return to linked HTML page')?.props.disabled===false,
+    'Return button never became enabled',()=>clientDiagnostics(app))
   const back=find(app.render(),n=>n.props?.['aria-label']==='Return to linked HTML page')
   assert.ok(back)
   back.props.onClick()
