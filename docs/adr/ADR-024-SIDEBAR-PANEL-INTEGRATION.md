@@ -42,7 +42,7 @@ Un resolver **par espace de travail**, à côté du resolver par session existan
 
 1. **ADR-024** (ce document) — la décision et les contrats.
 2. **Host** — *livré* (commit `feat(host): resolve workspace ids for sidebar-panel routes`) : resolver `workspaceId` + `/workspaces`, routes `files`/`document`/`apply`/`create` cadrées espace de travail, avec tests unitaires (id inconnu, id en forme de chemin, id d'un autre espace, dossier disparu, cible ambiguë, registre absent, verrou, révision périmée) et sans modifier le comportement de la voie session — prouvé par `tests/workspace-scoped-routes.test.mjs` (8 tests) et par les 42 tests de routes existants restés verts.
-3. **Client** : enregistrement `sidebar.panellist` (id `design-studio`) + `main` (clé `design-studio`), panneau réutilisant le composant Studio avec un transport espace de travail ; état vide honnête quand aucun espace de travail n'existe ; `layout.selectPanel` pour l'ouverture.
+3. **Client** — *livré* (commit `feat(client): register a sidebar cell and its workspace panel`) : enregistrement `sidebar.panellist` (id `design-studio`, icône SVG au gabarit demandé) + `main` (clé `design-studio`), panneau réutilisant le composant Studio avec un transport espace de travail (aucun `sessionId` n'est envoyé par le panneau), état honnête pour « registre absent » et « aucun espace de travail », sélecteur seulement à partir de deux espaces de travail. `layout.selectPanel` s'est révélé inutile : la barre latérale DSH adresse déjà la cellule `main` du même id — aucune API détournée n'a donc été utilisée.
 4. **Preuve** : gate DSH réelle — la ligne de barre latérale existe et le panneau liste un fichier réel de l'espace de travail, dans l'app Web **et** dans l'app Desktop.
 
 ## Ce qui ne change pas

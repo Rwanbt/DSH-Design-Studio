@@ -49,7 +49,7 @@ Les trois modèles sont du source natif que les inspecteurs existants savent dé
 | Niveau | Preuve | Résultat |
 |---|---|---|
 | 1 — `npm run check` | `tests/native-create.test.mjs` (14 tests) + 4 tests de route dans `tests/plugin-host.test.mjs` | **428/428 PASS** |
-| 2 — `npm run test:browser` | `tests/browser/specs/create.mjs` : création SVG réelle + ouverture du canevas + octets disque, création CSS + édition de règle, refus d'un chemin occupé sans altération des octets | **78 PASS / 0 FAIL** (39 specs × Chromium + Firefox) |
+| 2 — `npm run test:browser` | `tests/browser/specs/create.mjs` : création SVG réelle + ouverture du canevas + octets disque, création CSS + édition de règle, refus d'un chemin occupé sans altération des octets | **84 PASS / 0 FAIL** (42 specs × Chromium + Firefox) |
 | 3 — `npm run test:dsh` | non ré-exécuté après ce changement | **NOT_RUN** |
 
 Le niveau 3 reste `NOT_RUN` : le harnais DSH réel ouvre une fenêtre, ce qui est incompatible avec la session en cours. Il doit être ré-exécuté avant toute release candidate, et il ne peut pas être remplacé par les niveaux 1–2.
