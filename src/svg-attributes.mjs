@@ -1,4 +1,6 @@
 /** Conservative SVG source-span inspector; never serializes the XML tree. */
+import { scanSvgDocument } from './svg-document.mjs'
+
 const TAGS = new Set(['svg','g','rect','circle','ellipse','line','polyline','polygon','path','text','use'])
 const PROPS = new Set(['fill','stroke','stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
 const NUMERIC = new Set(['stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','font-size','letter-spacing'])
@@ -74,7 +76,7 @@ export function svgRootAttributes(source) {
   return result
 }
 
-export function listEditableSvgNodes(source) {
+function legacyNodes(source) {
   const used=new Set()
   const nodes=[]
   for(const item of tags(source)) {
@@ -88,6 +90,52 @@ export function listEditableSvgNodes(source) {
     nodes.push({id,tag:item.tag,attributes:Object.fromEntries(item.attrs.filter(a=>PROPS.has(a.name)).map(a=>[a.name,a.value]))})
   }
   return nodes
+}
+
+function unlocated(node) {
+  return {...node,depth:null,parentId:null,parentTag:null,ancestorIds:[],siblingIndex:null,
+    order:null,isGroup:node.tag==='g',start:null,openEnd:null,contentStart:null,contentEnd:null,
+    end:null,selfClosing:null,readOnly:true,structure:false}
+}
+
+function located(node,scan) {
+  const parent=scan.parent
+  // Named ancestor ids only (the SVG root and anonymous wrappers have no id);
+  // `parentTag` still names the immediate parent even when it is anonymous.
+  const ancestorIds=[]
+  for(let current=parent;current;current=current.parent)if(current.id)ancestorIds.unshift(current.id)
+  return {...node,depth:scan.depth,parentId:parent?parent.id:null,parentTag:parent?parent.tag:null,
+    ancestorIds,siblingIndex:scan.siblingIndex,order:scan.order,isGroup:scan.tag==='g',
+    start:scan.start,openEnd:scan.openEnd,contentStart:scan.contentStart,contentEnd:scan.contentEnd,
+    end:scan.end,selfClosing:scan.selfClosing,readOnly:scan.readOnly,structure:true}
+}
+
+/**
+ * Hierarchical layer model, backwards compatible with the flat alpha listing.
+ * Each node now also exposes `depth`, `parentId`/`parentTag`/`ancestorIds`,
+ * `siblingIndex`, `order`, `isGroup`, its exact source span
+ * (`start`/`openEnd`/`contentStart`/`contentEnd`/`end`, `selfClosing`) and
+ * `readOnly` (content of `<defs>`, `<symbol>`, gradients, … is listed but not
+ * directly editable).
+ *
+ * When the document cannot be mapped structurally (for example a tolerated
+ * legacy malformed fragment), the flat listing is still returned with
+ * `structure:false` and null hierarchy fields rather than guessing offsets.
+ * Ids that only exist inside comments, CDATA or quoted attribute values are
+ * never reported as editable nodes.
+ */
+export function listEditableSvgNodes(source) {
+  const nodes=legacyNodes(source)
+  let scan=null
+  try { scan=scanSvgDocument(source) } catch { scan=null }
+  if(!scan) return nodes.map(unlocated)
+  const result=[]
+  for(const node of nodes) {
+    const exact=scan.byId.get(node.id)
+    if(!exact || exact.tag!==node.tag) continue
+    result.push(located(node,exact))
+  }
+  return result
 }
 
 function validatedValue(attribute,value) {

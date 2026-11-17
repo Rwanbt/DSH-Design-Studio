@@ -3,7 +3,11 @@
  * Never executes SVG, reconstructs a DOM, or rewrites unrelated markup.
  * This is NOT a general-purpose XML parser; reject constructs we cannot map.
  */
+import { scanSvgDocument, svgLockedAncestor } from './svg-document.mjs'
+
 const EDITABLE = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'text'])
+const NESTED_EDITABLE = new Set([...EDITABLE, 'g'])
+const ID_PATTERN = /^[A-Za-z_][\w.:-]*$/
 const MAX_SOURCE = 8 * 1024 * 1024
 
 function fail(code, message) {
@@ -127,11 +131,12 @@ function scannedElements(source) {
 }
 
 /** Return one precise source-span patch for deleting or duplicating a simple element. */
-export function svgElementPatch(source, { id, operation }) {
-  if (typeof id !== 'string' || !/^[A-Za-z_][\w.:-]*$/.test(id) ||
+export function svgElementPatch(source, { id, operation, nested = false }) {
+  if (typeof id !== 'string' || !ID_PATTERN.test(id) ||
       !['duplicate', 'delete'].includes(operation)) {
     fail('invalid-target', 'Select an SVG element and a supported operation')
   }
+  if (nested === true) return nestedElementPatch(source, { id, operation })
   const {nodes, ids} = scannedElements(source)
   const node = nodes.find(node => node.id === id && EDITABLE.has(node.tag))
   if (!node) fail('unknown-node', 'SVG layer not found')
@@ -157,5 +162,89 @@ export function svgElementPatch(source, { id, operation }) {
   return {
     patch: { start: node.end, end: node.end, before: '', after: clone },
     selectedId: newId,
+  }
+}
+
+function subtreeOf(node) {
+  const members = []
+  const walk = (current) => {
+    members.push(current)
+    for (const child of current.children) walk(child)
+  }
+  walk(node)
+  return members
+}
+
+/**
+ * Nested/grouped duplicate and delete, enabled explicitly with
+ * `{nested:true}` so the historical conservative leaf-only contract of
+ * `svgElementPatch` is preserved for existing callers.
+ *
+ * - delete removes the exact source span (children included);
+ * - duplicate copies the exact source span and rewrites every element id in
+ *   the clone to a fresh unique id (`<id>-copy`, `<id>-copy-2`, …), so a
+ *   duplicated group never produces duplicate ids.
+ * Bytes outside the selected span are never rewritten.
+ */
+function nestedElementPatch(source, { id, operation }) {
+  const scan = scanSvgDocument(source)
+  const node = scan.byId.get(id)
+  if (!node) fail('unknown-node', 'SVG layer not found')
+  if (node === scan.root || !NESTED_EDITABLE.has(node.tag)) {
+    fail('unsupported-svg', 'Only editable SVG layers and groups can be changed here')
+  }
+  if (node.readOnly) fail('read-only', 'Referenced SVG content is read-only')
+  if (svgLockedAncestor(node)) fail('locked', 'SVG layer is locked')
+  if (node.end == null) fail('invalid-svg', 'SVG layer must be well-formed and closed')
+  const before = source.slice(node.start, node.end)
+  if (operation === 'delete') {
+    return {
+      patch: { start: node.start, end: node.end, before, after: '' },
+      selectedId: null,
+      nested: true,
+    }
+  }
+  if (!node.attributes.has('id')) fail('invalid-target', 'Layer requires an explicit ID')
+  const used = new Set(scan.byId.keys())
+  const allocated = new Map()
+  const allocate = (original) => {
+    if (allocated.has(original)) return allocated.get(original)
+    let candidate = original + '-copy'
+    if (used.has(candidate)) {
+      let suffix = 2
+      while (used.has(original + '-copy-' + suffix)) {
+        suffix += 1
+        if (suffix > 10000) fail('too-many-shapes', 'Cannot allocate unique SVG ID')
+      }
+      candidate = original + '-copy-' + suffix
+    }
+    used.add(candidate)
+    allocated.set(original, candidate)
+    return candidate
+  }
+  const edits = []
+  for (const member of subtreeOf(node)) {
+    const attribute = member.attributes.get('id')
+    if (!attribute) continue
+    if (!ID_PATTERN.test(attribute.value)) fail('ambiguous-svg', 'Cannot duplicate an unaddressable SVG id')
+    edits.push({
+      start: attribute.valueStart - node.start,
+      end: attribute.valueEnd - node.start,
+      after: allocate(attribute.value),
+    })
+  }
+  edits.sort((left, right) => left.start - right.start)
+  let clone = ''
+  let cursor = 0
+  for (const edit of edits) {
+    clone += before.slice(cursor, edit.start) + edit.after
+    cursor = edit.end
+  }
+  clone += before.slice(cursor)
+  return {
+    patch: { start: node.end, end: node.end, before: '', after: clone },
+    selectedId: allocated.get(id),
+    idMap: Object.fromEntries(allocated),
+    nested: true,
   }
 }
