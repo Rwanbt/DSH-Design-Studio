@@ -70,7 +70,7 @@ async function harness(run,options={}) {
     await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Open file page.html'),
       'Workspace HTML entry did not load')
     find(render(),n=>n.props?.['aria-label']==='Open file page.html').props.onClick()
-    await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Select HTML element title'),
+    await until(()=>!!find(render(),n=>String(n.props?.['aria-label']||'').startsWith('Select HTML element ')),
       'HTML document did not open')
     await run({render,source,file,root,calls:()=>calls})
   }finally{await rm(root,{recursive:true,force:true})}
