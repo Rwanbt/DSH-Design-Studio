@@ -81,6 +81,19 @@ window.__ModuleLoader__.load({
       const dragRef=React.useRef(null)
       const panRef=React.useRef(null)
       const viewportRef=React.useRef(null)
+      const viewportWheelRef=React.useRef(null)
+      const viewportRefCallback=React.useRef(null)
+      if(!viewportRefCallback.current) {
+        // Callable ref: React calls it on mount, callers may still assign
+        // `.current` to provide a synthetic viewport (unit tests do this).
+        const callback=node=>{viewportRef.current=node;bindViewportWheel(node)}
+        Object.defineProperty(callback,'current',{
+          get:()=>viewportRef.current,
+          set:value=>{viewportRef.current=value},
+          configurable:true,
+        })
+        viewportRefCallback.current=callback
+      }
       const [canvasTool,setCanvasTool]=React.useState('select')
       const [penPathId,setPenPathId]=React.useState('')
       const [penOutgoing,setPenOutgoing]=React.useState(null)
@@ -245,9 +258,32 @@ window.__ModuleLoader__.load({
         const fit=Math.min(1,Math.max(0.125,(rect.height-28)/(rect.width*artboard.height/artboard.width)))
         setCamera({zoom:fit,offsetX:0,offsetY:0})
       }
+      function bindViewportWheel(node) {
+        const binding=viewportWheelRef.current
+        if(binding && binding.node===node) return
+        if(binding && binding.node) {
+          try{binding.node.removeEventListener('wheel',binding.handler,true)}catch(_){}
+          viewportWheelRef.current=null
+        }
+        if(!node || typeof node.addEventListener!=='function') return
+        const handler=event=>{
+          if(['textarea','input','select'].includes(String(event.target?.tagName||'').toLowerCase()))return
+          if(event.cancelable===false) return
+          event.__dshWheelPrevented=true
+          event.preventDefault()
+        }
+        node.addEventListener('wheel',handler,{passive:false,capture:true})
+        viewportWheelRef.current={node,handler}
+      }
       function onCanvasWheel(event) {
         if(['textarea','input','select'].includes(String(event.target?.tagName||'').toLowerCase()))return
-        event.preventDefault()
+        // React attaches wheel listeners passively, so preventDefault() there only
+        // warns and the page still scrolls. bindViewportWheel installs a
+        // non-passive capture listener that cancels the scroll once per event.
+        // React copies a fixed property whitelist into its synthetic event, so the
+        // marker installed on the native event must be read from nativeEvent.
+        const alreadyPrevented=event.__dshWheelPrevented || event.nativeEvent?.__dshWheelPrevented
+        if(!alreadyPrevented) event.preventDefault()
         if(event.ctrlKey || event.metaKey) {
           changeZoom(Math.exp(-event.deltaY*0.002),{x:event.clientX,y:event.clientY})
         } else {
@@ -786,7 +822,9 @@ window.__ModuleLoader__.load({
         }
         void save({kind:'svg-attributes',edits})
       }
-      return h('section',{className:'dsh-studio-workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
+      return h('section',{className:'dsh-studio-workbench',lang:'fr',
+        'aria-label':'DSH Design Studio workbench',
+        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
         h('style',null,[
           '.dsh-studio-workbench *{box-sizing:border-box}',
           '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid #bca58c;outline-offset:1px}',
@@ -794,6 +832,8 @@ window.__ModuleLoader__.load({
           '.dsh-studio-layout{min-height:0;flex:1;overflow:auto}',
           '.dsh-studio-canvas{background-color:#191a1d;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
           '.dsh-studio-workbench{container-type:inline-size}',
+          '@media (prefers-reduced-motion:reduce){.dsh-studio-workbench,.dsh-studio-workbench *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}',
+          '@media (prefers-contrast:more){.dsh-studio-workbench{border-color:#e8e7e2}}',
           '.dsh-studio-mobile-tabs{display:none}',
           '@container (max-width:1080px){.dsh-studio-layout{grid-template-columns:170px minmax(230px,1fr) 230px!important}}',
           '@container (max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #414141;background:#232529}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
@@ -931,7 +971,7 @@ window.__ModuleLoader__.load({
                     )
                   ):
               artboard && doc.format==='svg'?
-                h('div',{className:'dsh-studio-viewport',ref:viewportRef,
+                h('div',{className:'dsh-studio-viewport',ref:viewportRefCallback.current,
                   'aria-label':'Canvas viewport',
                   onWheel:onCanvasWheel,
                   onPointerDown:startPan,
@@ -939,11 +979,17 @@ window.__ModuleLoader__.load({
                   onPointerUp:endPan,
                   onPointerCancel:endPan,
                   style:{position:'relative',width:'100%',height:'100%',minHeight:340,flex:'1 1 auto',
+                    containerType:'size',
                     overflow:'hidden',touchAction:'none',borderRadius:6,
                     cursor:panRef.current?'grabbing':canvasTool==='pen'?'crosshair':canvasTool==='hand'||spaceHeld?'grab':'default',
                     background:'transparent'}},
                   h('div',{className:'dsh-studio-artboard',
-                    style:{position:'absolute',left:'50%',top:'50%',width:'100%',
+                    style:{position:'absolute',left:'50%',top:'50%',
+                      // Fit BOTH dimensions: a wide viewBox must never be clipped
+                      // vertically, otherwise top-left handles become unreachable
+                      // and every hit target drifts away from the rendered shape.
+                      width:'min(100cqw, calc(100cqh * '+(artboard.width/artboard.height)+'))',
+                      maxWidth:'100%',maxHeight:'100%',
                       aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',
                       transform:'translate(-50%, -50%) translate('+camera.offsetX+'px, '+camera.offsetY+'px) scale('+camera.zoom+')',
                       transformOrigin:'center center',
