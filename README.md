@@ -54,3 +54,8 @@ The candidate repos and their verified license files are tracked in the source m
 ## License
 
 MIT — see `LICENSE`.
+
+
+### Interactive UI reference (Graphite V3)
+
+The [original, self-contained interactive HTML mockup](docs/design/DSH-Design-Studio-V3-Graphite-interactive.html) is committed on `dev`. Open it locally in a browser to inspect the approved initial visual direction; consult [UI design notes](docs/design/INTERFACE-V3-GRAPHITE.md) for constraints and unfinished items. This prototype is **not** the native plugin implementation and does not constitute evidence of host integration or production readiness.
