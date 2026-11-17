@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH Design Studio · browser harness</title>
+<style>
+  :root { color-scheme: dark }
+  html, body { margin: 0; height: 100%; background: #1b1c1e; color: #e8e7e2;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif }
+  #harness-bar { position: fixed; inset: 0 0 auto 0; height: 18px; z-index: 10;
+    display: flex; align-items: center; gap: 8px; padding: 0 8px;
+    font-size: 10px; letter-spacing: .04em; color: #7f838a; background: #17181a;
+    border-bottom: 1px solid #26282b; pointer-events: none }
+  #root { position: absolute; inset: 18px 0 0 0; display: flex; flex-direction: column }
+</style>
+</head>
+<body>
+<!--
+  Deliberately minimal stand-in for the DeepSeek Harness client shell.
+  It provides exactly the three integration points the plugin's client bundle is
+  allowed to use: window.__ModuleLoader__, require('react') and ctx.slots. Every
+  page, DOM node, pointer event, iframe, CSP and sandbox rule below this line is
+  the real browser: only the DSH host shell is simulated. The Host HTTP API is
+  NOT simulated: tests/browser/harness/host-server.mjs mounts the real
+  src/plugin-host.mjs route handler over a real filesystem.
+-->
+<div id="harness-bar"><span>conversation.view</span><span id="harness-slot">pending</span></div>
+<div id="root"></div>
+<script src="/react.js"></script>
+<script src="/react-dom.js"></script>
+<script>
+  window.__DSH_HARNESS__ = { sessionId: '__SESSION__', injected: null, registration: null,
+    ready: false, errors: [], fatal: false }
+  window.__ModuleLoader__ = { load(definition) { window.__pluginDefinition = definition } }
+  window.addEventListener('error', (event) => {
+    window.__DSH_HARNESS__.errors.push(String(event.message || 'error'))
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    window.__DSH_HARNESS__.errors.push('unhandledrejection: ' + String(event.reason))
+  })
+</script>
+<script src="/client.js"></script>
+<script>
+  (function boot() {
+    const state = window.__DSH_HARNESS__
+    const fail = (message) => { state.errors.push(message); state.fatal = true }
+    const definition = window.__pluginDefinition
+    if (!definition) return fail('client.js did not call window.__ModuleLoader__.load')
+    if (typeof definition.factory !== 'function') return fail('plugin definition has no factory')
+    const React = window.React
+    const ReactDOM = window.ReactDOM
+    if (!React || !ReactDOM) return fail('react/react-dom UMD bundles are missing')
+    let module
+    try {
+      module = definition.factory((name) => {
+        if (name === 'react') return React
+        throw new Error('unexpected require: ' + name)
+      })
+    } catch (error) { return fail('factory threw: ' + String(error)) }
+    if (!module || typeof module.apply !== 'function') return fail('plugin module exposes no apply()')
+    let component = null
+    const slots = {
+      inject(name, callback) {
+        state.injected = name
+        document.getElementById('harness-slot').textContent = 'inject ' + name
+        callback()
+      },
+      register(details, view) {
+        state.registration = { id: details && details.id, order: details && details.order,
+          name: details && details.name,
+          label: typeof details?.label === 'function' ? String(details.label()) : null }
+        component = view
+        return () => {}
+      },
+    }
+    try { module.apply({ slots }) } catch (error) { return fail('apply threw: ' + String(error)) }
+    if (!component) return fail('no conversation.view component registered')
+    try {
+      ReactDOM.createRoot(document.getElementById('root')).render(
+        React.createElement(component, { sessionId: state.sessionId }))
+    } catch (error) { return fail('render threw: ' + String(error)) }
+    state.ready = true
+  })()
+</script>
+</body>
+</html>

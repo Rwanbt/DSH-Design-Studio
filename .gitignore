@@ -1,0 +1,10 @@
+# dependencies (never committed; the core test suite runs with zero dependencies)
+node_modules/
+
+# test output
+test-results/
+tests/browser/__reports__/
+
+# local DSH / G0 artefacts
+.dsh-e2e/
+*.log

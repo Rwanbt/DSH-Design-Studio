@@ -1,16 +1,49 @@
 name: Core source patch tests
+
 on:
   push:
     branches: [main, dev]
   pull_request:
+
+permissions:
+  contents: read
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  # G1 requires the core suite to stay green on Linux AND Windows: the native
+  # file store, the advisory write lock and the multi-process tests must not
+  # depend on POSIX-only assumptions.
+  core:
+    name: core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm run check
+
+  # Real-browser gate: Chromium and Firefox with the real patch engine and real
+  # filesystem behind the real Host route handler. Only the DSH client shell is
+  # simulated here; tests/e2e/real-dsh.mjs covers the actual installation.
+  browser:
+    name: browser (chromium + firefox)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium firefox
+      # react-dom's UMD bundle is loaded by the harness shell, not by the plugin.
+      - run: npm run test:browser -- --json=tests/browser/__reports__/browser-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-report
+          path: tests/browser/__reports__/
+          if-no-files-found: warn
