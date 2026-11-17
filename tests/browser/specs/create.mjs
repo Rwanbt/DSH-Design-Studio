@@ -7,7 +7,7 @@
  * hold: a create really writes a valid native document that opens in the canvas,
  * and a create never replaces a file that already exists.
  */
-import { waitForDisk, openFileMenu } from './helpers.mjs'
+import { waitForDisk, openFileMenu, openWorkspaceFile, SVG_DOCUMENT } from './helpers.mjs'
 
 export const createSpec = {
   name: 'create: a new SVG document is written, listed and opened in the canvas',
@@ -67,6 +67,56 @@ export const createCssSpec = {
       { label: 'created css edit' })
     assert.ok(edited.includes(':root'), 'the template root rule survives the edit')
     assert.ok(edited.includes('body {'), 'the template body rule survives the edit')
+  },
+}
+
+export const createFeedbackSpec = {
+  name: 'create: the destination is visible before the click and the written path is announced afterwards',
+  async run({ page, harness, assert }) {
+    const region = page.getByRole('region', { name: 'Open a design file' })
+    await region.waitFor({ state: 'visible', timeout: 20000 })
+
+    // Before any click the user can read where a file would land and under which
+    // default name: the reported friction was a file written without knowing it.
+    const preview = region.locator('small', { hasText: 'Destination' })
+    assert.equal(await preview.count(), 1, 'the landing state must state the destination folder')
+    const previewText = await preview.innerText()
+    assert.ok(previewText.includes('nouveau-fichier'),
+      'the default file name must be visible: ' + JSON.stringify(previewText))
+    assert.ok(previewText.includes('{svg,html,css}'),
+      'the three creatable extensions must be visible: ' + JSON.stringify(previewText))
+    let wroteNothing = false
+    try {
+      await harness.read('nouveau-fichier.html')
+    } catch (_) {
+      wroteNothing = true
+    }
+    assert.equal(wroteNothing, true,
+      'simply reading the landing state must not write anything')
+
+    // The preview and the button title follow the typed name, so the write
+    // cannot land under a path the user did not see.
+    await page.getByLabel('New design file name').fill('essai.html')
+    const typedPreview = await preview.innerText()
+    assert.ok(typedPreview.includes('essai') && !typedPreview.includes('nouveau-fichier'),
+      'typing a name must replace the default in the preview: ' + JSON.stringify(typedPreview))
+    assert.equal(await page.getByRole('button', { name: 'Create HTML file' }).getAttribute('title'),
+      'Créer essai.html', 'the create button must name the exact path it will write')
+
+    await page.getByRole('button', { name: 'Create HTML file' }).click()
+    const status = page.locator('[data-created]')
+    await status.waitFor({ state: 'visible', timeout: 20000 })
+    assert.equal(await status.innerText(), 'Fichier créé : essai.html',
+      'the written path must be announced, not inferred')
+    assert.ok((await harness.read('essai.html')).includes('<h1'),
+      'the announced file must be the one written on disk')
+
+    // The notice describes the file it created; opening another document must
+    // not leave a stale claim on screen.
+    await harness.write('apres.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'apres.svg', { expect: 'svg' })
+    assert.equal(await page.locator('[data-created]').count(), 0,
+      'a creation notice must not survive opening another document')
   },
 }
 

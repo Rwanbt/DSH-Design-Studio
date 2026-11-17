@@ -23,7 +23,7 @@ import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
 import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 import { landingSpec, landingEmptySpec } from './landing.mjs'
-import { createSpec, createCssSpec, createRefusalSpec } from './create.mjs'
+import { createSpec, createCssSpec, createFeedbackSpec, createRefusalSpec } from './create.mjs'
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
@@ -44,6 +44,7 @@ export const specs = [
   landingEmptySpec,
   createSpec,
   createCssSpec,
+  createFeedbackSpec,
   createRefusalSpec,
   panelSpec,
   panelUnavailableSpec,

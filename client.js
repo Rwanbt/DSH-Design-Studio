@@ -427,6 +427,7 @@ window.__ModuleLoader__.load({
       const [file,setFile] = React.useState('design.svg')
       const [workspaceFiles,setWorkspaceFiles] = React.useState([])
       const [filesTruncated,setFilesTruncated] = React.useState(false)
+      const [notice,setNotice] = React.useState('')
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
@@ -570,6 +571,9 @@ window.__ModuleLoader__.load({
           setDragDelta(null);dragRef.current=null
           if(!force || (doc && doc.file!==targetFile)) {setUndoStack([]);setRedoStack([])}
           setWarning(data.warning||'')
+          // A creation notice belongs to the file it created, not to whatever is
+          // opened next.
+          if(doc?.file!==targetFile) setNotice('')
           const remembered = (data.nodes||[]).find(node=>node.id===retainSelection)
           setActive(remembered?retainSelection:'')
           const retainedAttr=remembered && remembered.attributes[attribute]?attribute:Object.keys(remembered?.attributes||{})[0]||''
@@ -614,6 +618,15 @@ window.__ModuleLoader__.load({
         if(opened)setShowFiles(false)
       }
       /**
+       * The exact path a create button will write, computed by the very rule the
+       * creation uses, so a preview can never disagree with what lands on disk.
+       */
+      function creationTarget(format, template=null) {
+        const typed=newName.trim()
+        const base=typed.replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')
+        return (base||(template?'graphite-v3':'nouveau-fichier'))+'.'+format
+      }
+      /**
        * Create a new native document and open it. The Host refuses to replace an
        * existing path, so a duplicate name is reported instead of overwriting a
        * file the user did not mean to touch.
@@ -622,16 +635,16 @@ window.__ModuleLoader__.load({
         if(!scopeReady||creating||busy) return
         if(refuseTextDraft())return
         if(doc && source!==doc.source){setError('Unsaved source changes: save or discard them before creating another file');return}
-        const typed=newName.trim()
-        const base=typed.replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')
-        const target=(base||(template?'graphite-v3':'nouveau-fichier'))+'.'+format
-        setCreating(true);setError('')
+        const target=creationTarget(format,template)
+        setCreating(true);setError('');setNotice('')
         try {
           await request('/create',{method:'POST',headers:{'content-type':'application/json'},
             body:JSON.stringify({...scopeBody,file:target,source:template||NEW_TEMPLATES[format]})})
           setNewName('')
           await loadWorkspaceFiles()
           await load(false,target)
+          // State the written path explicitly: silent creation was the friction.
+          setNotice('Fichier créé : '+target)
         }catch(e){
           setError(e.code==='already-exists'?'Un fichier occupe déjà ce chemin : '+target
             :e.code==='missing-directory'?'Ce dossier n’existe pas encore dans l’espace de travail.'
@@ -1536,7 +1549,7 @@ window.__ModuleLoader__.load({
           h('details',{className:'dsh-studio-menu'},h('summary',null,'Fichier'),h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0}},
             h('input',{style:field,'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
             h('button',{style:button,onClick:()=>load(false),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
-            h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',onClick:()=>void createDocument(format)},'+ '+format.toUpperCase()))))),
+            h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',title:'Créer '+creationTarget(format),onClick:()=>void createDocument(format)},'+ '+format.toUpperCase()))))),
            h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-muted',disabled:!doc,
              'aria-label':'Preview native document','aria-pressed':previewMode,
              onClick:()=>setPreviewMode(value=>!value)},glyph('previewBtn'),previewMode?'Retour à l’éditeur':'Aperçu'),
@@ -1668,6 +1681,8 @@ window.__ModuleLoader__.load({
               doc?.format==='svg'&&artboard&&h('span',{className:'dsh-studio-tag'},
                 Math.round(artboard.width)+' × '+Math.round(artboard.height)),
               h('span',{style:{flex:1}}),
+              notice&&h('span',{className:'dsh-studio-tag','data-created':notice,role:'status','aria-live':'polite',
+                title:'Fichier écrit dans l’espace de travail'},notice),
               h('span',{className:'dsh-studio-helper'},doc?'Fichier éditable':'Mode local')),
             h('div',{className:'dsh-studio-workspace'},!doc?h('div',{className:'dsh-studio-welcome',role:'region',
           'aria-label':'Open a design file',
@@ -1675,7 +1690,7 @@ window.__ModuleLoader__.load({
             justifyContent:'flex-start',overflow:'auto'}},
           h('strong',{style:{fontSize:18,fontWeight:600}},'Votre espace de création'),
            h('small',{style:{color:'var(--muted)'}},'SVG · HTML · CSS natifs'),
-           h('button',{style:button,type:'button','aria-label':'Create Graphite reference SVG',disabled:busy||creating||!scopeReady,onClick:()=>void createDocument('svg',GRAPHITE_EXAMPLE)},'Créer la maquette SVG'),
+           h('button',{style:button,type:'button','aria-label':'Create Graphite reference SVG',title:'Créer '+creationTarget('svg','graphite-v3'),disabled:busy||creating||!scopeReady,onClick:()=>void createDocument('svg',GRAPHITE_EXAMPLE)},'Créer la maquette SVG'),
           h('small',{style:{opacity:0.78,maxWidth:640,lineHeight:1.5}},
             'Choisissez un fichier de cet espace de travail ci-dessous, ou saisissez son chemin puis « Open ». '+
             'Le canevas, les calques et les propriétés apparaissent dès qu’un document est ouvert.'),
@@ -1696,11 +1711,18 @@ window.__ModuleLoader__.load({
               onChange:e=>setNewName(e.target.value),
               onKeyDown:e=>{if(e.key==='Enter')void createDocument('svg')}}),
             h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
-              'aria-label':'Create SVG file',onClick:()=>void createDocument('svg')},'+ SVG'),
+              'aria-label':'Create SVG file',title:'Créer '+creationTarget('svg'),onClick:()=>void createDocument('svg')},'+ SVG'),
             h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
-              'aria-label':'Create HTML file',onClick:()=>void createDocument('html')},'+ HTML'),
+              'aria-label':'Create HTML file',title:'Créer '+creationTarget('html'),onClick:()=>void createDocument('html')},'+ HTML'),
             h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
-              'aria-label':'Create CSS file',onClick:()=>void createDocument('css')},'+ CSS')),
+              'aria-label':'Create CSS file',title:'Créer '+creationTarget('css'),onClick:()=>void createDocument('css')},'+ CSS')),
+          // Show where a new file will land before the click: the Host writes
+          // into the workspace root, and a silent write was the actual friction.
+          h('small',{style:{opacity:0.72,overflowWrap:'anywhere',lineHeight:1.5}},
+            'Destination : ',
+            h('code',null,'espace de travail/'+
+              (newName.trim().replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')||'nouveau-fichier')),
+            h('code',null,'.{svg,html,css}')),
           workspaceFiles.length
             ? h('input',{style:{...field,maxWidth:420},value:fileSearch,'aria-label':'Filter design files',
                 placeholder:'Filtrer : nom, dossier, extension…',
