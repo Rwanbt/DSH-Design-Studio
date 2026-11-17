@@ -79,6 +79,13 @@ window.__ModuleLoader__.load({
       const [gridStep,setGridStep]=React.useState(10)
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
+      function disconnectHtmlPreview() {
+        const old=previewBindingRef.current
+        previewBindingRef.current=null
+        if(old) {
+          try{old.frameDoc.removeEventListener('click',old.handler,true)}catch(_){}
+        }
+      }
       async function load(force=false, targetFile=file, retainSelection='') {
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
         if(!sessionId) {setError('Open a conversation first');return false}
@@ -93,6 +100,7 @@ window.__ModuleLoader__.load({
             penGestureRef.current=null;penPendingRef.current=false
             panRef.current=null
           }
+          disconnectHtmlPreview()
           setFile(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
           setHtmlElements(data.htmlElements||[])
@@ -353,11 +361,7 @@ window.__ModuleLoader__.load({
         choose:chooseHtmlElement
       }
       function connectHtmlPreview(event) {
-        const old=previewBindingRef.current
-        if(old) {
-          try{old.frameDoc.removeEventListener('click',old.handler,true)}catch(_){}
-          previewBindingRef.current=null
-        }
+        disconnectHtmlPreview()
         if(!doc || !['html','htm'].includes(doc.format))return
         const frame=event?.currentTarget
         let frameDoc
@@ -367,8 +371,11 @@ window.__ModuleLoader__.load({
             typeof frameDoc.addEventListener!=='function')return
         const expectedFile=doc.file,expectedIdentity=doc.identity,expectedSession=sessionId
         const handler=event=>{
-          // Selection mode must also neutralize default link and form controls.
+          // Neutralize hyperlinks, form controls and navigations in the preview.
           event.preventDefault()
+          // Browser-generated clicks (mouse/touch/keyboard) are trusted. If
+          // scripts ever become possible here, synthetic DOM events are ignored.
+          if(event.isTrusted===false)return
           const context=previewContextRef.current
           if(!context || context.file!==expectedFile ||
              context.identity!==expectedIdentity ||
@@ -386,10 +393,12 @@ window.__ModuleLoader__.load({
           // The browser's parsed DOM and the source scanner must agree:
           // malformed HTML could otherwise hide a second matching id.
           let domMatches=0
-          for(const node of frameDoc.querySelectorAll('[id]')) {
-            if(node.getAttribute('id')===id)domMatches++
-            if(domMatches>1)break
-          }
+          try {
+            for(const node of frameDoc.querySelectorAll('[id]')) {
+              if(node.getAttribute('id')===id)domMatches++
+              if(domMatches>1)break
+            }
+          }catch(_){return}
           if(domMatches!==1)return
           context.choose(id)
         }
