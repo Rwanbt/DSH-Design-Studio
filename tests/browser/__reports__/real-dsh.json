@@ -13,7 +13,7 @@
     {
       "step": "create disposable profile",
       "status": "PASS",
-      "detail": "/tmp/dsh-g0-jLdlt0/dsh-home/profiles/e2e (shipped web template)"
+      "detail": "/tmp/dsh-g0-P0Rq2v/dsh-home/profiles/e2e (shipped web template)"
     },
     {
       "step": "install plugin into profile",
@@ -28,7 +28,7 @@
     {
       "step": "boot real DSH web app",
       "status": "PASS",
-      "detail": "http://127.0.0.1:40119"
+      "detail": "http://127.0.0.1:43165"
     },
     {
       "step": "load real DSH Web UI",
@@ -38,7 +38,7 @@
     {
       "step": "create a real DSH session",
       "status": "PASS",
-      "detail": "session-7ae68d40-edd9-4045-bf9c-1e0d24755917"
+      "detail": "session-3d73a76d-df5a-4e5b-813f-c02cd1e6eb0f"
     },
     {
       "step": "plugin route /health on the real Host",
@@ -103,7 +103,7 @@
     {
       "step": "boot the real DSH Desktop shell",
       "status": "PASS",
-      "detail": "Electron shell, CDP port 37875, Host http://127.0.0.1:41907"
+      "detail": "Electron shell, CDP port 37697, Host http://127.0.0.1:42899"
     },
     {
       "step": "the shell initializes its own desktop profile",
@@ -136,14 +136,19 @@
       "detail": "conversation.view tab opened and the workbench element is in the desktop DOM"
     },
     {
+      "step": "the workbench reaches the Host through the desktop protocol",
+      "status": "PASS",
+      "detail": "desktop-probe.svg listed from the workspace the application registered"
+    },
+    {
       "step": "workbench painted by the host theme in DSH Desktop",
       "status": "PASS",
-      "detail": "background=rgb(255, 255, 255), desktop --dsw-alias-bg-layer-1=rgb(255, 255, 255), box=994x658"
+      "detail": "background=rgb(255, 255, 255), desktop --dsw-alias-bg-layer-1=rgb(255, 255, 255), box=993x658"
     },
     {
       "step": "screenshot of the workbench in DSH Desktop",
       "status": "PASS",
-      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop.png (113581 bytes) + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop-element.png (57419 bytes, 1327x879)"
+      "detail": "/mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop.png (86345 bytes) + /mnt/Stockage/App/DSH-Design-Studio/docs/operations/evidence/dsh-workbench-desktop-element.png (48317 bytes, 993x658)"
     },
     {
       "step": "no plugin JavaScript errors in DSH Desktop",
@@ -157,9 +162,9 @@
     }
   ],
   "summary": {
-    "pass": 31,
+    "pass": 32,
     "fail": 0,
     "notRun": 0
   },
-  "at": "2026-11-17T14:07:27.364Z"
+  "at": "2026-11-17T14:20:20.686Z"
 }

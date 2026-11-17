@@ -202,6 +202,18 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
         sessionIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } } },
     }, null, 2) + '\n', 'utf8')
   }
+  // A file the workbench must find: this proves the renderer reaches the Host
+  // through the desktop protocol, not only that the view is mounted.
+  const activeWorkspace = await readFile(workspaceFile, 'utf8').then((body) => {
+    const store = JSON.parse(body)
+    const table = store?.tables?.workspaces ?? {}
+    const id = (store?.global?.workspaceIds ?? []).find((candidate) => table[candidate] && existsSync(table[candidate].path))
+    return id ? table[id].path : workspaceDir
+  }).catch(() => workspaceDir)
+  const probeName = 'desktop-probe.svg'
+  await writeFile(path.join(activeWorkspace, probeName),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">\n  <rect id="probe" x="10" y="10" width="40" height="30" fill="#bda991"/>\n</svg>\n',
+    'utf8').catch(() => {})
 
   // Phase 3 — second launch: the real renderer, with the bundle registered.
   shell = null
@@ -327,6 +339,32 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
         return { found: true, background: getComputedStyle(section).backgroundColor, tokenValue,
           width: Math.round(box.width), height: Math.round(box.height) }
       })
+      // The client calls the Host with RELATIVE URLs, which on dsh-app://app/
+      // only work if the application's protocol forwards them to the runtime.
+      // A rendered shell with an empty file list would look fine and be broken.
+      // The panel opens on demand ("Parcourir…"), it never lists files on mount.
+      // The visible label is localized and its aria-label overrides it, so the
+      // stable hook is the label the bundle always ships.
+      const browse = page.getByRole('button', { name: /Browse workspace design files/i })
+      const browsed = await browse.count()
+        ? await browse.first().click({ timeout: 10000 }).then(() => true).catch(() => false)
+        : false
+      let listed = false
+      for (let attempt = 0; attempt < 25 && !listed; attempt += 1) {
+        listed = await page.getByText(probeName).count().then((count) => count > 0).catch(() => false)
+        if (!listed) await sleep(750)
+      }
+      const panelText = listed ? '' : (await page.evaluate(() => {
+        const section = document.querySelector('.dsh-studio-workbench')
+        return section ? section.innerText.slice(0, 240).replace(/\n+/g, ' | ') : 'no workbench section'
+      }).catch(() => ''))
+      record('the workbench reaches the Host through the desktop protocol',
+        listed ? 'PASS' : 'FAIL',
+        listed
+          ? `${probeName} listed from the workspace the application registered`
+          : `${probeName} never appeared after opening the file panel (clicked=${browsed}); ` +
+            `panel text: ${JSON.stringify(panelText)}`)
+
       record('workbench painted by the host theme in DSH Desktop',
         theme.found && theme.background === theme.tokenValue && theme.width > 200 ? 'PASS' : 'FAIL',
         theme.found

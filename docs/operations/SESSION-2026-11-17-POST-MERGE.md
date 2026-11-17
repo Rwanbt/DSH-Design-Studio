@@ -75,7 +75,7 @@ One HTML↔CSS navigation test failed intermittently on Windows only. Instead of
 | `npm run check` (final) | **409 pass / 0 fail / 0 skip**, exit 0, Node v24.19.0 |
 | `npm run test:browser` (Chromium 145 + Firefox 146) | **68 PASS / 0 FAIL** (34 specs × 2 engines); report at `tests/browser/__reports__/browser-report.json` |
 | `npm run test:dsh` (without credentials) | 16 PASS / 0 FAIL / 6 NOT_RUN (steps that need a real turn or the shell wizard) |
-| `npm run test:dsh` (credentials opt-in) | **31 PASS / 0 FAIL / 0 NOT_RUN** — real Web app **and real Desktop app**, workbench rendered in both |
+| `npm run test:dsh` (credentials opt-in) | **32 PASS / 0 FAIL / 0 NOT_RUN** — real Web app **and real Desktop app**, workbench rendered in both |
 | GitHub Actions `core` (ubuntu) | PASS |
 | GitHub Actions `core` (windows-latest) | see the run history; every observed failure was fixed (rename/lock/permission/path issues), never skipped |
 | GitHub Actions `browser` (ubuntu-24.04) | PASS (Chromium + Firefox installed and executed in CI) |
@@ -96,8 +96,9 @@ The Web app was never the whole product: the plugin ships *into* the DSH Desktop
 1. **The desktop profile belongs to the app, not to the CLI.** `dsh plugin --profile desktop add` is refused until the application has created its own profile, so the harness boots the shell once in a disposable `HOME`/`DSH_HOME` (with `XDG_*` redirected so no real setting is touched), stops it, then installs the bundle — the documented user path.
 2. **A different renderer, a different document, a different delivery path.** The shell renders `dsh-app://app/` (not the HTTP origin) and serves client bundles over its own protocol in batched URLs: `plugins/??@rwanbt/dsh-design-studio/client.js&rev=1d95b76ad6e1` → HTTP 200, 106,855 bytes, `immediately=true`. Same byte count as the HTTP path, two independent proofs.
 3. **The Host half runs in the desktop runtime:** `/design-studio-native/health` → 200 `{"ok":true,...}`. Anonymous calls get 401 — the harness authenticates with the shell's own token URL instead of weakening the route.
-4. **The workbench renders there:** the `Design Studio` tab of `conversation.view` opens, the element is in the DOM, painted by the host theme (`rgb(255,255,255)` = the desktop's `--dsw-alias-bg-layer-1`), measured at 994×658. Captures `dsh-workbench-desktop.png` (1 707×1 005, 6 364 colours) and `dsh-workbench-desktop-element.png` (1 327×879, 1 808 colours) — image statistics are checked so a blank frame can never pass as evidence.
-5. No plugin JavaScript errors in the Electron renderer.
+4. **The workbench renders there:** the `Design Studio` tab of `conversation.view` opens, the element is in the DOM, painted by the host theme (`rgb(255,255,255)` = the desktop's `--dsw-alias-bg-layer-1`), measured at 993×658. Captures `dsh-workbench-desktop.png` (1 280×754, 6 947 colours) and `dsh-workbench-desktop-element.png` (993×658, 3 091 colours) — image statistics are checked so a blank frame can never pass as evidence.
+5. **And it actually reaches the Host.** A mounted shell that cannot talk to its runtime would pass every check above. The harness writes `desktop-probe.svg` into the workspace the application registered and requires it to appear in the workbench's file panel: it does, so the client's relative URLs (`new URL('/design-studio-native/…', document.baseURI)`) are forwarded from `dsh-app://app/` to the runtime. Two wrong assumptions were corrected on the way: the panel lists nothing on mount (it opens on demand), and its accessible name is `Browse workspace design files`, not the localized visible label — the first attempt failed on both and the assertion now records the buttons it saw.
+6. No plugin JavaScript errors in the Electron renderer.
 
 Two things remain unproven **inside the shell** and are written down as such: a real assistant turn (the disposable desktop profile has no adapter for the tested provider — `NO_ADAPTER`; the conversation is made non-blank by the error path, which is what renders the view), and the account sign-in flow (the welcome window and the first-run wizard are clicked through by script, not tested by hand).
 

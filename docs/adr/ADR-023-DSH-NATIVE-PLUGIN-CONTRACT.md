@@ -56,7 +56,8 @@ Conséquences pour tout futur point d'intégration :
 1. ne jamais supposer que l'origine est HTTP : les chemins relatifs doivent rester relatifs, jamais construits sur `location.origin` ;
 2. le profil `desktop` ne se crée pas par la CLI : l'installation utilisateur passe par un premier démarrage, puis `dsh plugin --profile desktop add` ;
 3. les routes Host du runtime desktop exigent le token du shell ; un test qui les appelle anonymement doit attendre un 401, pas contourner l'authentification ;
-4. le thème doit être lu à l'exécution (le Desktop de cette machine est en thème clair) : une valeur codée en dur reste invisible en test et fausse en production.
+4. le thème doit être lu à l'exécution (le Desktop de cette machine est en thème clair) : une valeur codée en dur reste invisible en test et fausse en production ;
+5. les URLs du client restent **relatives** : `new URL('/' + api + endpoint, document.baseURI)` fonctionne depuis `dsh-app://app/` parce que l'application transmet ces chemins au runtime — vérifié fonctionnellement en listant un fichier sonde depuis le panneau, pas seulement en rendant la vue.
 
 ## Conséquences
 
