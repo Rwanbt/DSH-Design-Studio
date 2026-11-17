@@ -1,0 +1,17 @@
+# Keep source, design references and generated examples byte-identical on every
+# operating system. Without this, a Windows checkout rewrites line endings and a
+# reference-artwork comparison would compare CRLF against LF.
+* text=auto
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.svg text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.txt text eol=lf
+*.lock text eol=lf
+*.png binary
+*.asar binary

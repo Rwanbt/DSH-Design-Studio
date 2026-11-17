@@ -10,14 +10,18 @@ import { svgGeometry } from '../src/svg-geometry.mjs'
 const mockup = await readFile(new URL('../docs/design/DSH-Design-Studio-V3-Graphite-interactive.html', import.meta.url), 'utf8')
 const example = await readFile(new URL('../examples/graphite-v3.svg', import.meta.url), 'utf8')
 
+// Compare content, not a checkout's line-ending policy: a Windows worktree may
+// store CRLF while the committed reference is LF.
+const lf = (text) => text.replace(/\r\n/g, '\n')
+
 test('Graphite native example retains the exact authored artwork from the supplied HTML', () => {
   const artboard = mockup.match(/<svg\s+xmlns="http:\/\/www\.w3\.org\/2000\/svg"\s+id="artboard"[\s\S]*?<\/svg>/)?.[0]
   assert.ok(artboard)
-  const expected = artboard.replace('id="artboard"', 'id="graphite-board" width="680" height="440"')
+  const expected = lf(artboard).replace('id="artboard"', 'id="graphite-board" width="680" height="440"')
     .replace(/data-id="([^"]+)"/g, 'id="$1"')
     .replace(/ class="(?:document-svg|selectable)"/g, '')
     .replace(/></g, '>\n<')
-  assert.equal(example, '<?xml version="1.0" encoding="UTF-8"?>\n' + expected + '\n')
+  assert.equal(lf(example), '<?xml version="1.0" encoding="UTF-8"?>\n' + expected + '\n')
   assert.ok(example.includes('fill="url(#orbGrad)"'), 'gradients are preserved, not replaced by a fake colour')
   assert.ok(example.includes('filter="url(#blur)"'), 'authored effects stay native even if their inspector is read-only')
 })
