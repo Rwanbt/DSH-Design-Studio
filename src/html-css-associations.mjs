@@ -71,10 +71,12 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       continue
     }
     const rules=listCssVisualRules(sheet.source)
-    const safePreview=buildSafeLinkedPreviewCss(rules,permittedSelectors,previewLength)
+    // Account for the newline that joins successive linked sheets as well.
+    const separator=previewParts.length?1:0
+    const safePreview=buildSafeLinkedPreviewCss(rules,permittedSelectors,previewLength+separator)
     if(safePreview.css) {
       previewParts.push(safePreview.css)
-      previewLength+=safePreview.css.length
+      previewLength+=safePreview.css.length+separator
     }
     previewDeclarations+=safePreview.included
     previewOmitted+=safePreview.omitted
