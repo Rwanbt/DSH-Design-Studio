@@ -20,7 +20,7 @@ export const hierarchySpec = {
       .replace('<rect id="right"', '<rect id="right" display="none"')
       .replace('<rect id="loose"', '<rect id="loose" data-locked="true"')
     await harness.write('hierarchy.svg', document)
-    await openWorkspaceFile(page, 'hierarchy.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'hierarchy.svg', { expect: 'svg', advanced: true })
 
     const paddingOf = async (name) => page.getByRole('button', { name }).evaluate((node) => parseFloat(getComputedStyle(node).paddingLeft))
     const groupDepth = await paddingOf('Select layer g #row')
@@ -51,7 +51,7 @@ export const lockSpec = {
   name: 'structure: locking a layer is written to the file and blocks further visual edits',
   async run({ page, harness, assert }) {
     await harness.write('lock.svg', DOCUMENT)
-    await openWorkspaceFile(page, 'lock.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'lock.svg', { expect: 'svg', advanced: true })
     await page.getByRole('button', { name: 'Select layer rect #loose' }).click()
     await page.getByRole('button', { name: 'Lock selected layer' }).click()
     const locked = await waitForDisk(harness, 'lock.svg', (content) => content.includes('data-locked="true"'),
@@ -84,7 +84,7 @@ export const groupSpec = {
 </svg>
 `
     await harness.write('group.svg', flat)
-    await openWorkspaceFile(page, 'group.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'group.svg', { expect: 'svg', advanced: true })
 
     const groupButton = page.getByRole('button', { name: 'Group selected layers' })
     await page.getByRole('button', { name: 'Select layer rect #one' }).click()
@@ -120,7 +120,7 @@ export const ungroupSpec = {
   name: 'structure: ungrouping removes only the wrapper tags',
   async run({ page, harness, assert }) {
     await harness.write('ungroup.svg', DOCUMENT)
-    await openWorkspaceFile(page, 'ungroup.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'ungroup.svg', { expect: 'svg', advanced: true })
     await page.getByRole('button', { name: 'Select layer g #row' }).click()
     await page.getByRole('button', { name: 'Ungroup selected layer' }).click()
     const ungrouped = await waitForDisk(harness, 'ungroup.svg', (content) => !content.includes('<g '),
@@ -141,7 +141,7 @@ export const transformSpec = {
   name: 'structure: rotate and scale write one normalised matrix about the shape centre',
   async run({ page, harness, assert }) {
     await harness.write('transform.svg', DOCUMENT)
-    await openWorkspaceFile(page, 'transform.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'transform.svg', { expect: 'svg', advanced: true })
     await page.getByRole('button', { name: 'Select layer rect #loose' }).click()
     await page.getByRole('button', { name: 'Rotate selected layer 90 degrees' }).click()
 
@@ -194,7 +194,7 @@ export const groupDragSpec = {
 </svg>
 `
     await harness.write('groupdrag.svg', grouped)
-    await openWorkspaceFile(page, 'groupdrag.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'groupdrag.svg', { expect: 'svg', advanced: true })
 
     const handle = page.getByRole('button', { name: 'Drag g row' })
     await handle.waitFor({ state: 'visible' })
@@ -237,7 +237,7 @@ export const nestedPivotSpec = {
 </svg>
 `
     await harness.write('pivot.svg', nested)
-    await openWorkspaceFile(page, 'pivot.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'pivot.svg', { expect: 'svg', advanced: true })
     await page.getByRole('button', { name: 'Select layer rect #inner' }).click()
     const before = await page.getByRole('button', { name: 'Drag rect inner' }).boundingBox()
     await page.getByRole('button', { name: 'Rotate selected layer 90 degrees' }).click()

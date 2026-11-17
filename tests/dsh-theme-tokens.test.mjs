@@ -61,7 +61,7 @@ test('every DSH token referenced by the client exists in the host theme', () => 
     'unknown DSH tokens silently fall back to the hardcoded value and break theming')
 })
 
-test('the workbench follows the host for surfaces, borders, text and states', () => {
+test('the plugin retains valid host tokens beside its scoped Graphite palette', () => {
   for (const family of ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2']) {
     assert.ok(client.includes(family), `missing surface token ${family}`)
   }
@@ -74,9 +74,9 @@ test('the workbench follows the host for surfaces, borders, text and states', ()
   for (const family of ['--dsw-alias-state-error-primary', '--dsw-alias-state-warn-primary']) {
     assert.ok(client.includes(family), `missing state token ${family}`)
   }
-  // Typography is inherited instead of forced.
+  // Host-facing wrapper retains DSH typography; the exact editor font is local (ADR-026).
   assert.match(client, /--dsw-font-family/, 'the workbench must inherit the DSH font family')
-  assert.ok(!/'system-ui,sans-serif'/.test(client), 'the font family must not be hardcoded anymore')
+  assert.match(client, /\.dsh-studio-workbench\{--dsw-alias-bg-base:/, 'Graphite aliases must be scoped to the workbench, never the document root')
 })
 
 test('every token use keeps a fallback so the plugin renders without the host theme', () => {

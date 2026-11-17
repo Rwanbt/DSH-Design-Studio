@@ -28,8 +28,8 @@ export const landingSpec = {
     const nested = page.getByRole('button', { name: 'Open file nested/landing-b.svg' })
     await first.waitFor({ state: 'visible', timeout: 20000 })
     await nested.waitFor({ state: 'visible', timeout: 20000 })
-    assert.equal(await region.getByText('Aucun fichier ouvert').count(), 1,
-      'the landing state must name what the user is looking at')
+    assert.equal(await region.getByText('Votre espace de création').count(), 1,
+      'the first visit must expose the integrated creation workspace, not a blank panel')
 
     // Opening from that list must reach a real document, not just change a label.
     await nested.click()

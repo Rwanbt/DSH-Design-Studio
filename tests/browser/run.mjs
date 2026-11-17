@@ -133,6 +133,9 @@ async function main() {
         const context = await browser.newContext({ viewport: spec.viewport || { width: 1280, height: 820 },
           ...(spec.contextOptions || {}) })
         const page = await context.newPage()
+        // A missing/hidden control should fail within a bounded interval instead
+        // of spending the default 30 seconds per inaccessible control.
+        page.setDefaultTimeout(10000)
         const consoleErrors = []
         page.on('pageerror', (error) => consoleErrors.push('pageerror: ' + String(error)))
         page.on('console', (message) => {

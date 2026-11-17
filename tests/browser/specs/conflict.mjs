@@ -2,7 +2,7 @@
  * Concurrency and recovery in the browser: an edit issued from the real UI must
  * be refused when the file changed underneath, never silently overwritten.
  */
-import { SVG_DOCUMENT, dragBy, openWorkspaceFile, waitForDisk } from './helpers.mjs'
+import { SVG_DOCUMENT, dragBy, openWorkspaceFile, openFileMenu, waitForDisk } from './helpers.mjs'
 
 export const externalConflictSpec = {
   allowConsoleErrors: 'refusals',
@@ -64,6 +64,7 @@ export const unsavedSourceGuardSpec = {
     await openWorkspaceFile(page, 'a.svg', { expect: 'svg' })
     await page.locator('summary').filter({ hasText: 'Code source natif' }).click()
     await page.locator('textarea').first().fill(SVG_DOCUMENT.replace('Title', 'Edited locally'))
+    await openFileMenu(page)
     await page.getByLabel('Workspace file').fill('b.svg')
     await page.getByRole('button', { name: 'Open', exact: true }).click()
     await page.waitForTimeout(500)

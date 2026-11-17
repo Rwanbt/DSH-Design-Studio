@@ -41,8 +41,10 @@ export const geometryInspectorSpec = {
 
     // A path has no width attribute: no invented inputs, no broken numbers.
     await page.getByRole('button', { name: 'Select layer path #curve' }).click()
-    assert.equal(await page.getByLabel('Geometry width').count(), 0,
-      'a shape without width/height attributes must not show editable numbers')
+    assert.equal(await page.getByLabel('Geometry width').isEnabled(), false,
+      'the persistent reference section must not make unsupported dimensions editable')
+    assert.equal(await page.getByLabel('Geometry width').inputValue(), '',
+      'a read-only placeholder must never invent a width for a path')
 
     // Undo restores the exact original bytes.
     await page.getByRole('button', { name: 'Select layer rect #one' }).click()

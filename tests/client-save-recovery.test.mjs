@@ -80,18 +80,26 @@ async function harness(mode='reload-fails') {
   await find(render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
   return {render,setFailReload:v=>{failReload=v},writes:()=>writes,reads:()=>reads}
 }
+async function placeRectangle(app) {
+  find(app.render(),n=>n.props?.['aria-label']==='Add rect').props.onClick()
+  const overlay=find(app.render(),n=>n.props?.['aria-label']==='Direct manipulation overlay')
+  await overlay.props.onPointerDownCapture({button:0,clientX:25,clientY:25,
+    currentTarget:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},
+    preventDefault(){},stopPropagation(){}})
+}
+
 test('successful native save followed by failed read blocks edits and clears history until explicit reload',async()=>{
   const app=await harness()
   let add=find(app.render(),n=>n.props?.['aria-label']==='Add rect')
   assert.ok(add)
-  add.props.onClick()
+  await placeRectangle(app)
   await settle()
   assert.equal(app.writes(),1,'File was saved once')
   let reload=find(app.render(),n=>n.props?.['aria-label']==='Reload after save error')
   assert.ok(reload,'Editor must offer explicit recovery after unknown on-disk state')
   assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Add rect').props.disabled,true)
   assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit').props.disabled,true)
-  find(app.render(),n=>n.props?.['aria-label']==='Add rect').props.onClick()
+  await placeRectangle(app)
   await settle()
   assert.equal(app.writes(),1,'Stale editor cannot issue another write')
   reload.props.onClick()
@@ -101,7 +109,7 @@ test('successful native save followed by failed read blocks edits and clears his
 })
 test('a 409 stale-revision response requires reload before further source edits',async()=>{
   const app=await harness('stale')
-  find(app.render(),n=>n.props?.['aria-label']==='Add rect').props.onClick()
+  await placeRectangle(app)
   await settle()
   assert.equal(app.writes(),1)
   assert.ok(find(app.render(),n=>n.props?.['aria-label']==='Reload after save error'))
@@ -109,7 +117,7 @@ test('a 409 stale-revision response requires reload before further source edits'
 })
 test('a validation error keeps current editor responsive without forced file reload',async()=>{
   const app=await harness('invalid')
-  find(app.render(),n=>n.props?.['aria-label']==='Add rect').props.onClick()
+  await placeRectangle(app)
   await settle()
   assert.equal(app.writes(),1)
   assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Reload after save error'),null)

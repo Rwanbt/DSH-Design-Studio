@@ -7,7 +7,7 @@
  * hold: a create really writes a valid native document that opens in the canvas,
  * and a create never replaces a file that already exists.
  */
-import { waitForDisk } from './helpers.mjs'
+import { waitForDisk, openFileMenu } from './helpers.mjs'
 
 export const createSpec = {
   name: 'create: a new SVG document is written, listed and opened in the canvas',
@@ -37,6 +37,7 @@ export const createSpec = {
     assert.ok(written.includes('id="fond"'), 'the created document carries an editable layer id')
 
     // The new file is part of the workspace listing from then on.
+    await openFileMenu(page)
     await page.getByRole('button', { name: 'Browse workspace design files' }).click()
     await page.getByRole('button', { name: 'Open file carte.svg' })
       .waitFor({ state: 'visible', timeout: 20000 })

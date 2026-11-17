@@ -1,0 +1,68 @@
+{
+  "build": "8479abf595cdd8723367206fe393204a99888eed",
+  "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
+  "startedAt": "2026-11-17T21:02:58.749Z",
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "specs": [
+        {
+          "name": "structure: the layer list shows real nesting depth and hidden/locked state",
+          "checks": 7,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: locking a layer is written to the file and blocks further visual edits",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: ctrl-click groups sibling layers into one real <g> and undo restores bytes",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: ungrouping removes only the wrapper tags",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: rotate and scale write one normalised matrix about the shape centre",
+          "checks": 12,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: dragging a group moves it with one transform and keeps children bytes",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: rotating a layer inside a translated group keeps its centre fixed",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "summary": {
+    "pass": 7,
+    "fail": 0,
+    "notRun": 0
+  },
+  "finishedAt": "2026-11-17T21:03:03.271Z"
+}

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" id="graphite-board" width="680" height="440" viewBox="0 0 680 440">
+<defs>
+<linearGradient id="baseGrad" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#f7f7f4"/>
+<stop offset="1" stop-color="#e8ecf6"/>
+</linearGradient>
+<linearGradient id="orbGrad" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#2458e9"/>
+<stop offset=".48" stop-color="#527af6"/>
+<stop offset="1" stop-color="#9cc8ff"/>
+</linearGradient>
+<linearGradient id="peach" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="#ffce9f"/>
+<stop offset="1" stop-color="#ef725f"/>
+</linearGradient>
+<filter id="blur">
+<feGaussianBlur stdDeviation="21"/>
+</filter>
+</defs>
+<rect x="0" y="0" width="680" height="440" fill="url(#baseGrad)"/>
+<g id="scene">
+<rect id="bg-panel" x="33" y="32" width="614" height="376" rx="15" fill="#161d31"/>
+<ellipse cx="491" cy="231" rx="145" ry="118" fill="#416aff" opacity=".15" filter="url(#blur)"/>
+<ellipse id="orb" cx="490" cy="221" rx="137" ry="137" fill="url(#orbGrad)"/>
+<path d="M406 220C442 177 470 176 490 176c58 0 88 64 130 69" stroke="#b9d9ff" stroke-width="6" opacity=".45" fill="none"/>
+<path d="M430 300c42-90 116-106 165-157" stroke="#091d72" stroke-width="14" opacity=".12" fill="none"/>
+<ellipse id="accent" cx="560" cy="291" rx="53" ry="53" fill="url(#peach)"/>
+<rect x="72" y="69" width="31" height="31" rx="6" fill="#6592ff"/>
+<path d="m79 83 8-8 8 8-8 8z" stroke="#fff" stroke-width="2" fill="none"/>
+<text id="brand-title" x="113" y="89" font-size="12" fill="#b7c2de" font-family="Inter,Arial,sans-serif" font-weight="700" letter-spacing=".14em">NOVA / DESIGN SYSTEMS</text>
+<text id="hero-title" x="72" y="198" fill="#fff" font-size="64" font-family="Inter,Arial,sans-serif" font-weight="790" letter-spacing="-3">Make</text>
+<text id="hero-subtitle" x="72" y="264" fill="#fff" font-size="64" font-family="Inter,Arial,sans-serif" font-weight="790" letter-spacing="-3">space.</text>
+<text id="description" x="76" y="320" fill="#afbed9" font-size="12" font-family="Inter,Arial,sans-serif">A playground for better ideas.</text>
+<rect id="chip" x="72" y="346" width="129" height="33" rx="16.5" fill="#e9f0ff"/>
+<text id="cta-label" x="91" y="367" fill="#203457" font-size="11" font-family="Inter,Arial,sans-serif" font-weight="700">Explore concept ↗</text>
+<text id="copyright" x="572" y="378" fill="#8899bb" font-size="10" font-family="Inter,Arial,sans-serif">© 2026</text>
+</g>
+</svg>

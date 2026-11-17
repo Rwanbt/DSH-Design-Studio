@@ -180,6 +180,15 @@ export function svgAttributePatch(source,{id,attribute,value}) {
   }
   const selected=tags(source).find(item=>item.attrs.some(a=>a.name==='id'&&a.value===id))
   const matches=selected.attrs.filter(a=>a.name===attribute)
+  if(matches.length===0 && (attribute==='opacity' || (selected.tag==='text' &&
+      ['font-family','font-size','font-weight','font-style','letter-spacing','text-anchor'].includes(attribute)))) {
+    // Graphite exposes these real SVG defaults. Make an explicit, validated
+    // declaration with one insertion; never serialize/rewrite the element.
+    const exact=scanSvgDocument(source).byId.get(id)
+    if(!exact || exact.readOnly)fail('unsupported-edit','Attribute insertion requires an editable source element')
+    const at=exact.openEnd-(exact.selfClosing?2:1)
+    return {start:at,end:at,before:'',after:' '+attribute+'="'+value+'"'}
+  }
   if(matches.length!==1) fail('unsupported-edit','This attribute must already exist and be unique')
   const a=matches[0]
   return {start:a.start,end:a.end,before:a.value,after:value}

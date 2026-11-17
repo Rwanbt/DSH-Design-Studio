@@ -26,9 +26,20 @@ import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createRefusalSpec } from './create.mjs'
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
+import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
+import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
+import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
 
 export const specs = [
   mountSpec,
+  graphiteReferenceSpec,
+  graphiteWelcomeSpec,
+  graphiteEllipseSpec,
+  graphiteExampleSpec,
+  graphiteCreationToolSpec,
+  graphiteDraftSpec,
+  graphiteExportSpec,
+  graphiteOpacitySpec,
   landingSpec,
   landingEmptySpec,
   createSpec,

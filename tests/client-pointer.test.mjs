@@ -232,6 +232,10 @@ test('Add Rectangle toolbar submits a native SVG shape creation without AI',asyn
   const add=find(harness.render(),node=>node.props?.['aria-label']==='Add rect')
   assert.ok(add,'A manual shape button should exist in the SVG editor')
   await add.props.onClick()
+  assert.equal(harness.writes().length,0,'arming the tool does not write')
+  const overlay=find(harness.render(),node=>node.props?.['aria-label']==='Direct manipulation overlay')
+  await overlay.props.onPointerDownCapture({button:0,clientX:25,clientY:25,
+    currentTarget:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},preventDefault(){},stopPropagation(){}})
   assert.equal(harness.writes().length,1)
   assert.equal(harness.writes()[0].kind,'svg-add-shape')
   assert.equal(harness.writes()[0].shape,'rect')
@@ -258,7 +262,7 @@ test('delete key on a selected layer sends native delete but not when editing te
   const harness=createHarness()
   await harness.init()
   await find(harness.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  const layer=find(harness.render(),node=>node.type==='button'&&node.children?.includes('rect #box'))
+  const layer=find(harness.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer rect #box')
   layer.props.onClick()
   let prevented=false
   harness.render().props.onKeyDown({key:'Delete',target:{tagName:'BUTTON'},preventDefault:()=>{prevented=true}})
@@ -584,7 +588,7 @@ function samplePath() {
 test('selecting an editable path exposes anchor and Bézier control handles',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
-  const layer=find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve'))
+  const layer=find(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer path #curve')
   assert.ok(layer)
   layer.props.onClick()
   assert.ok(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay'))
@@ -596,7 +600,7 @@ test('selecting an editable path exposes anchor and Bézier control handles',asy
 test('dragging a Bézier control previews live path without writes then commits one native action',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
-  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer path #curve').props.onClick()
   const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 2 of curve')
   let captured=false,stopped=false
   const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){captured=true}}
@@ -622,7 +626,7 @@ test('dragging a Bézier control previews live path without writes then commits 
 test('Alt bypasses grid snap for Bézier nodes; cancel causes no save',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
-  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer path #curve').props.onClick()
   find(h.render(),n=>n.props?.['aria-label']==='Toggle snap to grid').props.onClick()
   const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
   const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
@@ -636,7 +640,7 @@ test('Alt bypasses grid snap for Bézier nodes; cancel causes no save',async()=>
 test('unsupported complex path remains selectable but has no active point controls',async()=>{
   const h=createHarness([],[{id:'curve',editable:false,reason:'unsupported-path',points:[]}]);await h.init()
   await find(h.render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
-  find(h.render(),n=>n.type==='button'&&n.children?.includes('path #curve')).props.onClick()
+  find(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer path #curve').props.onClick()
   assert.equal(find(h.render(),n=>n.props?.className==='dsh-studio-path-overlay'),null)
   assert.equal(find(h.render(),n=>n.props?.['aria-label']==='Move path point 0 of curve'),null)
   assert.equal(h.writes().length,0)
@@ -657,7 +661,7 @@ test('Add Path action inserts a native editable cubic without AI',async()=>{
 test('one-axis grid snap keeps the untouched Bézier coordinate stable',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer path #curve').props.onClick()
   find(h.render(),node=>node.props?.['aria-label']==='Toggle snap to grid').props.onClick()
   const node=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
   node.props.onPointerDown({button:0,pointerId:100,clientX:0,clientY:0,currentTarget:{
@@ -675,7 +679,7 @@ test('one-axis grid snap keeps the untouched Bézier coordinate stable',async()=
 test('Escape cancels an in-progress Bézier edit without committing the SVG',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer path #curve').props.onClick()
   const control=find(h.render(),n=>n.props?.['aria-label']==='Move path point 1 of curve')
   const target={parentElement:{getBoundingClientRect:()=>({width:200,height:200})},setPointerCapture(){}}
   control.props.onPointerDown({button:0,pointerId:19,clientX:0,clientY:0,currentTarget:target,stopPropagation(){},preventDefault(){}})
@@ -693,7 +697,7 @@ test('Escape cancels an in-progress Bézier edit without committing the SVG',asy
 test('canvas midpoint + button commits a native curve subdivision without changing source on render',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer path #curve').props.onClick()
   const midpoint=find(h.render(),node=>node.props?.['aria-label']==='Insert path point on segment 2 of curve')
   assert.ok(midpoint)
   assert.equal(h.writes().length,0)
@@ -707,7 +711,7 @@ test('canvas midpoint + button commits a native curve subdivision without changi
 test('curve inspector permits insertion but does not expose destructive Bézier removal',async()=>{
   const h=createHarness([],[samplePath()]);await h.init()
   await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #curve')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer path #curve').props.onClick()
   assert.ok(find(h.render(),node=>node.props?.['aria-label']==='Insert midpoint segment 2'))
   assert.equal(find(h.render(),node=>node.props?.['aria-label']==='Remove line point segment 2'),null)
 })
@@ -717,7 +721,7 @@ test('inspector removes only a selected supported line endpoint with one native 
     points:[{index:0,role:'anchor',x:1,y:1},{index:1,role:'anchor',x:5,y:5}]}
   const h=createHarness([],[path]);await h.init()
   await find(h.render(),node=>node.type==='button'&&node.children?.includes('Open')).props.onClick()
-  find(h.render(),node=>node.type==='button'&&node.children?.includes('path #line')).props.onClick()
+  find(h.render(),node=>node.type==='button'&&node.props?.['aria-label']==='Select layer path #line').props.onClick()
   const remove=find(h.render(),node=>node.props?.['aria-label']==='Remove line point segment 2')
   assert.ok(remove)
   remove.props.onClick()

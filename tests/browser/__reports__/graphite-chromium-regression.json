@@ -1,0 +1,471 @@
+{
+  "build": "8479abf595cdd8723367206fe393204a99888eed",
+  "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
+  "startedAt": "2026-11-17T20:05:18.115Z",
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "specs": [
+        {
+          "name": "client registers conversation.view and mounts without AI credentials",
+          "checks": 14,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: shell geometry and icon artwork match the supplied HTML reference",
+          "checks": 36,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: an unopened document keeps the same editor shell instead of an admin page",
+          "checks": 10,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: ellipse inspector uses bounding-box X/Y/W/H and saves one reversible native operation",
+          "checks": 10,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: creating the supplied artwork makes a real native file and never fakes gradient paint",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: creation tools arm without writes and place the shape at the real canvas click",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: a text draft survives property edits, layer changes and new-file attempts until explicitly handled",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: preview and export use the current native document without a new window or a rewrite",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: the reference opacity slider writes a native value and undoes it exactly",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "landing: the workbench lists workspace files before any click and opens one directly",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "landing: an empty workspace explains the situation instead of showing a blank tab",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "create: a new SVG document is written, listed and opened in the canvas",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "create: a new CSS document opens the rule inspector with its own rules",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "create: an existing path is refused and its bytes are never replaced",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [
+            "console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "panel: the sidebar cell opens its main panel and edits a workspace by id",
+          "checks": 12,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "panel: a host without a workspace registry says so instead of showing an empty editor",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "panel: no registered workspace is reported, and the editor is not faked",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "inspector: numeric X/Y/W/H edit one attribute at a time and undo exactly",
+          "checks": 10,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "inspector: the fill hex field writes one validated paint and undo restores it",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "dsh: exact Graphite palette stays scoped while the surrounding host changes light and dark themes",
+          "checks": 15,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "svg: pointer drag edits only the moved attribute and Undo restores exact bytes",
+          "checks": 14,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "svg: zoom, fit, grid, snap and tool controls respond in the browser",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "svg: duplicate and delete keep unique ids and undo byte-exactly",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "geometry: selection handles coincide with the rendered shapes, artboard stays fully visible",
+          "checks": 12,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "geometry: zoom keeps the shape under the pointer and pan keeps handles attached",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: the layer list shows real nesting depth and hidden/locked state",
+          "checks": 4,
+          "failures": [
+            "locator.isVisible: Error: strict mode violation: getByRole('button', { name: 'Show selected layer' }) resolved to 2 elements:\n    1) <button type=\"button\" class=\"dsh-studio-switch\" aria-label=\"Show selected layer\"></button> aka getByRole('button', { name: 'Show selected layer' }).first()\n    2) <button type=\"button\" aria-label=\"Show selected layer\">◉ Afficher</button> aka getByText('◉ Afficher')\n\nCall log:\n    - checking visibility of getByRole('button', { name: 'Show selected layer' })\n"
+          ],
+          "consoleErrors": [],
+          "status": "FAIL"
+        },
+        {
+          "name": "structure: locking a layer is written to the file and blocks further visual edits",
+          "checks": 1,
+          "failures": [
+            "locator.isDisabled: Error: strict mode violation: getByRole('button', { name: 'Hide selected layer' }) resolved to 2 elements:\n    1) <button disabled type=\"button\" aria-label=\"Hide selected layer\" class=\"dsh-studio-switch dsh-studio-on\"></button> aka getByRole('button', { name: 'Hide selected layer' }).first()\n    2) <button disabled type=\"button\" aria-label=\"Hide selected layer\">◌ Masquer</button> aka getByText('◌ Masquer')\n\nCall log:\n  - waiting for getByRole('button', { name: 'Hide selected layer' })\n"
+          ],
+          "consoleErrors": [],
+          "status": "FAIL"
+        },
+        {
+          "name": "structure: ctrl-click groups sibling layers into one real <g> and undo restores bytes",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: ungrouping removes only the wrapper tags",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: rotate and scale write one normalised matrix about the shape centre",
+          "checks": 0,
+          "failures": [
+            "locator.click: Error: strict mode violation: getByRole('button', { name: 'Rotate selected layer 90 degrees' }) resolved to 2 elements:\n    1) <button class=\"dsh-studio-prop\" title=\"Rotation 90° autour du centre réel\" aria-label=\"Rotate selected layer 90 degrees\">↻ 90°</button> aka getByText('↻ 90°')\n    2) <button type=\"button\" aria-label=\"Rotate selected layer 90 degrees\" title=\"Rotation de 90° autour du centre réel de la forme\">⟳ Pivoter 90°</button> aka getByText('⟳ Pivoter 90°')\n\nCall log:\n  - waiting for getByRole('button', { name: 'Rotate selected layer 90 degrees' })\n"
+          ],
+          "consoleErrors": [],
+          "status": "FAIL"
+        },
+        {
+          "name": "structure: dragging a group moves it with one transform and keeps children bytes",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "structure: rotating a layer inside a translated group keeps its centre fixed",
+          "checks": 0,
+          "failures": [
+            "locator.click: Error: strict mode violation: getByRole('button', { name: 'Rotate selected layer 90 degrees' }) resolved to 2 elements:\n    1) <button class=\"dsh-studio-prop\" title=\"Rotation 90° autour du centre réel\" aria-label=\"Rotate selected layer 90 degrees\">↻ 90°</button> aka getByText('↻ 90°')\n    2) <button type=\"button\" aria-label=\"Rotate selected layer 90 degrees\" title=\"Rotation de 90° autour du centre réel de la forme\">⟳ Pivoter 90°</button> aka getByText('⟳ Pivoter 90°')\n\nCall log:\n  - waiting for getByRole('button', { name: 'Rotate selected layer 90 degrees' })\n"
+          ],
+          "consoleErrors": [],
+          "status": "FAIL"
+        },
+        {
+          "name": "html: element text is edited in place and undo restores the exact bytes",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:36019/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36019/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36019/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:36019/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "html: allowlisted attributes are editable and dangerous ones are not offered",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:39687/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39687/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39687/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:39687/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "html: text editing fails closed for mixed markup instead of destroying children",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [
+            "console: Failed to load resource: the server responded with a status of 400 (Bad Request)"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "html: clicking a unique id in the real preview selects it and edits one style declaration",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:44365/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:44365/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:44365/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:44365/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "html: preview selection never targets an element without a unique source id",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "html: flex/grid preset buttons apply one validated declaration with undo",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:34603/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "html: wrap, gap and grid-row presets each write one validated declaration",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so ",
+            "console: Loading the stylesheet 'http://127.0.0.1:35709/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "css: a native rule edit rewrites only the targeted declaration and is reversible",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "conflict: an external edit wins and the stale UI save is refused, never overwritten",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [
+            "console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "conflict: deleting the file on disk makes the next save fail without recreating it",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [
+            "console: Failed to load resource: the server responded with a status of 409 (Conflict)"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "safety: unsaved source text blocks opening another file instead of losing it",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "security: untrusted HTML stays inert and offline inside the preview frame",
+          "checks": 30,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
+            "console: Loading the stylesheet 'https://evil.invalid/import.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
+            "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked.",
+            "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
+            "console: Loading the stylesheet 'https://evil.invalid/import.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
+            "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked.",
+            "console: Loading the stylesheet 'https://evil.invalid/sheet.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'st",
+            "console: Loading the stylesheet 'https://evil.invalid/import.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Loading the image 'https://evil.invalid/pixel.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Fetching content from 'https://evil.invalid/prefetch' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "console: Loading the image 'https://evil.invalid/bg.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked.",
+            "console: Framing 'https://evil.invalid/' violates the following Content Security Policy directive: \"frame-src 'none'\". The request has been blocked.\n",
+            "console: Loading plugin data from 'https://evil.invalid/obj' violates the following Content Security Policy directive: \"object-src 'none'\". The action has been blocked."
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "security: an SVG carrying script is refused, never previewed with scripts enabled",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set."
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "security: an SVG referencing remote assets previews with an inert empty sandbox",
+          "checks": 2,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the image 'https://evil.invalid/asset.png' violates the following Content Security Policy directive: \"img-src data:\". The action has been blocked."
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "security: linked CSS projection keeps validated rules and drops @import/url() resources",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:41699/ok.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'sty",
+            "console: Loading the stylesheet 'http://127.0.0.1:41699/evil.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 's"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "a11y: keyboard reaches real controls, toggles expose state and shortcuts never lose edits",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "a11y: compact layout exposes a real tablist with aria-selected and reachable panels",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "a11y: reduced-motion preference is honoured and every animation is neutralised",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "responsive: 390/768/1280 px keep the editor usable and the preview width truthful",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:37235/r.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'styl"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "performance: a 1500-node SVG opens and saves within a documented budget",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        }
+      ],
+      "status": "FAIL"
+    }
+  },
+  "summary": {
+    "pass": 48,
+    "fail": 4,
+    "notRun": 0
+  },
+  "finishedAt": "2026-11-17T20:05:56.049Z"
+}

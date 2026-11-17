@@ -70,7 +70,7 @@ async function mockClient() {
 
 test('text layer exposes a typography inspector and a content field',async()=>{
   const h=await mockClient()
-  const layer=locate(h.render(),n=>n.type==='button'&&n.children?.includes('text #txt'))
+  const layer=locate(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer text #txt')
   assert.ok(layer)
   layer.props.onClick()
   const inspector=locate(h.render(),n=>n.props?.['aria-label']==='Text content')
@@ -96,7 +96,7 @@ test('double-click on text canvas handle starts inline editing and commits nativ
 })
 test('typography select issues restricted source update without AI',async()=>{
   const h=await mockClient()
-  locate(h.render(),n=>n.type==='button'&&n.children?.includes('text #txt')).props.onClick()
+  locate(h.render(),n=>n.type==='button'&&n.props?.['aria-label']==='Select layer text #txt').props.onClick()
   const picker=locate(h.render(),n=>n.type==='select'&&n.props.value==='Inter, Arial')
   assert.ok(picker)
   picker.props.onChange({target:{value:'Georgia'}})
@@ -105,12 +105,19 @@ test('typography select issues restricted source update without AI',async()=>{
   assert.equal(h.writes[0].attribute,'font-family')
   assert.equal(h.writes[0].value,'Georgia')
 })
-test('Add Text toolbar creates a native editable text object',async()=>{
+test('Text toolbar arms creation and the canvas click creates native text at that point',async()=>{
   const h=await mockClient()
   const add=locate(h.render(),n=>n.props?.['aria-label']==='Add text')
   assert.ok(add)
   add.props.onClick()
-  await new Promise(resolve=>setTimeout(resolve,12))
+  assert.equal(h.writes.length,0,'choosing a tool must not write a file')
+  const overlay=locate(h.render(),n=>n.props?.['aria-label']==='Direct manipulation overlay')
+  assert.ok(overlay)
+  await overlay.props.onPointerDownCapture({button:0,clientX:100,clientY:50,
+    currentTarget:{getBoundingClientRect:()=>({left:0,top:0,width:200,height:100})},
+    preventDefault(){},stopPropagation(){}})
   assert.equal(h.writes[0].kind,'svg-add-shape')
   assert.equal(h.writes[0].shape,'text')
+  assert.equal(h.writes[0].x,100)
+  assert.equal(h.writes[0].y,50)
 })

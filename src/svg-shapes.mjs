@@ -1,5 +1,6 @@
 import { listEditableSvgNodes, svgRootAttributes } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
+import { scanSvgDocument } from './svg-document.mjs'
 
 const TYPES=new Set(['rect','circle','ellipse','text','path','pen'])
 const ATTRS={
@@ -27,7 +28,20 @@ export function svgShapeInsertPatch(source,kind,position=null) {
   if(!close)invalid('unsupported-svg','SVG must end with a closing root element')
   const start=close.index
   if(source.slice(0,start).match(/<\/svg\s*>/gi))invalid('ambiguous-svg','Multiple closing root elements')
-  const geometry=svgGeometry(source)
+  const placed=position!==null
+  if(placed){
+    if(!['rect','circle','ellipse','text','pen'].includes(kind) ||
+       typeof position!=='object' || typeof position.x!=='number' || typeof position.y!=='number') {
+      invalid('invalid-geometry','Shape placement requires numeric x and y')
+    }
+    // Reuse the native geometry range and precision; off-artboard anchors are valid.
+    number(position.x);number(position.y)
+    // Non-layer IDs (gradients/filters/defs) also occupy the SVG ID namespace.
+    if(kind!=='pen')for(const id of scanSvgDocument(source).byId.keys())ids.add(id)
+  }
+  // Positioned primitives are appended to the root, not to an existing group's
+  // coordinate system. Keep the historical conservative mode for other calls.
+  const geometry=svgGeometry(source,{transforms:placed && kind!=='pen'})
   if(!geometry.artboard || geometry.warning)invalid('unsupported-svg','Add shape requires a simple root viewBox and safe geometry')
   let id
   for(let i=1;i<=10000;i++){
@@ -54,6 +68,8 @@ export function svgShapeInsertPatch(source,kind,position=null) {
            number(cx+size)+' '+number(cy),
          fill:'none',stroke:'#bca38d','stroke-width':Math.max(0.5,Math.min(width,height)*0.015)}:
         {x:cx,y:cy,'font-size':Math.max(12,size/2),'font-family':'Inter, Arial','font-weight':'500','font-style':'normal','letter-spacing':0,'text-anchor':'middle',fill:'#e9e7e2'}
+  if(placed && ['rect','text'].includes(kind)){attr.x=position.x;attr.y=position.y}
+  if(placed && ['circle','ellipse'].includes(kind)){attr.cx=position.x;attr.cy=position.y}
   const string=ATTRS[kind].map(key=>key+'="'+(typeof attr[key]==='number'?number(attr[key]):attr[key])+'"').join(' ')
   const prefix=(start>0 && source[start-1]==='\n'?'':'\n')
   const inserted=prefix+'  <'+(kind==='pen'?'path':kind)+' id="'+id+'" '+string+(kind==='text'?'>Double-click to edit</text>':'/>')+'\n'

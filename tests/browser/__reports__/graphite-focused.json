@@ -1,0 +1,82 @@
+{
+  "build": "8479abf595cdd8723367206fe393204a99888eed",
+  "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
+  "startedAt": "2026-11-17T20:01:26.439Z",
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "specs": [
+        {
+          "name": "graphite: shell geometry and icon artwork match the supplied HTML reference",
+          "checks": 36,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: an unopened document keeps the same editor shell instead of an admin page",
+          "checks": 10,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: ellipse inspector uses bounding-box X/Y/W/H and saves one reversible native operation",
+          "checks": 10,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: creating the supplied artwork makes a real native file and never fakes gradient paint",
+          "checks": 5,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: creation tools arm without writes and place the shape at the real canvas click",
+          "checks": 6,
+          "failures": [
+            "the file stores the actual click position",
+            "the file stores the actual click position"
+          ],
+          "consoleErrors": [],
+          "status": "FAIL"
+        },
+        {
+          "name": "graphite: a text draft survives property edits, layer changes and new-file attempts until explicitly handled",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: preview and export use the current native document without a new window or a rewrite",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "graphite: the reference opacity slider writes a native value and undoes it exactly",
+          "checks": 1,
+          "failures": [
+            "disk file opacity.svg did not reach the expected state; last content begins: \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>\\n<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"600\\\" height=\\\"400\\\" viewBox=\\\"0 0 600 400\\\">\\n  <!-- editable demo; comments and unfamiliar attributes must survive -->\\n  <rect id=\\\"bg\\\" x=\\\"\""
+          ],
+          "consoleErrors": [
+            "console: Failed to load resource: the server responded with a status of 400 (Bad Request)"
+          ],
+          "status": "FAIL"
+        }
+      ],
+      "status": "FAIL"
+    }
+  },
+  "summary": {
+    "pass": 6,
+    "fail": 2,
+    "notRun": 0
+  },
+  "finishedAt": "2026-11-17T20:01:45.487Z"
+}

@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
      * viewBox so the canvas mounts, the HTML carries ids the element mapper can
      * target, the CSS carries rules the rule inspector can list.
      */
+    const GRAPHITE_EXAMPLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"graphite-board\" width=\"680\" height=\"440\" viewBox=\"0 0 680 440\">\n<defs>\n<linearGradient id=\"baseGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n<stop stop-color=\"#f7f7f4\"/>\n<stop offset=\"1\" stop-color=\"#e8ecf6\"/>\n</linearGradient>\n<linearGradient id=\"orbGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n<stop stop-color=\"#2458e9\"/>\n<stop offset=\".48\" stop-color=\"#527af6\"/>\n<stop offset=\"1\" stop-color=\"#9cc8ff\"/>\n</linearGradient>\n<linearGradient id=\"peach\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n<stop stop-color=\"#ffce9f\"/>\n<stop offset=\"1\" stop-color=\"#ef725f\"/>\n</linearGradient>\n<filter id=\"blur\">\n<feGaussianBlur stdDeviation=\"21\"/>\n</filter>\n</defs>\n<rect x=\"0\" y=\"0\" width=\"680\" height=\"440\" fill=\"url(#baseGrad)\"/>\n<g id=\"scene\">\n<rect id=\"bg-panel\" x=\"33\" y=\"32\" width=\"614\" height=\"376\" rx=\"15\" fill=\"#161d31\"/>\n<ellipse cx=\"491\" cy=\"231\" rx=\"145\" ry=\"118\" fill=\"#416aff\" opacity=\".15\" filter=\"url(#blur)\"/>\n<ellipse id=\"orb\" cx=\"490\" cy=\"221\" rx=\"137\" ry=\"137\" fill=\"url(#orbGrad)\"/>\n<path d=\"M406 220C442 177 470 176 490 176c58 0 88 64 130 69\" stroke=\"#b9d9ff\" stroke-width=\"6\" opacity=\".45\" fill=\"none\"/>\n<path d=\"M430 300c42-90 116-106 165-157\" stroke=\"#091d72\" stroke-width=\"14\" opacity=\".12\" fill=\"none\"/>\n<ellipse id=\"accent\" cx=\"560\" cy=\"291\" rx=\"53\" ry=\"53\" fill=\"url(#peach)\"/>\n<rect x=\"72\" y=\"69\" width=\"31\" height=\"31\" rx=\"6\" fill=\"#6592ff\"/>\n<path d=\"m79 83 8-8 8 8-8 8z\" stroke=\"#fff\" stroke-width=\"2\" fill=\"none\"/>\n<text id=\"brand-title\" x=\"113\" y=\"89\" font-size=\"12\" fill=\"#b7c2de\" font-family=\"Inter,Arial,sans-serif\" font-weight=\"700\" letter-spacing=\".14em\">NOVA / DESIGN SYSTEMS</text>\n<text id=\"hero-title\" x=\"72\" y=\"198\" fill=\"#fff\" font-size=\"64\" font-family=\"Inter,Arial,sans-serif\" font-weight=\"790\" letter-spacing=\"-3\">Make</text>\n<text id=\"hero-subtitle\" x=\"72\" y=\"264\" fill=\"#fff\" font-size=\"64\" font-family=\"Inter,Arial,sans-serif\" font-weight=\"790\" letter-spacing=\"-3\">space.</text>\n<text id=\"description\" x=\"76\" y=\"320\" fill=\"#afbed9\" font-size=\"12\" font-family=\"Inter,Arial,sans-serif\">A playground for better ideas.</text>\n<rect id=\"chip\" x=\"72\" y=\"346\" width=\"129\" height=\"33\" rx=\"16.5\" fill=\"#e9f0ff\"/>\n<text id=\"cta-label\" x=\"91\" y=\"367\" fill=\"#203457\" font-size=\"11\" font-family=\"Inter,Arial,sans-serif\" font-weight=\"700\">Explore concept ↗</text>\n<text id=\"copyright\" x=\"572\" y=\"378\" fill=\"#8899bb\" font-size=\"10\" font-family=\"Inter,Arial,sans-serif\">© 2026</text>\n</g>\n</svg>\n"
     const NEW_TEMPLATES = {
       svg: '<?xml version="1.0" encoding="UTF-8"?>\n'+
         '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">\n'+
@@ -100,6 +101,314 @@ window.__ModuleLoader__.load({
       }
       return result
     }
+    // SVG paths and shell stylesheet are translated from the committed Graphite V3 reference.
+    const GRAPHITE_CSS = `
+.dsh-studio-workbench{--bg:#15171b;--shell:#1d2026;--panel:#202329;--panel2:#262a31;--line:#333740;--soft:#2a2f39;--text:var(--dsw-alias-label-primary,#e8ebf0);--muted:#949ba9;--sub:var(--dsw-alias-label-tertiary,#6e7786);--blue:#c7ad8e;--blue-bg:#4b4035;--canvas:#111317;--shadow:0 14px 50px #080a0c9c;--radius:8px}
+.dsh-studio-workbench *{box-sizing:border-box}
+.dsh-studio-workbench{height:100%;margin:0;background:var(--bg);color:var(--text);font:12px/1.35 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.dsh-studio-workbench button,.dsh-studio-workbench input,.dsh-studio-workbench select{font:inherit}
+.dsh-studio-workbench button{border:0;background:none;color:inherit;cursor:pointer}
+.dsh-studio-workbench button:disabled{opacity:.3;cursor:default}
+.dsh-studio-workbench button:hover:not(:disabled){background:#ffffff0e}
+.dsh-studio-workbench button:focus-visible,.dsh-studio-workbench input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.dsh-studio-workbench{height:100%;min-height:650px;display:grid;grid-template-rows:48px 50px minmax(0,1fr) 30px;overflow:hidden}
+.dsh-studio-workbench .dsh-studio-top{display:flex;align-items:center;padding:0 15px;gap:12px;background:#1e2127;border-bottom:1px solid var(--line)}
+.dsh-studio-workbench .dsh-studio-mark{display:flex;align-items:center;gap:9px;font-weight:700;font-size:12.5px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-brandmark{width:23px;height:23px;border-radius:6px;background:linear-gradient(145deg,#a88e70,#d5b796);display:grid;place-items:center;color:#fff;box-shadow:0 2px 11px #a88e7034}
+.dsh-studio-workbench .dsh-studio-brandmark svg{width:15px;height:15px}
+.dsh-studio-workbench .dsh-studio-tb-divider{height:20px;width:1px;background:var(--line)}
+.dsh-studio-workbench .dsh-studio-crumb{font-weight:500;color:var(--muted);white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-crumb b{font-weight:600;color:var(--text)}
+.dsh-studio-workbench .dsh-studio-tag{border:1px solid #3a414e;color:#aab3c0;padding:3px 8px;border-radius:5px;font-size:10px}
+.dsh-studio-workbench .dsh-studio-grow{flex:1}
+.dsh-studio-workbench .dsh-studio-avatars{display:flex;margin-right:3px}
+.dsh-studio-workbench .dsh-studio-avatar{width:25px;height:25px;border:2px solid var(--shell);border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:10px;background:#546477;margin-right:-5px}
+.dsh-studio-workbench .dsh-studio-avatar.dsh-studio-two{background:#66545e}
+.dsh-studio-workbench .dsh-studio-topbtn{height:29px;padding:0 11px;border:1px solid #3a404b;background:#2c3038;border-radius:6px;font-weight:550;display:flex;align-items:center;gap:7px}
+.dsh-studio-workbench .dsh-studio-topbtn.dsh-studio-primary{border:1px solid #bda17e;background:#4e4235;color:white}
+.dsh-studio-workbench .dsh-studio-topbtn.dsh-studio-muted{background:transparent}
+.dsh-studio-workbench .dsh-studio-topbtn svg{width:14px;height:14px}
+.dsh-studio-workbench .dsh-studio-toolbar{background:#1c1f25;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;padding:0 14px}
+.dsh-studio-workbench .dsh-studio-tools{display:flex;align-items:center;gap:3px}
+.dsh-studio-workbench .dsh-studio-tool{width:33px;height:33px;border-radius:6px;color:#aab2be;display:grid;place-items:center;position:relative}
+.dsh-studio-workbench .dsh-studio-tool svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.65;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.dsh-studio-workbench .dsh-studio-tool.dsh-studio-selected{background:#4b4035;color:#f1ebe2}
+.dsh-studio-workbench .dsh-studio-tool .dsh-studio-shortcut{display:none;position:absolute;top:36px;z-index:20;background:#2c3038;padding:5px 9px;border:1px solid #444c59;color:#dce1e8;white-space:nowrap;border-radius:5px}
+.dsh-studio-workbench .dsh-studio-tool:hover .dsh-studio-shortcut{display:block}
+.dsh-studio-workbench .dsh-studio-sdiv{height:21px;border-left:1px solid var(--line);margin:0 8px}
+.dsh-studio-workbench .dsh-studio-tooltext{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;color:#b0b8c4;font-size:11px}
+.dsh-studio-workbench .dsh-studio-tooltext svg{width:15px;height:15px}
+.dsh-studio-workbench .dsh-studio-active-dot{width:6px;height:6px;border-radius:50%;background:#b9b3a1}
+.dsh-studio-workbench .dsh-studio-layout{display:grid;grid-template-columns:50px 244px minmax(320px,1fr) 298px;min-height:0}
+.dsh-studio-workbench .dsh-studio-rail{background:#191c21;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding-top:11px;gap:8px}
+.dsh-studio-workbench .dsh-studio-railbtn{width:34px;height:34px;display:grid;place-items:center;border-radius:7px;color:#939aa7}
+.dsh-studio-workbench .dsh-studio-railbtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.dsh-studio-workbench .dsh-studio-railbtn.dsh-studio-selected{background:#383632;color:#d4b18a}
+.dsh-studio-workbench .dsh-studio-rail .dsh-studio-spacer{flex:1}
+.dsh-studio-workbench .dsh-studio-rail .dsh-studio-bottom{margin-bottom:11px}
+.dsh-studio-workbench .dsh-studio-sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-height:0}
+.dsh-studio-workbench .dsh-studio-sidehead{height:43px;padding:0 13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-weight:600}
+.dsh-studio-workbench .dsh-studio-small-tool{width:23px;height:23px;border-radius:4px;color:var(--muted);font-size:16px}
+.dsh-studio-workbench .dsh-studio-tabs{display:flex;padding:8px 10px 0;gap:16px;border-bottom:1px solid var(--line)}
+.dsh-studio-workbench .dsh-studio-tab{padding:7px 3px 10px;color:var(--muted);font-size:11px;position:relative}
+.dsh-studio-workbench .dsh-studio-tab.dsh-studio-selected{color:#e8edf6;font-weight:600}
+.dsh-studio-workbench .dsh-studio-tab.dsh-studio-selected:after{content:"";height:2px;background:var(--blue);position:absolute;bottom:-1px;left:0;right:0}
+.dsh-studio-workbench .dsh-studio-layer-search{margin:11px 10px 11px;border:1px solid #363a43;border-radius:6px;height:29px;display:flex;align-items:center;gap:7px;padding:0 9px;color:#7f8997}
+.dsh-studio-workbench .dsh-studio-layer-search span{margin-left:auto;font:10px ui-monospace,monospace;border:1px solid #414550;border-radius:3px;padding:1px 5px}
+.dsh-studio-workbench .dsh-studio-group{color:#808a9a;padding:10px 14px 7px;letter-spacing:.09em;text-transform:uppercase;font-size:9px;font-weight:700}
+.dsh-studio-workbench .dsh-studio-layer-list{overflow:auto;flex:1;padding:0 7px}
+.dsh-studio-workbench .dsh-studio-item{display:flex;align-items:center;gap:9px;padding:0 10px;height:31px;border-radius:5px;color:#b9c0cb;cursor:pointer;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-item .dsh-studio-mini{width:14px;color:#8f9aa9;text-align:center;font-size:11px;flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-item.dsh-studio-active{background:#464038;color:#f1eae0}
+.dsh-studio-workbench .dsh-studio-item:hover:not(.dsh-studio-active){background:#ffffff0b}
+.dsh-studio-workbench .dsh-studio-item .dsh-studio-label{overflow:hidden;text-overflow:ellipsis;flex:1}
+.dsh-studio-workbench .dsh-studio-item .dsh-studio-eye{color:#687383}
+.dsh-studio-workbench .dsh-studio-item.dsh-studio-child{padding-left:24px}
+.dsh-studio-workbench .dsh-studio-panel-note{padding:13px;color:#7e8795;font-size:11px;border-top:1px solid var(--line);line-height:1.5}
+.dsh-studio-workbench .dsh-studio-canvas{background:#111317;position:relative;min-width:0;overflow:hidden;display:flex;flex-direction:column}
+.dsh-studio-workbench .dsh-studio-stage-top{height:38px;display:flex;align-items:center;gap:10px;padding:0 15px;border-bottom:1px solid #282b31;background:#1a1d22;color:#9099a7;font-size:11px;z-index:2}
+.dsh-studio-workbench .dsh-studio-stage-top b{color:#e3e6eb;font-weight:550}
+.dsh-studio-workbench .dsh-studio-stage-top .dsh-studio-pill{background:#2b303a;border-radius:4px;padding:4px 7px;font-size:10px}
+.dsh-studio-workbench .dsh-studio-stage-top .dsh-studio-right{margin-left:auto;display:flex;gap:12px;align-items:center}
+.dsh-studio-workbench .dsh-studio-workspace{flex:1;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;background-color:#13161b;background-image:radial-gradient(#52566026 .7px,transparent .7px);background-size:17px 17px}
+.dsh-studio-workbench .dsh-studio-artframe{position:relative;box-shadow:0 16px 45px #0009;transform:scale(var(--zoom,1));transform-origin:center;transition:transform .15s ease;flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-artboard-label{position:absolute;left:0;top:-27px;color:#aab4c4;font-size:12px;font-weight:550;display:flex;gap:7px;align-items:center}
+.dsh-studio-workbench .dsh-studio-artboard-label:before{content:"▣";color:#c0a37f;font-size:14px}
+.dsh-studio-workbench .dsh-studio-document-svg{width:680px;height:440px;display:block;background:#fff;touch-action:none;user-select:none}
+.dsh-studio-workbench .dsh-studio-document-svg .dsh-studio-selectable{cursor:move}
+.dsh-studio-workbench .dsh-studio-document-svg .dsh-studio-selectable:hover{filter:brightness(1.06)}
+.dsh-studio-workbench .dsh-studio-selection{position:absolute;pointer-events:none;border:1.5px solid #cbb092;box-shadow:0 0 0 .5px #cbb09255}
+.dsh-studio-workbench .dsh-studio-handle{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid #b89975;box-shadow:0 0 0 1px #fff7;border-radius:1px;pointer-events:auto;transform:translate(-50%,-50%);cursor:nwse-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-nw{left:0;top:0}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-ne{left:100%;top:0;cursor:nesw-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-sw{left:0;top:100%;cursor:nesw-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-se{left:100%;top:100%}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-n{left:50%;top:0;cursor:ns-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-s{left:50%;top:100%;cursor:ns-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-w{left:0;top:50%;cursor:ew-resize}
+.dsh-studio-workbench .dsh-studio-handle.dsh-studio-e{left:100%;top:50%;cursor:ew-resize}
+.dsh-studio-workbench .dsh-studio-distance{position:absolute;top:-25px;right:0;color:#e2cfb4;font:10px ui-monospace,monospace;background:#5b4635;padding:3px 6px;border-radius:3px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-canvas-bottom{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:3;display:flex;gap:8px;align-items:center;background:#242831e8;border:1px solid #3d424d;border-radius:8px;padding:5px;box-shadow:0 4px 22px #0006;backdrop-filter:blur(10px)}
+.dsh-studio-workbench .dsh-studio-zoom-btn{padding:6px 10px;color:#dce2ec;border-radius:5px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-zoom-btn:hover{background:#3c414b}
+.dsh-studio-workbench .dsh-studio-zoom-btn.dsh-studio-min{min-width:29px}
+.dsh-studio-workbench .dsh-studio-inspector{display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0;overflow:hidden}
+.dsh-studio-workbench .dsh-studio-inspect-top{height:43px;display:flex;align-items:center;padding:0 17px;gap:20px;border-bottom:1px solid var(--line)}
+.dsh-studio-workbench .dsh-studio-it{height:100%;display:flex;align-items:center;position:relative;color:#9fa7b3;font-weight:550}
+.dsh-studio-workbench .dsh-studio-it.dsh-studio-on{color:#eaf1ff}
+.dsh-studio-workbench .dsh-studio-it.dsh-studio-on:after{content:"";height:2px;background:var(--blue);position:absolute;bottom:-1px;left:0;right:0}
+.dsh-studio-workbench .dsh-studio-inspect-scroll{overflow:auto;padding-bottom:20px}
+.dsh-studio-workbench .dsh-studio-inspect-head{padding:17px;display:flex;align-items:center;gap:8px}
+.dsh-studio-workbench .dsh-studio-type-icon{border:1px solid #4d5a6c;color:#ceb394;padding:4px 7px;border-radius:4px}
+.dsh-studio-workbench .dsh-studio-inspect-title{font-weight:650;font-size:12px}
+.dsh-studio-workbench .dsh-studio-inspect-detail{font-size:11px;color:#7e8896}
+.dsh-studio-workbench .dsh-studio-ins-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dsh-studio-workbench .dsh-studio-ins-row.dsh-studio-triple{grid-template-columns:1fr 1fr 1fr}
+.dsh-studio-workbench .dsh-studio-prop{position:relative;display:flex;align-items:center;gap:7px;padding:0 9px;height:30px;border:1px solid var(--dsw-alias-border-l2,#3a414c);background:#252a32;border-radius:5px;min-width:0}
+.dsh-studio-workbench .dsh-studio-prop span{color:#8c96a6;min-width:10px}
+.dsh-studio-workbench .dsh-studio-prop input{width:100%;min-width:0;border:0;background:transparent;color:var(--dsw-alias-label-primary,#e8ecf1);outline:none;font-size:11px}
+.dsh-studio-workbench .dsh-studio-prop input:focus{outline:none}
+.dsh-studio-workbench .dsh-studio-prop input[type=color]{width:18px;height:18px;padding:0;border:0;background:transparent;cursor:pointer;flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-ins-block{padding:0 17px 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.dsh-studio-workbench .dsh-studio-ins-block:last-child{border:0}
+.dsh-studio-workbench .dsh-studio-ins-head{display:flex;justify-content:space-between;align-items:center;font-weight:650;font-size:11px;margin-bottom:11px}
+.dsh-studio-workbench .dsh-studio-ins-head span{color:#858e9e;font-size:14px}
+.dsh-studio-workbench .dsh-studio-hint{margin:8px 0 0;color:#808a9a;font-size:10px}
+.dsh-studio-workbench .dsh-studio-rowspace{height:10px}
+.dsh-studio-workbench .dsh-studio-toggle-row{height:32px;display:flex;justify-content:space-between;align-items:center;color:#aeb6c1}
+.dsh-studio-workbench .dsh-studio-switch{width:28px;height:16px;background:#3a4050;border-radius:20px;position:relative}
+.dsh-studio-workbench .dsh-studio-switch:before{content:"";position:absolute;left:3px;top:3px;width:10px;height:10px;border-radius:50%;background:#9ca4b3}
+.dsh-studio-workbench .dsh-studio-switch.dsh-studio-on{background:#7e654c}
+.dsh-studio-workbench .dsh-studio-switch.dsh-studio-on:before{left:15px;background:white}
+.dsh-studio-workbench .dsh-studio-color-row{display:flex;gap:8px;align-items:center}
+.dsh-studio-workbench .dsh-studio-swatch{width:22px;height:22px;border-radius:4px;background:#3c66ff;border:1px solid #ffffff44}
+.dsh-studio-workbench .dsh-studio-colorcode{flex:1}
+.dsh-studio-workbench .dsh-studio-opacity{width:35px}
+.dsh-studio-workbench .dsh-studio-addprop{color:#9aa7be;background:#282c35;border:1px dashed #3c4350;width:100%;height:31px;border-radius:5px;text-align:left;padding-left:10px;font-size:11px}
+.dsh-studio-workbench .dsh-studio-footer{background:#1d2025;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 15px;gap:12px;color:#88929f;font-size:10px}
+.dsh-studio-workbench .dsh-studio-footer .dsh-studio-r{margin-left:auto;display:flex;gap:14px}
+.dsh-studio-workbench .dsh-studio-live{color:#6acbaa}
+.dsh-studio-workbench .dsh-studio-kbd{border:1px solid #4c5360;border-radius:3px;padding:1px 4px;color:#a9b3c0;font-size:10px}
+.dsh-studio-workbench .dsh-studio-toast{position:absolute;bottom:72px;left:50%;transform:translateX(-50%);background:#202d43;border:1px solid #4f8ce7;border-radius:7px;padding:9px 13px;color:#e5eeff;z-index:9;box-shadow:0 7px 22px #0008;opacity:0;pointer-events:none;transition:opacity .17s;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-toast.dsh-studio-show{opacity:1}
+.dsh-studio-workbench .dsh-studio-icon-small{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+.dsh-studio-workbench .dsh-studio-mini-select{color:var(--muted);font-size:10px}
+.dsh-studio-workbench input[type=range]{accent-color:#709dff}
+.dsh-studio-workbench #exportLink{display:none}
+.dsh-studio-workbench .dsh-studio-panel-sub{margin-top:2px;color:#717d8b;font-size:10px}
+.dsh-studio-workbench .dsh-studio-helper{font-size:10px;color:#8d98a7}
+.dsh-studio-workbench .dsh-studio-type-inspector[hidden]{display:none!important}
+.dsh-studio-workbench .dsh-studio-field-label{display:block;color:#a6afbf;font-size:11px;margin-bottom:6px}
+.dsh-studio-workbench .dsh-studio-type-content{width:100%;min-height:76px;resize:vertical;padding:10px 11px;border:1px solid #414a59;border-radius:6px;background:#171b23;color:#f1f4fa;font:12px/1.5 Inter,Arial,sans-serif;outline:none;box-sizing:border-box}
+.dsh-studio-workbench .dsh-studio-type-content:focus,.dsh-studio-workbench .dsh-studio-type-select:focus{border-color:#bea88c;box-shadow:0 0 0 2px #bea88c22}
+.dsh-studio-workbench .dsh-studio-type-select,.dsh-studio-workbench .dsh-studio-prop select{width:100%;min-width:0;border:1px solid #414a59;border-radius:5px;background:#262b34;color:#edf1f9;padding:7px 9px;font-size:11px;outline:none}
+.dsh-studio-workbench .dsh-studio-prop select{border:0;padding:0;background:transparent}
+.dsh-studio-workbench .dsh-studio-type-help{font-size:10px;color:#788a9f;margin-top:6px;line-height:1.5}
+.dsh-studio-workbench .dsh-studio-type-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px}
+.dsh-studio-workbench .dsh-studio-type-action{height:31px;border:1px solid #3e4551;border-radius:5px;background:#262b34;color:#b5bfd0;font-size:17px}
+.dsh-studio-workbench .dsh-studio-type-action:hover{background:#343d4d}
+.dsh-studio-workbench .dsh-studio-type-action.dsh-studio-active{background:#294a7c;border-color:#4e85dd;color:#e4efff}
+.dsh-studio-workbench .dsh-studio-type-action:nth-child(2){text-align:center}
+.dsh-studio-workbench .dsh-studio-type-action:nth-child(3){text-align:right;padding-right:10px}
+.dsh-studio-workbench .dsh-studio-type-action.dsh-studio-italic-action{font-family:Georgia,serif}
+.dsh-studio-workbench .dsh-studio-type-action.dsh-studio-edit-canvas-action{font-size:16px}
+.dsh-studio-workbench .dsh-studio-document-svg text.dsh-studio-selectable{cursor:move;pointer-events:bounding-box}
+.dsh-studio-workbench .dsh-studio-document-svg text.dsh-studio-selectable:hover{paint-order:stroke fill;stroke:#8aafff;stroke-width:.22px}
+.dsh-studio-workbench .dsh-studio-text-inline-editor{position:absolute;z-index:20;resize:none;overflow:hidden;background:#102038ef;color:#fff;border:1.5px solid #7eafff;box-shadow:0 0 0 3px #3b7bed25,0 12px 32px #0008;border-radius:3px;padding:0;outline:none;white-space:pre;line-height:1.2;min-height:28px}
+.dsh-studio-workbench .dsh-studio-text-inline-editor:focus{outline:none}
+.dsh-studio-workbench .dsh-studio-text-editor-hint{position:absolute;z-index:21;pointer-events:none;background:#274b81;color:#eaf3ff;padding:3px 7px;border-radius:3px;font-size:10px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-selection.dsh-studio-is-text .dsh-studio-handle{display:none}
+.dsh-studio-workbench .dsh-studio-document-svg.dsh-studio-text-insert-mode{cursor:text}
+.dsh-studio-workbench{ --bg:var(--dsw-alias-bg-base,#191a1c); --shell:var(--dsw-alias-bg-base,#202125); --panel:var(--dsw-alias-bg-layer-1,#242528); --panel2:var(--dsw-alias-bg-layer-2,#2a2b2e); --line:var(--dsw-alias-border-l1,#38393b); --soft:#303136; --canvas:#151618; --muted:var(--dsw-alias-label-secondary,#a19f9d); }
+.dsh-studio-workbench .dsh-studio-brandmark{box-shadow:none; background:linear-gradient(150deg,#756657,#ad9272)}
+.dsh-studio-workbench .dsh-studio-topbtn.dsh-studio-primary{background:#504538;color:#f3eee6;border-color:#85745f}
+.dsh-studio-workbench .dsh-studio-tool.dsh-studio-selected,.dsh-studio-workbench .dsh-studio-railbtn.dsh-studio-selected,.dsh-studio-workbench .dsh-studio-item.dsh-studio-active{color:#e9e1d7;background:#453b32}
+.dsh-studio-workbench .dsh-studio-selection{border-color:#c6aa89;box-shadow:0 0 0 .5px #c6aa8955}
+.dsh-studio-workbench .dsh-studio-handle{border-color:#b59d7e}
+.dsh-studio-workbench .dsh-studio-workspace{background-color:var(--dsw-alias-bg-base,#17181a)}
+
+
+.dsh-studio-workbench{container-type:inline-size;position:relative;min-height:0!important;border-radius:8px;--g-line:var(--line);--g-panel:var(--panel);--g-panel2:var(--panel2);--g-shell:var(--shell);--g-text:var(--text);--g-muted:var(--muted);--g-sub:var(--sub);--g-accent:var(--blue);--g-sel:#453b32;font-family:var(--dsw-font-family,Inter,system-ui,sans-serif)}
+
+.dsh-studio-workbench button{border:0;background:none;color:inherit;cursor:pointer}
+.dsh-studio-workbench input,.dsh-studio-workbench select,.dsh-studio-workbench textarea{color:var(--text)}
+
+.dsh-studio-workbench .dsh-studio-top,.dsh-studio-workbench .dsh-studio-toolbar{min-width:0}
+.dsh-studio-workbench .dsh-studio-topbtn{flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-brand{font-size:12.5px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-crumb{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dsh-studio-workbench .dsh-studio-crumb b{overflow:hidden;text-overflow:ellipsis}
+.dsh-studio-workbench .dsh-studio-tool.selected{color:#e9e1d7;background:#453b32}
+
+.dsh-studio-workbench .dsh-studio-layout{overflow:hidden}
+.dsh-studio-workbench .dsh-studio-sidebar{overflow:hidden}
+.dsh-studio-workbench .dsh-studio-layer-search{width:calc(100% - 20px);background:transparent;color:var(--text);flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-layer-list{display:flex;flex-direction:column;gap:1px}
+.dsh-studio-workbench .dsh-studio-layer-list>button{height:31px;min-height:31px;flex-shrink:0;border:0!important;display:flex;align-items:center;gap:9px;padding-top:0!important;padding-bottom:0!important;border-radius:5px}
+.dsh-studio-workbench .dsh-studio-layer-list>button[aria-pressed=true]{background:#453b32!important;color:#e9e1d7}
+.dsh-studio-workbench .dsh-studio-layer-list svg{width:14px;height:14px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7}
+
+.dsh-studio-workbench .dsh-studio-canvas{padding:0;min-height:0;background-image:none}
+.dsh-studio-workbench .dsh-studio-stage-top{height:38px;flex:0 0 38px;min-width:0}
+.dsh-studio-workbench .dsh-studio-stage-top b{max-width:50%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-studio-workbench .dsh-studio-workspace{min-height:0;padding:32px;overflow:auto}
+.dsh-studio-workbench .dsh-studio-viewport{min-height:0!important;flex:1;align-self:stretch}
+.dsh-studio-workbench .dsh-studio-artboard{max-width:calc(100% - 48px)!important;max-height:calc(100% - 48px)!important;width:min(var(--art-width),calc(100cqw - 48px),calc((100cqh - 48px) * var(--art-ratio)))!important}
+.dsh-studio-workbench .dsh-studio-artboard-label{white-space:nowrap;font-size:11px}
+
+.dsh-studio-workbench .dsh-studio-canvas-bottom{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:18;display:flex;align-items:center;gap:4px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 22px #0006}
+.dsh-studio-workbench .dsh-studio-canvas-bottom button{height:29px;border:0;padding:4px 8px}
+.dsh-studio-workbench .dsh-studio-canvas-bottom output{font-size:11px}
+.dsh-studio-workbench .dsh-studio-canvas-bottom select{height:28px}
+
+.dsh-studio-workbench .dsh-studio-inspector{padding:0;overflow:hidden}
+.dsh-studio-workbench .dsh-studio-inspect-top{flex:0 0 43px}
+.dsh-studio-workbench .dsh-studio-inspect-scroll{min-height:0;flex:1}
+.dsh-studio-workbench .dsh-studio-inspect-head{min-height:76px}
+.dsh-studio-workbench .dsh-studio-inspect-head svg{width:20px;height:20px;stroke:var(--blue);fill:none;stroke-width:1.65}
+.dsh-studio-workbench .dsh-studio-ins-block{padding:0 17px 16px;margin-bottom:16px}
+.dsh-studio-workbench .dsh-studio-ins-block input,.dsh-studio-workbench .dsh-studio-ins-block select{max-width:100%;min-width:0}
+.dsh-studio-workbench .dsh-studio-prop input{height:28px;padding:0}
+.dsh-studio-workbench .dsh-studio-prop{font-size:11px}
+.dsh-studio-workbench .dsh-studio-ins-head{color:var(--text)}
+.dsh-studio-workbench .dsh-studio-ins-head span{color:var(--muted)}
+
+.dsh-studio-workbench details>summary{cursor:pointer;list-style:none;font-size:11px;color:var(--muted)}
+.dsh-studio-workbench details>summary::-webkit-details-marker{display:none}
+.dsh-studio-workbench details>summary:after{content:'⌄';margin-left:8px}
+.dsh-studio-workbench .dsh-studio-menu{position:relative}
+.dsh-studio-workbench .dsh-studio-menu>summary{height:29px;display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-radius:6px;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-menu-body{position:absolute;top:36px;left:0;width:320px;padding:14px;display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;z-index:40;box-shadow:var(--shadow)}
+.dsh-studio-workbench .dsh-studio-menu-body input{width:100%;min-width:0}
+.dsh-studio-workbench .dsh-studio-menu-body button{border:1px solid var(--line)}
+.dsh-studio-workbench .dsh-studio-settings .dsh-studio-menu-body{left:auto;right:0}
+.dsh-studio-workbench .dsh-studio-file-picker{position:absolute;left:15px;top:96px;width:min(600px,calc(100% - 30px));z-index:35;background:var(--panel)!important;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+
+.dsh-studio-workbench .dsh-studio-welcome{width:min(540px,100%);margin:auto;padding:28px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+.dsh-studio-workbench .dsh-studio-welcome button{border:1px solid var(--line);background:var(--panel2)}
+.dsh-studio-workbench .dsh-studio-welcome [role=list]{max-height:230px;overflow:auto}
+.dsh-studio-workbench .dsh-studio-empty{padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;min-height:0!important}
+
+.dsh-studio-workbench .dsh-studio-alerts{position:absolute;top:104px;left:50%;transform:translateX(-50%);max-width:65%;z-index:32;background:var(--panel);border-radius:6px;box-shadow:var(--shadow)}
+.dsh-studio-workbench .dsh-studio-alerts:empty{display:none}
+.dsh-studio-workbench .dsh-studio-source{position:absolute;bottom:30px;left:294px;right:298px;z-index:30;background:var(--panel);border-top:1px solid var(--line);padding:8px 14px}
+.dsh-studio-workbench .dsh-studio-source[open]{box-shadow:0 -8px 24px #0006}
+.dsh-studio-workbench .dsh-studio-source textarea{max-height:35vh}
+.dsh-studio-workbench .dsh-studio-footer{height:30px;min-width:0;white-space:nowrap;overflow:hidden}
+.dsh-studio-workbench .dsh-studio-footer>span:last-child{margin-left:auto}
+
+.dsh-studio-workbench .dsh-studio-mobile-tabs{display:none}
+.dsh-studio-workbench .dsh-studio-layout-controls{padding:0!important;border:0!important;background:transparent!important}
+.dsh-studio-workbench .dsh-studio-technical{padding:0 17px 16px}
+.dsh-studio-workbench .dsh-studio-technical>summary{padding:9px 0}
+.dsh-studio-workbench .dsh-studio-type-actions{grid-template-columns:repeat(3,1fr)}
+
+@container (max-width:1150px){.dsh-studio-workbench .dsh-studio-layout{grid-template-columns:50px 200px minmax(240px,1fr) 260px}
+.dsh-studio-workbench .dsh-studio-source{left:250px;right:260px}
+.dsh-studio-workbench .dsh-studio-helper{display:none}
+}
+
+@container (max-width:950px){.dsh-studio-workbench .dsh-studio-layout{grid-template-columns:44px 160px minmax(180px,1fr) 240px}
+.dsh-studio-workbench .dsh-studio-source{left:204px;right:240px}
+.dsh-studio-workbench .dsh-studio-status{display:none}
+}
+
+@container (max-width:750px){.dsh-studio-workbench{grid-template-rows:48px 50px minmax(0,1fr) 30px}
+.dsh-studio-workbench .dsh-studio-mobile-tabs{display:flex;position:absolute;top:103px;left:8px;z-index:25;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px}
+.dsh-studio-workbench .dsh-studio-mobile-tabs button{padding:4px 7px}
+.dsh-studio-workbench .dsh-studio-layout{display:block}
+.dsh-studio-workbench .dsh-studio-layout>.dsh-studio-rail{display:none}
+.dsh-studio-workbench .dsh-studio-layout>.dsh-studio-sidebar,.dsh-studio-workbench .dsh-studio-layout>.dsh-studio-inspector,.dsh-studio-workbench .dsh-studio-layout>.dsh-studio-canvas{display:none;height:100%;padding-top:40px}
+.dsh-studio-workbench .dsh-studio-layout>.dsh-studio-mobile-active{display:flex}
+.dsh-studio-workbench .dsh-studio-source{left:0;right:0}
+.dsh-studio-workbench .dsh-studio-crumb,.dsh-studio-workbench .dsh-studio-helper,.dsh-studio-workbench .dsh-studio-tag{display:none}
+.dsh-studio-workbench .dsh-studio-tools{gap:0}
+.dsh-studio-workbench .dsh-studio-tool{width:28px}
+.dsh-studio-workbench .dsh-studio-toolbar{gap:5px;padding:0 6px}
+.dsh-studio-workbench .dsh-studio-sdiv{margin:0 3px}
+.dsh-studio-workbench .dsh-studio-workspace{padding:12px}
+.dsh-studio-workbench .dsh-studio-welcome{padding:15px}
+.dsh-studio-workbench .dsh-studio-inspector{max-height:none}
+.dsh-studio-workbench .dsh-studio-canvas-bottom{bottom:35px}
+.dsh-studio-workbench .dsh-studio-footer>span:nth-child(n+4){display:none}
+}
+
+@media(prefers-reduced-motion:reduce){.dsh-studio-workbench *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}
+
+
+.dsh-studio-workbench{--dsw-alias-bg-base:#202125;--dsw-alias-bg-layer-1:#242528;--dsw-alias-bg-layer-2:#2a2b2e;--dsw-alias-border-l1:#38393b;--dsw-alias-border-l2:#3a414c;--dsw-alias-label-primary:#e8ebf0;--dsw-alias-label-secondary:#a19f9d;--dsw-alias-label-tertiary:#949ba9}
+.dsh-studio-workbench .dsh-studio-tabs button[aria-selected=true]{color:var(--text);font-weight:600;border-bottom:2px solid var(--blue)}
+.dsh-studio-workbench .dsh-studio-rail button{width:34px;height:34px;border-radius:7px;color:#939aa7;display:grid;place-items:center}
+.dsh-studio-workbench .dsh-studio-rail button svg{width:17px;height:17px}
+.dsh-studio-workbench .dsh-studio-rail button[aria-pressed=true]{background:#453b32;color:#e9e1d7}
+.dsh-studio-workbench .dsh-studio-canvas-bottom{background:#242528}
+.dsh-studio-workbench .dsh-studio-inspector{overflow:hidden!important}
+.dsh-studio-workbench .dsh-studio-tooltext svg{width:15px;height:15px}
+.dsh-studio-workbench .dsh-studio-brandmark svg{width:15px;height:15px}
+.dsh-studio-workbench .dsh-studio-welcome{min-height:0!important;flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-source:not([open]){background:transparent;border:0;left:auto;right:12px;padding:6px 10px}
+.dsh-studio-workbench .dsh-studio-artboard-label{pointer-events:none}
+
+
+.dsh-studio-workbench .dsh-studio-layer-list>button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-toolbar button[data-tool]{flex-shrink:0}
+.dsh-studio-workbench[data-preview=true] .dsh-studio-layout{grid-template-columns:minmax(0,1fr)}
+.dsh-studio-workbench[data-preview=true] .dsh-studio-layout>.dsh-studio-rail,
+.dsh-studio-workbench[data-preview=true] .dsh-studio-layout>.dsh-studio-sidebar,
+.dsh-studio-workbench[data-preview=true] .dsh-studio-layout>.dsh-studio-inspector,
+.dsh-studio-workbench[data-preview=true] [aria-label="Direct manipulation overlay"],
+.dsh-studio-workbench[data-preview=true] .dsh-studio-source{display:none!important}
+.dsh-studio-workbench .dsh-studio-tool[aria-pressed=true]{background:#453b32!important;color:#e9e1d7}
+.dsh-studio-workbench .dsh-studio-type-commit{display:flex;gap:6px;margin-top:6px}
+.dsh-studio-workbench .dsh-studio-type-commit:has(button:only-child:disabled){display:none}
+
+    `
+    const GRAPHITE_ICONS = {"previewBtn":[["path",{"d":"M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"}],["circle",{"cx":"12","cy":"12","r":"3"}]],"export":[["path",{"d":"M12 3v13m-4-4 4 4 4-4M4 18v3h16v-3"}]],"select":[["path",{"d":"M5 3v17l5-5 4 7 2-1-4-7 8-1Z"}]],"frame":[["path",{"d":"M4 2v20M20 2v20M2 4h20M2 20h20"}]],"rect":[["rect",{"x":"4","y":"4","width":"16","height":"16","rx":"1"}]],"ellipse":[["circle",{"cx":"12","cy":"12","r":"9"}]],"pen":[["path",{"d":"M3 21 16 8m-4-4 8 8M3 21l5-1 12-12-4-4L4 16Z"}]],"text":[["path",{"d":"M3 5h18M12 5v15m-5 0h10M5 5l-1 4m15-4 1 4"}]],"hand":[["path",{"d":"M6 13V8a2 2 0 0 1 4 0v2-5a2 2 0 0 1 4 0v5-3a2 2 0 0 1 4 0v5-2a2 2 0 0 1 4 0v6c0 4-4 6-9 6-4 0-6-2-8-6l-3-3 2-2Z"}]],"undoBtn":[["path",{"d":"M9 5 3 11l6 6M3 11h12a6 6 0 0 1 0 12"}]],"redoBtn":[["path",{"d":"m15 5 6 6-6 6m6-6H9a6 6 0 0 0 0 12"}]],"Calques":[["path",{"d":"m3 8 9-5 9 5-9 5Z"}],["path",{"d":"m3 12 9 5 9-5M3 16l9 5 9-5"}]],"Composants":[["rect",{"x":"3","y":"3","width":"8","height":"8"}],["rect",{"x":"13","y":"3","width":"8","height":"8"}],["rect",{"x":"3","y":"13","width":"8","height":"8"}],["rect",{"x":"13","y":"13","width":"8","height":"8"}]],"Ressources":[["rect",{"x":"3","y":"3","width":"18","height":"18","rx":"2"}],["circle",{"cx":"8","cy":"9","r":"2"}],["path",{"d":"m3 18 6-5 3 3 4-6 5 6"}]],"Historique":[["path",{"d":"M3 12a9 9 0 1 1 3 7M3 5v7h7M12 6v6l4 2"}]],"Réglages":[["circle",{"cx":"12","cy":"12","r":"3"}],["path",{"d":"M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"}]],"brand":[["path",{"d":"M12 2 22 12 12 22 2 12Z"}]],"path":[["path",{"d":"M3 21 16 8m-4-4 8 8M3 21l5-1 12-12-4-4L4 16Z"}]],"circle":[["circle",{"cx":"12","cy":"12","r":"9"}]],"grid":[["path",{"d":"M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"}]]}
+    function glyph(name) {
+      return h('svg',{viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.7,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':'true',focusable:'false'},
+        (GRAPHITE_ICONS[name]||GRAPHITE_ICONS.rect).map(([tag,attrs],index)=>h(tag,{...attrs,key:index})))
+    }
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
       const workspaceId = props && typeof props.workspaceId === 'string' ? props.workspaceId : ''
@@ -122,6 +431,8 @@ window.__ModuleLoader__.load({
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
       const [layerSearch,setLayerSearch] = React.useState('')
+      const [previewMode,setPreviewMode] = React.useState(false)
+      const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
       const [creating,setCreating] = React.useState(false)
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
@@ -183,6 +494,7 @@ window.__ModuleLoader__.load({
       const [penOutgoing,setPenOutgoing]=React.useState(null)
       const [penPreview,setPenPreview]=React.useState(null)
       const penGestureRef=React.useRef(null)
+      const shapePendingRef=React.useRef(false)
       const penPendingRef=React.useRef(false)
       const [spaceHeld,setSpaceHeld]=React.useState(false)
       const [camera,setCamera]=React.useState({zoom:1,offsetX:0,offsetY:0})
@@ -199,7 +511,27 @@ window.__ModuleLoader__.load({
           try{old.frameDoc.removeEventListener('click',old.handler,true)}catch(_){}
         }
       }
+      function exportNativeDocument() {
+        if(!doc||busy||reloadRequired||refuseTextDraft())return
+        if(source!==doc.source){setError('Enregistrez le brouillon source avant l’export.');return}
+        const mime=doc.format==='svg'?'image/svg+xml':doc.format==='css'?'text/css':'text/html'
+        const url=URL.createObjectURL(new Blob([doc.source],{type:mime+';charset=utf-8'}))
+        const anchor=document.createElement('a')
+        anchor.href=url;anchor.download=doc.file.split('/').pop()||('design.'+doc.format)
+        anchor.click()
+        setTimeout(()=>URL.revokeObjectURL(url),0)
+      }
+      function hasTextDraft() {
+        const text=textNodes.find(item=>item.id===active)
+        return !!text && textDraft!==text.text
+      }
+      function refuseTextDraft() {
+        if(!hasTextDraft())return false
+        setError('Texte non enregistré : enregistrez ou abandonnez le brouillon avant une autre action.')
+        return true
+      }
       async function load(force=false, targetFile=file, retainSelection='', onLoaded=null) {
+        if(!force && refuseTextDraft())return false
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
         if(!scopeReady) {setError(scopeMessage);return false}
         setBusy(true);setError('')
@@ -265,7 +597,7 @@ window.__ModuleLoader__.load({
           setWorkspaceFiles(response.files||[])
           setFilesTruncated(!!response.truncated)
           return true
-        } catch(_) { return false }
+        } catch(error) { setError('Impossible de lister les fichiers : '+String(error.message));return false }
       }
 
       // The tab used to open on an empty body: the workspace list only appeared
@@ -286,15 +618,17 @@ window.__ModuleLoader__.load({
        * existing path, so a duplicate name is reported instead of overwriting a
        * file the user did not mean to touch.
        */
-      async function createDocument(format) {
-        if(!scopeReady||creating) return
+      async function createDocument(format, template=null) {
+        if(!scopeReady||creating||busy) return
+        if(refuseTextDraft())return
+        if(doc && source!==doc.source){setError('Unsaved source changes: save or discard them before creating another file');return}
         const typed=newName.trim()
         const base=typed.replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')
-        const target=(base||'nouveau-fichier')+'.'+format
+        const target=(base||(template?'graphite-v3':'nouveau-fichier'))+'.'+format
         setCreating(true);setError('')
         try {
           await request('/create',{method:'POST',headers:{'content-type':'application/json'},
-            body:JSON.stringify({...scopeBody,file:target,source:NEW_TEMPLATES[format]})})
+            body:JSON.stringify({...scopeBody,file:target,source:template||NEW_TEMPLATES[format]})})
           setNewName('')
           await loadWorkspaceFiles()
           await load(false,target)
@@ -306,6 +640,7 @@ window.__ModuleLoader__.load({
       }
       async function save(payload, historyMode='record',onSaved=null) {
         if(!doc || busy)return false
+        if(payload.kind!=='svg-text' && refuseTextDraft())return false
         if(reloadRequired){setError('Document state uncertain. Reload the file before making further changes.');return false}
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
         setBusy(true);setError('')
@@ -472,15 +807,17 @@ window.__ModuleLoader__.load({
           setDragDelta(null);setPathDrag(null)
           return
         }
+        if(event.key==='Escape'){setCanvasTool('select');return}
         const command=event.ctrlKey || event.metaKey
         if(!command && !event.altKey && (event.key===' ' || event.code==='Space')) {
           event.preventDefault()
           setSpaceHeld(true)
           return
         }
-        if(!command && !event.altKey && !event.shiftKey && (event.key==='v' || event.key==='h' || event.key==='p')) {
+        if(!command && !event.altKey && !event.shiftKey && ['v','h','p','r','o','t'].includes(event.key)) {
           event.preventDefault()
-          setCanvasTool(event.key==='h'?'hand':event.key==='p'?'pen':'select')
+          if(refuseTextDraft())return
+          setCanvasTool(({v:'select',h:'hand',p:'pen',r:'rect',o:'ellipse',t:'text'})[event.key])
           if(event.key==='p'){setPenPathId('');setPenOutgoing(null)}
           return
         }
@@ -522,6 +859,7 @@ window.__ModuleLoader__.load({
         if(event.key===' ' || event.code==='Space') setSpaceHeld(false)
       }
       function select(nodeId, additive=false) {
+        if(refuseTextDraft())return
         setActive(nodeId)
         setEditingText('')
         setTextDraft(textNodes.find(item=>item.id===nodeId)?.text||'')
@@ -758,6 +1096,10 @@ window.__ModuleLoader__.load({
       const selectedText=textNodes.find(node=>node.id===active)
       const selectedPath=pathNodes.find(node=>node.id===active)
       function startTextEditing(nodeId) {
+        if(hasTextDraft()) {
+          if(nodeId!==active){refuseTextDraft();return}
+          setEditingText(nodeId);return
+        }
         const node=textNodes.find(item=>item.id===nodeId)
         if(!node || !node.editable) {setError('Complex SVG text cannot be edited visually without risking its source');return}
         if(busy || source!==doc?.source) {setError('Save or discard current source changes first');return}
@@ -843,6 +1185,21 @@ window.__ModuleLoader__.load({
           x=snapAxis(x,artboard.x,gridStep);y=snapAxis(y,artboard.y,gridStep)
         }
         return {x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000}
+      }
+      async function createShapeAtPointer(event) {
+        if(!['rect','ellipse','text'].includes(canvasTool)||event.button!==0||spaceHeld||
+          busy||reloadRequired||shapePendingRef.current||source!==doc?.source||refuseTextDraft())return
+        const point=positionInArtboard(event,event.currentTarget)
+        if(!point)return
+        event.preventDefault();event.stopPropagation()
+        const shape=canvasTool
+        shapePendingRef.current=true
+        try {
+          await save({kind:'svg-add-shape',shape,x:point.x,y:point.y},'record',response=>{
+            setCanvasTool('select')
+            if(shape==='text')setEditingText(response.createdId)
+          })
+        } finally {shapePendingRef.current=false}
       }
       function startPenGesture(event) {
         if(event.button!==0 || canvasTool!=='pen'||spaceHeld||penPendingRef.current||
@@ -966,6 +1323,7 @@ window.__ModuleLoader__.load({
       }
       function startDrag(event,handle,mode='move') {
         if(event.button!==0 || busy || reloadRequired || canvasTool!=='select' || spaceHeld) return
+        if(refuseTextDraft())return
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
@@ -1063,141 +1421,261 @@ window.__ModuleLoader__.load({
         if(edits.length===0) return
         void save({kind:'svg-attributes',edits})
       }
-      const geometryInspector = geometryValues.length>0
-        ? h('div',{className:'dsh-studio-ins-block'},
-            h('div',{className:'dsh-studio-ins-head'},'Transformation',
-              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},'unités SVG')),
-            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}},
-              geometryValues.map(key=>h('label',{key,style:{display:'flex',alignItems:'center',gap:7,
-                  border:'1px solid var(--dsw-alias-border-l2, #3a414c)',
-                  background:'var(--dsw-alias-bg-layer-2, #252a32)',borderRadius:5,height:30,padding:'0 9px',minWidth:0}},
-                h('span',{style:{color:'var(--dsw-alias-label-tertiary, #8c96a6)',fontSize:10,minWidth:12}},
-                  GEOMETRY_LABELS[key]||key),
-                h('input',{key:key+':'+selected.attributes[key],type:'number',step:'any',
-                  defaultValue:selected.attributes[key],disabled:!geometryWritable,
-                  'aria-label':'Geometry '+key,
-                  style:{width:'100%',minWidth:0,border:0,background:'transparent',height:26,
-                    color:'var(--dsw-alias-label-primary, #e8ecf1)',fontSize:11,padding:0},
-                  onBlur:e=>commitAttributes({[key]:e.target.value}),
-                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))) )
-        : null
-      const fillValue = selected && typeof selected.attributes?.fill==='string' &&
-        /^#[0-9a-f]{3,8}$/i.test(selected.attributes.fill) ? selected.attributes.fill : ''
-      const appearanceInspector = selected && !selectedCss && doc?.format==='svg' && fillValue
-        ? h('div',{className:'dsh-studio-ins-block'},
-            h('div',{className:'dsh-studio-ins-head'},'Apparence',
-              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},'remplissage')),
-            h('div',{style:{display:'flex',gap:8,alignItems:'center'}},
-              h('input',{type:'color',value:fillValue.length===7?fillValue:fillValue,
-                'aria-label':'Fill colour',disabled:!editable,
-                style:{width:34,height:30,padding:2,cursor:'pointer'},
-                onChange:e=>commitAttributes({fill:e.target.value})}),
-              h('input',{type:'text',defaultValue:fillValue,key:fillValue,'aria-label':'Fill hex',
-                spellCheck:false,disabled:!editable,style:{...field,height:30},
-                onBlur:e=>commitAttributes({fill:e.target.value}),
-                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
-            h('div',{style:{display:'flex',gap:8,alignItems:'center',marginTop:8}},
-              h('span',{style:{color:'var(--dsw-alias-label-tertiary, #8c96a6)',fontSize:10,minWidth:58}},
-                'Opacité'),
-              h('input',{type:'number',min:0,max:1,step:0.05,key:'opacity:'+(selected.attributes.opacity??''),
-                defaultValue:selected.attributes.opacity??'1',disabled:!editable,
-                'aria-label':'Opacity',
-                style:{...field,height:30,width:80},
-                onBlur:e=>commitAttributes({opacity:e.target.value}),
-                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
-            h('small',{style:{display:'block',marginTop:8,color:'var(--dsw-alias-label-tertiary, #7e8795)',fontSize:10,lineHeight:1.5}},
-              'Contour, dégradés et effets ne sont pas pris en charge par le moteur actuel : aucune commande factice n’est affichée.'))
-        : null
-      return h('section',{className:'dsh-studio-workbench',lang:'fr',
-        'aria-label':'DSH Design Studio workbench',
-        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'var(--dsw-font-family, system-ui, sans-serif)',fontSize:12}},
-        // Graphite V3 (docs/design/DSH-Design-Studio-V3-Graphite-interactive.html):
-        // the mockup's geometry and palette are reproduced here, while every
-        // surface still resolves through DSH theme tokens first, so the editor
-        // keeps following the host's light/dark theme (ADR-023).
-        h('style',null,[
-          '.dsh-studio-workbench *{box-sizing:border-box}',
-          '.dsh-studio-workbench{container-type:inline-size;--g-line:var(--dsw-alias-border-l1,#38393b);--g-panel:var(--dsw-alias-bg-layer-1,#242528);--g-panel2:var(--dsw-alias-bg-layer-2,#2a2b2e);--g-shell:var(--dsw-alias-bg-base,#202125);--g-stage:#151618;--g-text:var(--dsw-alias-label-primary,#e8ebf0);--g-muted:var(--dsw-alias-label-secondary,#a19f9d);--g-sub:var(--dsw-alias-label-tertiary,#949ba9);--g-accent:#bda991;--g-sel:#453b32}',
-          '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid var(--g-accent);outline-offset:1px}',
-          '.dsh-studio-workbench button:not(:disabled):hover{filter:brightness(1.14)}',
-          '.dsh-studio-workbench button:disabled{opacity:.45;cursor:default}',
-          // 48px top bar
-          '.dsh-studio-top{display:flex;align-items:center;gap:11px;height:48px;flex:0 0 48px;padding:0 14px;border-bottom:1px solid var(--g-line);background:var(--g-panel)}',
-          '.dsh-studio-brandmark{width:23px;height:23px;border-radius:6px;background:linear-gradient(145deg,#a88e70,#d5b796);display:grid;place-items:center;color:#fff;font-size:12px;flex:0 0 auto;box-shadow:0 2px 11px #a88e7034}',
-          '.dsh-studio-brand{font-size:12.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap}',
-          '.dsh-studio-tb-divider{width:1px;height:20px;background:var(--g-line);flex:0 0 auto}',
-          '.dsh-studio-crumb{display:flex;align-items:center;gap:8px;color:var(--g-muted);font-size:11.5px;min-width:0;flex:1}',
-          '.dsh-studio-crumb b{color:var(--g-text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:330px}',
-          '.dsh-studio-tag{border:1px solid var(--g-line);color:var(--g-muted);padding:3px 7px;border-radius:4px;font-size:10px;white-space:nowrap;background:var(--g-panel2)}',
-          // 50px file/tool strip
-          '.dsh-studio-toolbar{display:flex;align-items:center;gap:9px;height:50px;flex:0 0 50px;padding:0 12px;border-bottom:1px solid var(--g-line);background:var(--dsw-alias-bg-layer-2, #1c1f25)}',
-          '.dsh-studio-toolbar input{height:29px}',
-          '.dsh-studio-toolbar button{height:29px}',
-          // work grid: rail | side | stage | inspector
-          '.dsh-studio-layout{display:grid;grid-template-columns:50px 244px minmax(300px,1fr) 298px;min-height:0;flex:1;overflow:hidden}',
-          '.dsh-studio-rail{background:var(--dsw-alias-bg-base, #191c21);border-right:1px solid var(--g-line);display:flex;flex-direction:column;align-items:center;padding-top:11px;gap:8px}',
-          '.dsh-studio-rail button{width:34px;height:34px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary, #939aa7);display:grid;place-items:center;cursor:pointer;padding:0}',
-          '.dsh-studio-rail button[aria-pressed="true"]{background:var(--g-sel);color:var(--dsw-alias-label-primary, #e9e1d7)}',
-          '.dsh-studio-sidebar{display:flex;flex-direction:column;min-height:0;overflow:hidden;border:0!important;border-right:1px solid var(--g-line)!important;border-radius:0!important;background:var(--g-panel)!important;padding:0!important}',
-          '.dsh-studio-sidehead{height:43px;flex:0 0 43px;padding:0 13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--g-line);font-weight:600;font-size:12px}',
-          '.dsh-studio-tabs{display:flex;gap:16px;padding:8px 12px 0;border-bottom:1px solid var(--g-line);flex:0 0 auto}',
-          '.dsh-studio-tabs button{border:0;background:transparent;padding:7px 2px 9px;color:var(--g-muted);font-size:11px;cursor:pointer}',
-          '.dsh-studio-tabs button[aria-selected="true"]{color:var(--g-text);font-weight:600}',
-          '.dsh-studio-tabs button:disabled{opacity:.45;cursor:default}',
-          '.dsh-studio-layer-search{margin:10px 10px 8px;height:29px;width:calc(100% - 20px);border:1px solid var(--g-line);border-radius:6px;background:var(--g-panel2);color:var(--g-text);padding:0 9px;font-size:11px}',
-          '.dsh-studio-layer-list{overflow:auto;flex:1;padding:0 7px;display:flex;flex-direction:column;gap:1px}',
-          '.dsh-studio-layer-list button{height:31px;display:flex;align-items:center;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary, #b9c0cb);cursor:pointer;font-size:11.5px;text-align:left;padding:0 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-          '.dsh-studio-layer-list button[aria-pressed="true"]{background:#464038;color:var(--dsw-alias-label-primary, #f1eae0)}',
-          '.dsh-studio-panel-note{padding:12px 13px;color:var(--dsw-alias-label-tertiary, #7e8795);font-size:10.5px;line-height:1.5;border-top:1px solid var(--g-line);flex:0 0 auto}',
-          // stage
-          '.dsh-studio-canvas{border:0!important;border-radius:0!important;padding:18px!important;background-color:var(--dsw-alias-bg-base, #13161b)!important;background-image:radial-gradient(#52566026 .7px,transparent .7px);background-size:17px 17px;overflow:auto;display:flex;flex-direction:column;justify-content:center;min-width:0}',
-          '.dsh-studio-stage-top{display:flex;align-items:center;gap:9px;height:38px;flex:0 0 38px;padding:0 14px;border-bottom:1px solid var(--dsw-alias-border-l1, #282b31);background:var(--dsw-alias-bg-layer-1, #1a1d22);color:var(--g-sub);font-size:11px;margin:0!important;border-radius:0!important}',
-          '.dsh-studio-stage-top b{color:var(--g-text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}',
-          '.dsh-studio-canvas>.dsh-studio-stage-top{margin:-18px -18px 14px!important}',
-          '.dsh-studio-canvas .dsh-studio-canvas{background:transparent!important}',
-          // inspector
-          '.dsh-studio-inspector{border:0!important;border-left:1px solid var(--g-line)!important;border-radius:0!important;background:var(--g-panel)!important;overflow:auto;min-height:0;padding:0!important}',
-          '.dsh-studio-ins-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 11px;padding:0;font-size:11px;font-weight:650;letter-spacing:0;text-transform:none;color:var(--g-text)}',
-          '.dsh-studio-ins-block{padding:15px 17px;border-top:1px solid var(--g-line);margin:0}',
-          '.dsh-studio-ins-block:first-of-type{border-top:0}',
-          '.dsh-studio-inspector .dsh-studio-ins-block input,.dsh-studio-inspector .dsh-studio-ins-block select,.dsh-studio-inspector .dsh-studio-ins-block textarea{border:1px solid var(--dsw-alias-border-l2, #3a414c);background:var(--dsw-alias-bg-layer-2, #252a32);border-radius:5px;height:30px;color:var(--dsw-alias-label-primary, #e8ecf1);padding:0 9px;font-size:11px}',
-          '.dsh-studio-inspector .dsh-studio-ins-block textarea{height:auto;min-height:76px;padding:10px 11px;line-height:1.5}',
-          // 30px bottom bar
-          '.dsh-studio-footer{height:30px;flex:0 0 30px;display:flex;align-items:center;gap:14px;padding:0 15px;border-top:1px solid var(--g-line);background:var(--dsw-alias-bg-layer-2, #1d2025);color:var(--dsw-alias-label-tertiary, #88929f);font-size:10px;overflow:hidden;white-space:nowrap}',
-          '.dsh-studio-footer kbd{border:1px solid var(--g-line);border-radius:4px;padding:1px 4px;background:var(--g-panel2);color:var(--dsw-alias-label-secondary, #aeb6c1);font:inherit}',
-          '@media (prefers-reduced-motion:reduce){.dsh-studio-workbench,.dsh-studio-workbench *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}',
-          '@media (prefers-contrast:more){.dsh-studio-workbench{border-color:var(--g-text)}}',
-          '.dsh-studio-mobile-tabs{display:none}',
-          '@container (max-width:1180px){.dsh-studio-layout{grid-template-columns:50px 200px minmax(240px,1fr) 252px}}',
-          '@container (max-width:980px){.dsh-studio-layout{grid-template-columns:50px 176px minmax(220px,1fr) 230px}}',
-          '@container (max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--g-line);background:var(--g-shell)}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0;overflow:auto}.dsh-studio-rail{display:none!important}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
-        ].join('')),
+      // Geometry fields describe a local bounding box, never radii disguised as W/H.
+      const attr=selected?.attributes||{}
+      const round=value=>String(Math.round(value*1000)/1000)
+      const ellipse=selected?.tag==='ellipse'||selected?.tag==='circle'
+      const rx=Number(attr[selected?.tag==='circle'?'r':'rx']), ry=Number(attr[selected?.tag==='circle'?'r':'ry'])
+      const boxValues=ellipse&&[Number(attr.cx),Number(attr.cy),rx,ry].every(Number.isFinite)
+        ?{x:Number(attr.cx)-rx,y:Number(attr.cy)-ry,width:rx*2,height:ry*2}
+        :Object.fromEntries(geometryValues.map(key=>[key,attr[key]]))
+      function commitGeometry(key,raw) {
+        if(!geometryWritable||!selected)return
+        const value=Number(raw)
+        if(!Number.isFinite(value)||(['width','height'].includes(key)&&value<=0))return
+        if(!ellipse){commitAttributes({[key]:String(value)});return}
+        const next={...boxValues,[key]:value}
+        if(selected.tag==='circle'&&key==='width')next.height=value
+        if(selected.tag==='circle'&&key==='height')next.width=value
+        commitAttributes(selected.tag==='circle'
+          ?{cx:round(next.x+next.width/2),cy:round(next.y+next.height/2),r:round(next.width/2)}
+          :{cx:round(next.x+next.width/2),cy:round(next.y+next.height/2),rx:round(next.width/2),ry:round(next.height/2)})
+      }
+      const displayGeometry=Object.keys(boxValues).length?Object.keys(boxValues):['x','y','width','height']
+      const geometryInspector=h('section',{className:'dsh-studio-ins-block'},
+        h('div',{className:'dsh-studio-ins-head'},'Transformation',h('span',null,'⌘')),
+        h('div',{className:'dsh-studio-ins-row',style:{rowGap:10}},displayGeometry.map(key=>
+          h('label',{className:'dsh-studio-prop',key},h('span',null,GEOMETRY_LABELS[key]||key),
+            h('input',{key:active+':'+key+':'+boxValues[key],type:'number',step:'any',
+              defaultValue:boxValues[key]??'',disabled:!geometryWritable,'aria-label':'Geometry '+key,
+              onBlur:e=>commitGeometry(key,e.target.value),onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('div',{className:'dsh-studio-ins-row'},
+          h('button',{className:'dsh-studio-prop','aria-label':'Rotate selected layer 90 degrees',disabled:!selected||!editable,title:'Rotation 90° autour du centre réel',onClick:()=>void transformSelected('rotate')},'↻ 90°'),
+          h('button',{className:'dsh-studio-prop',disabled:true,title:'Verrouillage permanent non implémenté ; Shift pendant redimensionnement'},'◇ Proportions libres')),
+        selected?.tag==='text'&&h('p',{className:'dsh-studio-hint'},'X/Y : origine de la ligne de base SVG ; taille dans Typographie.'))
+      const fillValue=typeof attr.fill==='string'?attr.fill:''
+      const hexFill=/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(fillValue)
+      const expandedFill=hexFill&&(fillValue.length===4||fillValue.length===5)
+        ?'#'+fillValue.slice(1).split('').map(c=>c+c).join(''):fillValue
+      const fillRGB=hexFill?expandedFill.slice(0,7):'#000000'
+      const fillAlpha=hexFill&&expandedFill.length===9?expandedFill.slice(7):''
+      const appearanceInspector=h(React.Fragment,null,
+        h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Apparence',h('span',null,'＋')),
+           h('div',{className:'dsh-studio-toggle-row'},h('span',null,'Opacité'),
+             h('output',{'aria-label':'Saved opacity'},Math.round(Number(attr.opacity??1)*100)+' %')),
+           h('input',{type:'range',min:0,max:100,step:1,key:active+':opacity:'+(attr.opacity??''),
+             defaultValue:Number(attr.opacity??1)*100,disabled:!selected||!editable,'aria-label':'Opacity',style:{width:'100%'},
+             onPointerUp:e=>commitAttributes({opacity:String(Number(e.currentTarget.value)/100)}),
+             onKeyUp:e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))commitAttributes({opacity:String(Number(e.currentTarget.value)/100)})}}),
+           h('div',{className:'dsh-studio-rowspace'}),
+          h('div',{className:'dsh-studio-toggle-row'},h('span',null,'Visibilité'),
+            h('button',{className:'dsh-studio-switch'+(!selected?.hidden?' dsh-studio-on':''),type:'button',
+              'aria-label':selected?.hidden?'Show selected layer':'Hide selected layer',disabled:!selected||!editable,
+              onClick:()=>void save({kind:'svg-visibility',id:selected.id,property:'display',value:selected.hidden?null:'none'})}))),
+        h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Remplissage',h('span',null,'＋')),
+          h('div',{className:'dsh-studio-color-row'},
+            h('input',{type:'color',value:fillRGB,'aria-label':'Fill colour',disabled:!selected||!editable||!hexFill,
+              title:hexFill?'Couleur native, alpha conservé':'Dégradé ou valeur non hexadécimale : édition couleur indisponible',
+              style:{width:30,height:30,padding:2},onChange:e=>commitAttributes({fill:e.target.value+fillAlpha})}),
+            h('input',{type:'text',defaultValue:fillValue,key:active+':'+fillValue,'aria-label':'Fill hex',spellCheck:false,
+              disabled:!selected||!editable||!hexFill,style:{...field,height:30},
+              onBlur:e=>{if(/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(e.target.value))commitAttributes({fill:e.target.value})},
+              onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+          h('p',{className:'dsh-studio-hint'},fillValue&&!hexFill?'Valeur native préservée : '+fillValue:'Couleur native · alpha préservé.')))
+      const typeLabels={'font-family':'Police','font-size':'Taille','font-weight':'Graisse',
+        'font-style':'Style','letter-spacing':'Espacement','text-anchor':'Alignement'}
+      const typeChoices={
+        'font-family':['Inter,Arial,sans-serif','Inter, Arial','Arial','Georgia','Verdana','Times New Roman','Courier New','system-ui,sans-serif'],
+        'font-weight':['normal','300','400','500','600','700','800','900','bold'],
+        'font-style':['normal','italic','oblique'],'text-anchor':['start','middle','end']
+      }
+      function typographyControl(key) {
+        const current=attr[key]??''
+        const choices=typeChoices[key]
+        if(choices)return h('select',{style:field,'aria-label':'Typography '+key,value:current,
+          disabled:!editable,onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
+          !current&&h('option',{value:'',disabled:true},'Hérité'),
+          [...new Set([...(current?[current]:[]),...choices])].map(value=>h('option',{key:value,value},value)))
+        const numeric=/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(String(current))
+        return h('input',{style:field,type:numeric?'number':'text',step:'any',
+          'aria-label':'Typography '+key,key:active+':'+key+':'+current,defaultValue:current,
+          readOnly:!!current&&!numeric,disabled:!editable,
+          title:current&&!numeric?'Valeur native conservée avec son unité : '+current:undefined,
+          onBlur:e=>{if(e.target.value&&e.target.value!==current)void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
+          onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})
+      }
+      const typographyInspector = selected?.tag==='text'&&selectedText&&h('section',{className:'dsh-studio-ins-block'},
+        h('div',{className:'dsh-studio-ins-head'},'Texte',h('span',{style:{fontSize:10}},'Édition directe · T')),
+        h('label',{className:'dsh-studio-field-label'},'Contenu'),
+        h('textarea',{className:'dsh-studio-type-content',value:textDraft,'aria-label':'Text content',
+          onChange:e=>setTextDraft(e.target.value),disabled:!editable||!selectedText.editable}),
+        h('small',{className:'dsh-studio-type-help'},'Double-cliquez sur le texte du canevas pour le modifier.'),
+        h('div',{className:'dsh-studio-type-commit'},
+          h('button',{style:button,disabled:!editable||!selectedText.editable||textDraft===selectedText.text,
+            onClick:()=>void commitText()},'Save text'),
+          hasTextDraft()&&h('button',{type:'button',style:button,'aria-label':'Discard text draft',
+            onClick:()=>{setTextDraft(selectedText.text);setEditingText('');setError('')}},'Abandonner le brouillon')),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('label',{className:'dsh-studio-field-label'},typeLabels['font-family']),typographyControl('font-family'),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('div',{className:'dsh-studio-ins-row',style:{rowGap:8}},
+          ['font-size','font-weight','letter-spacing','font-style'].map(key=>h('label',{key,className:'dsh-studio-prop'},
+            h('span',null,typeLabels[key]),typographyControl(key)))),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('label',{className:'dsh-studio-field-label'},typeLabels['text-anchor']),typographyControl('text-anchor'))
+      return h('section',{className:'dsh-studio-workbench','data-preview':previewMode?'true':'false',lang:'fr','aria-label':'DSH Design Studio workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),color:'var(--dsw-alias-label-primary,#e8ebf0)',background:'var(--dsw-alias-bg-base,#202125)',fontSize:12}},
+        h('style',null,GRAPHITE_CSS),
         h('header',{className:'dsh-studio-top'},
-          h('span',{className:'dsh-studio-brandmark','aria-hidden':'true'},'◇'),
-          h('strong',{className:'dsh-studio-brand'},'DSH · Design Studio'),
-          h('span',{className:'dsh-studio-crumb',style:{marginRight:'auto'}},
-            doc?h('b',{title:doc.file},doc.file):h('span',null,'Aucun fichier ouvert'),
-            doc&&h('span',{className:'dsh-studio-tag'},doc.format.toUpperCase()+' natif'),
-            doc&&doc.format==='svg'&&artboard&&h('span',null,
-              Math.round(artboard.width)+' × '+Math.round(artboard.height))),
-          doc&&h('span',{style:{fontSize:11,whiteSpace:'nowrap',color:busy||reloadRequired?
-              'var(--dsw-alias-label-tertiary, #8d8b88)':'var(--dsw-alias-label-secondary, #a19f9d)'}},
-            busy?'⏳ Enregistrement…':(reloadRequired?'⚠ À recharger':(source!==doc.source?
-              '● Modifications non enregistrées':'✓ Enregistré localement'))),
-          h('button',{style:button,title:'Annuler · Ctrl+Z',disabled:busy||reloadRequired||!undoStack.length||source!==doc?.source,onClick:()=>void undo(),'aria-label':'Undo saved edit'},'↶'),
-          h('button',{style:button,title:'Rétablir · Ctrl+Shift+Z',disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷')),
-        h('div',{className:'dsh-studio-toolbar'},
-          h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
-          h('button',{style:button,onClick:()=>load(false),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
-          h('button',{style:button,onClick:()=>{ if(doc) void browseFiles(); else void loadWorkspaceFiles() },
-            disabled:busy||!scopeReady,
-            'aria-label':'Browse workspace design files'},
-            doc?(showFiles?'Fermer les fichiers':'Parcourir…'):'Actualiser')),
-        !doc&&h('div',{className:'dsh-studio-canvas dsh-studio-empty',role:'region',
+          h('span',{className:'dsh-studio-brandmark'},glyph('brand')),
+          h('strong',{className:'dsh-studio-brand'},'DSH ',h('span',{style:{fontWeight:450,color:'var(--muted)'}},'Design Studio')),
+          h('span',{className:'dsh-studio-tb-divider'}),
+          h('span',{className:'dsh-studio-crumb'},h('b',{title:doc?.file},doc?.file||'Nouveau document')),
+          doc&&h('span',{className:'dsh-studio-tag'},doc.format.toUpperCase()+' natif'),h('span',{className:'dsh-studio-grow'}),
+          h('span',{className:'dsh-studio-status',style:{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}},busy?'Enregistrement…':reloadRequired?'À recharger':doc?source!==doc.source||hasTextDraft()?'Modifications non enregistrées':'✓ Enregistré localement':'Mode local · sans IA'),
+          h('details',{className:'dsh-studio-menu'},h('summary',null,'Fichier'),h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0}},
+            h('input',{style:field,'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
+            h('button',{style:button,onClick:()=>load(false),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
+            h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',onClick:()=>void createDocument(format)},'+ '+format.toUpperCase()))))),
+           h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-muted',disabled:!doc,
+             'aria-label':'Preview native document','aria-pressed':previewMode,
+             onClick:()=>setPreviewMode(value=>!value)},glyph('previewBtn'),previewMode?'Retour à l’éditeur':'Aperçu'),
+           h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-primary',
+             disabled:!doc||busy||reloadRequired||source!==doc?.source||hasTextDraft(),
+             'aria-label':'Export native document',onClick:exportNativeDocument},glyph('export'),
+             doc?'Exporter '+doc.format.toUpperCase():'Exporter SVG')),
+        h('div',{className:'dsh-studio-toolbar'},          h('div',{className:'dsh-studio-tools',role:'toolbar','aria-label':'SVG creation tools'},
+            h('button',{type:'button','data-tool':'select','aria-pressed':canvasTool==='select',className:'dsh-studio-tool'+(canvasTool==='select'?' selected':''),'aria-label':'Select canvas tool',style:{background:canvasTool==='select'?'#51483d':'transparent'},title:'Sélection · V',onClick:()=>setCanvasTool('select')},glyph('select')),
+            h('button',{type:'button','data-tool':'frame',className:'dsh-studio-tool',disabled:true,title:'Cadre · non implémenté','aria-label':'Frame tool unavailable'},glyph('frame')),
+            ['rect','ellipse'].map(shape=>h('button',{key:shape,type:'button','data-tool':shape,'aria-pressed':canvasTool===shape,className:'dsh-studio-tool','aria-label':'Add '+shape,title:shape==='rect'?'Rectangle · R':shape==='ellipse'?'Ellipse · O':'Texte · T',disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>{if(!refuseTextDraft())setCanvasTool(shape)}},glyph(shape))),
+            h('button',{type:'button','data-tool':'pen','aria-pressed':canvasTool==='pen',className:'dsh-studio-tool'+(canvasTool==='pen'?' selected':''),'aria-label':'Activate Pen tool',title:'Plume · P',disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>{setCanvasTool('pen');setPenPathId('');setPenOutgoing(null)}},glyph('pen')),
+            ['text'].map(shape=>h('button',{key:shape,type:'button','data-tool':shape,'aria-pressed':canvasTool===shape,className:'dsh-studio-tool','aria-label':'Add '+shape,title:shape==='rect'?'Rectangle · R':shape==='ellipse'?'Ellipse · O':'Texte · T',disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>{if(!refuseTextDraft())setCanvasTool(shape)}},glyph(shape))),
+            h('span',{className:'dsh-studio-sdiv'}),
+            h('button',{type:'button','data-tool':'hand','aria-pressed':canvasTool==='hand',className:'dsh-studio-tool'+(canvasTool==='hand'?' selected':''),'aria-label':'Pan canvas tool',style:{background:canvasTool==='hand'?'#51483d':'transparent'},title:'Main · H',onClick:()=>setCanvasTool('hand')},glyph('hand')),
+            h('span',{className:'dsh-studio-sdiv'}),
+            h('button',{type:'button',className:'dsh-studio-tool','aria-label':'Undo saved edit',title:'Annuler · Ctrl+Z',disabled:busy||reloadRequired||!undoStack.length||source!==doc?.source,onClick:()=>void undo()},glyph('undoBtn')),
+            h('button',{type:'button',className:'dsh-studio-tool','aria-label':'Redo saved edit',title:'Rétablir · Ctrl+Shift+Z',disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo()},glyph('redoBtn'))),
+          h('span',{className:'dsh-studio-grow'}),
+          h('button',{className:'dsh-studio-tooltext',type:'button','aria-label':'Toggle canvas grid','aria-pressed':gridVisible,onClick:()=>setGridVisible(v=>!v)},glyph('grid'),'Grille'),
+          h('span',{className:'dsh-studio-helper'},'Édition manuelle'),h('details',{className:'dsh-studio-menu dsh-studio-settings'},h('summary',null,'Options'),h('div',{className:'dsh-studio-menu-body'},
+            h('button',{style:button,'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,onClick:()=>setSnapToGrid(v=>!v)},'Magnétisme'),
+            h('select',{style:field,'aria-label':'Grid spacing',value:gridStep,onChange:e=>setGridStep(Number(e.target.value))},[2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
+            h('button',{style:button,'aria-label':'Toggle smart alignment guides','aria-pressed':smartGuides,onClick:()=>setSmartGuides(v=>!v)},'Repères intelligents'),
+            ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
+            canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
+            canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
+                showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
+          padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
+          maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
+        }},
+          h('div',{style:{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between'}},
+            h('strong',null,'Fichiers du workspace'),
+            h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},workspaceFiles.length+' fichier(s)'+(filesTruncated?' · liste limitée':''))),
+          h('input',{style:field,value:fileSearch,'aria-label':'Filter design files',
+            placeholder:'Rechercher : nom, dossier, extension…',
+            onChange:e=>setFileSearch(e.target.value)}),
+          h('div',{role:'list',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:4}},
+            ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase())).slice(0,100).map(item=>
+              h('button',{key:item.path,style:{...button,textAlign:'left',overflowWrap:'anywhere'},
+                'aria-label':'Open file '+item.path,disabled:busy,
+                title:item.path+' · '+item.size+' bytes',
+                onClick:()=>void openPickedFile(item.path)},
+                h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
+                item.path))),
+          workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
+        ),
+
+        h('div',{className:'dsh-studio-alerts'},error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          h('span',null,error),
+          reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
+            disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
+        warning&&h('div',{role:'status',style:{color:'var(--dsw-alias-state-warn-primary, #f5c36a)'}},warning)),
+                h('nav',{className:'dsh-studio-mobile-tabs',role:'tablist',
+          'aria-label':'Mobile editor panels'},
+          [['layers','Calques'],['canvas','Canevas'],['inspector','Propriétés']].map(([tab,label])=>
+            h('button',{key:tab,type:'button',role:'tab',
+              'aria-label':'Mobile panel '+tab,'aria-selected':mobilePanel===tab,
+              style:{...button,background:mobilePanel===tab?'#574939':button.background,
+                borderColor:mobilePanel===tab?ACCENT:'var(--dsw-alias-border-l2, #44464b)'},
+              onClick:()=>setMobilePanel(tab)},label))),
+
+                h('div',{className:'dsh-studio-layout'},
+          h('aside',{className:'dsh-studio-rail','aria-label':'Editor panels'},
+            h('button',{type:'button','aria-label':'Show layers panel','aria-pressed':true,
+              title:'Calques',onClick:()=>setMobilePanel('layers')},
+              h('svg',{width:18,height:18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.6,
+                strokeLinejoin:'round','aria-hidden':'true'},
+                h('path',{d:'m3 8 9-5 9 5-9 5Z'}),h('path',{d:'m3 12 9 5 9-5M3 16l9 5 9-5'}))),
+            ['Composants','Ressources','Historique'].map(name=>h('button',{key:name,type:'button',className:'dsh-studio-railbtn',disabled:true,'aria-label':name+' unavailable',title:name+' · non implémenté'},glyph(name))),
+             h('span',{className:'dsh-studio-spacer'}),
+             h('button',{type:'button',className:'dsh-studio-railbtn dsh-studio-bottom',
+               'aria-label':'Editor options',title:'Réglages',onClick:event=>{
+                 const root=event.currentTarget.closest('.dsh-studio-workbench')
+                 const options=root?.querySelector('.dsh-studio-settings')
+                 if(options)options.open=!options.open
+               }},glyph('Réglages'))),
+          h('aside',{className:'dsh-studio-sidebar'+(mobilePanel==='layers'?' dsh-studio-mobile-active':'')},
+            h('div',{className:'dsh-studio-sidehead'},
+              h('span',null,'Explorer'),
+              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},
+                String(doc?.format==='css'?cssRules.length:doc?.format==='html'||doc?.format==='htm'?htmlElements.length:nodes.length))),
+            h('div',{className:'dsh-studio-tabs',role:'tablist','aria-label':'Left panel tabs'},
+              h('button',{type:'button',role:'tab',className:'dsh-studio-tab dsh-studio-selected','aria-selected':true},'Calques'),
+              h('button',{type:'button',role:'tab',className:'dsh-studio-tab','aria-selected':false,disabled:true,
+                title:'Non implémenté dans cette version'},'Ressources'),
+              h('button',{type:'button',role:'tab','aria-selected':false,disabled:true,
+                title:'Non implémenté dans cette version'},'Composants')),
+            h('input',{className:'dsh-studio-layer-search',value:layerSearch,
+              'aria-label':'Filter layers',placeholder:'Rechercher des calques',
+              onChange:e=>setLayerSearch(e.target.value)}),
+            h('div',{className:'dsh-studio-group'},'Pages'),
+            h('div',{className:'dsh-studio-item',style:{margin:'0 7px'}},h('span',{className:'dsh-studio-mini'},'▦'),h('span',{className:'dsh-studio-label'},doc?.file||'Nouveau document')),
+            h('div',{className:'dsh-studio-group',style:{marginTop:9}},'Calques',h('span',{style:{float:'right',letterSpacing:0}},nodes.length)),
+            h('div',{className:'dsh-studio-layer-list'},
+              doc?.format==='css'?
+                (cssRules.length?cssRules.map(rule=>h('button',{
+                  key:rule.selector,type:'button','aria-label':'Select CSS rule '+rule.selector,
+                  style:{...button,textAlign:'left',background:cssActive===rule.selector?'#494034':'transparent'},
+                  onClick:()=>chooseCssRule(rule.selector)},
+                  rule.selector+(rule.editable?'':' · lecture seule'))):
+                  h('small',null,'Règles simples #id ou .classe uniquement.')):
+              (doc?.format==='html'||doc?.format==='htm')?
+                (htmlElements.length?htmlElements.map(n=>h('button',{key:n.id,type:'button',
+                  'aria-label':'Select HTML element '+n.id,
+                  style:{...button,textAlign:'left',background:htmlActive===n.id?'#494034':'transparent'},
+                  onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
+                  h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
+                (nodes.length?nodes.filter(n=>!layerSearch||
+                    (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>h('button',{key:n.id,
+                  type:'button',className:'dsh-studio-item'+(active===n.id?' dsh-studio-active':''),
+                  'aria-label':'Select layer '+n.tag+' #'+n.id+
+                    (n.hidden?' (hidden)':'')+(n.locked?' (locked)':'')+
+                    (extraSelection.includes(n.id)?' (in selection)':''),
+                  'aria-pressed':active===n.id,
+                  style:{width:'100%',paddingLeft:10+(Math.max(0,Math.min(12,n.depth||0))*11),
+                    opacity:n.hidden?0.55:1,...(extraSelection.includes(n.id)&&active!==n.id?{background:'#3a3630'}:{})},
+                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))},
+                   h('span',{className:'dsh-studio-mini'},n.isGroup?'▤':n.tag==='text'?'T':n.tag==='ellipse'||n.tag==='circle'?'◯':n.tag==='path'?'⌁':'▢'),
+                   h('span',{className:'dsh-studio-label'},n.tag+' #'+n.id),
+                   h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'))):
+                  h('small',null,'Aucun nœud SVG adressable (un id unique est requis).'))),
+            h('div',{className:'dsh-studio-panel-note'},'Cliquez un calque pour le sélectionner ; les propriétés apparaissent à droite. Les fichiers du projet sont dans l’état d’accueil du canevas.')),
+          h('main',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{display:'flex',flexDirection:'column',minWidth:0}},
+            h('div',{className:'dsh-studio-stage-top'},
+              h('b',{title:doc?.file||'Document'},doc?.file||'Document'),
+              h('span',{'aria-hidden':'true'},'›'),
+              h('span',null,doc?doc.format.toUpperCase()+' natif':'Bienvenue'),
+              doc?.format==='svg'&&artboard&&h('span',{className:'dsh-studio-tag'},
+                Math.round(artboard.width)+' × '+Math.round(artboard.height)),
+              h('span',{style:{flex:1}}),
+              h('span',{className:'dsh-studio-helper'},doc?'Fichier éditable':'Mode local')),
+            h('div',{className:'dsh-studio-workspace'},!doc?h('div',{className:'dsh-studio-welcome',role:'region',
           'aria-label':'Open a design file',
           style:{...pane,minHeight:340,padding:20,display:'flex',flexDirection:'column',gap:10,
             justifyContent:'flex-start',overflow:'auto'}},
-          h('strong',{style:{fontSize:14}},'Aucun fichier ouvert'),
+          h('strong',{style:{fontSize:18,fontWeight:600}},'Votre espace de création'),
+           h('small',{style:{color:'var(--muted)'}},'SVG · HTML · CSS natifs'),
+           h('button',{style:button,type:'button','aria-label':'Create Graphite reference SVG',disabled:busy||creating||!scopeReady,onClick:()=>void createDocument('svg',GRAPHITE_EXAMPLE)},'Créer la maquette SVG'),
           h('small',{style:{opacity:0.78,maxWidth:640,lineHeight:1.5}},
             'Choisissez un fichier de cet espace de travail ci-dessous, ou saisissez son chemin puis « Open ». '+
             'Le canevas, les calques et les propriétés apparaissent dès qu’un document est ouvert.'),
@@ -1240,162 +1718,8 @@ window.__ModuleLoader__.load({
             : h('div',{role:'status',style:{...pane,padding:12,marginTop:4,background:'var(--dsw-alias-bg-layer-1, #232529)'}},
                 h('span',null,'Aucun fichier SVG, HTML ou CSS dans cet espace de travail.'),
                 h('small',{style:{opacity:0.7,display:'block',marginTop:4}},
-                  'Ajoutez-en un depuis la conversation, ou ouvrez un dossier qui en contient un.'))),
-        showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
-          padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
-          maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
-        }},
-          h('div',{style:{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between'}},
-            h('strong',null,'Fichiers du workspace'),
-            h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},workspaceFiles.length+' fichier(s)'+(filesTruncated?' · liste limitée':''))),
-          h('input',{style:field,value:fileSearch,'aria-label':'Filter design files',
-            placeholder:'Rechercher : nom, dossier, extension…',
-            onChange:e=>setFileSearch(e.target.value)}),
-          h('div',{role:'list',style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:4}},
-            ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase())).slice(0,100).map(item=>
-              h('button',{key:item.path,style:{...button,textAlign:'left',overflowWrap:'anywhere'},
-                'aria-label':'Open file '+item.path,disabled:busy,
-                title:item.path+' · '+item.size+' bytes',
-                onClick:()=>void openPickedFile(item.path)},
-                h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
-                item.path))),
-          workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
-        ),
-        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'var(--dsw-alias-bg-layer-1, #222427)'},'aria-label':'SVG creation tools'},
-          h('button',{type:'button',
-            'aria-label':'Activate Pen tool',
-            style:{...button,background:canvasTool==='pen'?'#51483d':button.background},
-            disabled:busy||reloadRequired||source!==doc.source,
-            onClick:()=>{setCanvasTool('pen');setPenPathId('');setPenOutgoing(null)}
-          },'✒ Plume · P'),
-          canvasTool==='pen'&&h('button',{type:'button',
-            'aria-label':'Start new pen path',
-            style:button,disabled:busy||reloadRequired,
-            onClick:()=>{setPenPathId('');setPenOutgoing(null)}
-          },'Nouveau'),
-          canvasTool==='pen'&&penPathId&&h('button',{type:'button',
-            'aria-label':'Close current pen path',style:{...button,borderColor:ACCENT},
-            disabled:busy||reloadRequired||
-              (pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,
-            onClick:()=>void closePenPath()
-          },'Fermer le tracé'),
-          ['rect','circle','ellipse','text','path'].map(shape=>h('button',{
-            key:shape,type:'button',style:button,'aria-label':'Add '+shape,
-            disabled:busy||reloadRequired||source!==doc.source,
-            onClick:()=>void save({kind:'svg-add-shape',shape})
-          },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':shape==='text'?'Text':'Tracé')))),
-        error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
-          h('span',null,error),
-          reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
-            disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
-        warning&&h('div',{role:'status',style:{color:'var(--dsw-alias-state-warn-primary, #f5c36a)'}},warning),
-        doc&&h('nav',{className:'dsh-studio-mobile-tabs',role:'tablist',
-          'aria-label':'Mobile editor panels'},
-          [['layers','Calques'],['canvas','Canevas'],['inspector','Propriétés']].map(([tab,label])=>
-            h('button',{key:tab,type:'button',role:'tab',
-              'aria-label':'Mobile panel '+tab,'aria-selected':mobilePanel===tab,
-              style:{...button,background:mobilePanel===tab?'#574939':button.background,
-                borderColor:mobilePanel===tab?ACCENT:'var(--dsw-alias-border-l2, #44464b)'},
-              onClick:()=>setMobilePanel(tab)},label))),
-        doc&&h('div',{className:'dsh-studio-layout'},
-          h('aside',{className:'dsh-studio-rail','aria-label':'Editor panels'},
-            h('button',{type:'button','aria-label':'Show layers panel','aria-pressed':mobilePanel==='layers',
-              title:'Calques',onClick:()=>setMobilePanel('layers')},
-              h('svg',{width:18,height:18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.6,
-                strokeLinejoin:'round','aria-hidden':'true'},
-                h('path',{d:'m3 8 9-5 9 5-9 5Z'}),h('path',{d:'m3 12 9 5 9-5M3 16l9 5 9-5'}))),
-            h('button',{type:'button','aria-label':'Show canvas panel','aria-pressed':mobilePanel==='canvas',
-              title:'Canevas',onClick:()=>setMobilePanel('canvas')},
-              h('svg',{width:18,height:18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.6,
-                'aria-hidden':'true'},h('rect',{x:3,y:4,width:18,height:16,rx:2}))),
-            h('button',{type:'button','aria-label':'Show properties panel','aria-pressed':mobilePanel==='inspector',
-              title:'Propriétés',onClick:()=>setMobilePanel('inspector')},
-              h('svg',{width:18,height:18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.6,
-                strokeLinecap:'round','aria-hidden':'true'},
-                h('path',{d:'M4 6h16M4 12h10M4 18h7'}))),
-            h('span',{style:{flex:1}}),
-            h('span',{style:{padding:'0 0 10px',color:'#6e7786',fontSize:9,letterSpacing:'.08em'}},'V3')),
-          h('aside',{className:'dsh-studio-sidebar'+(mobilePanel==='layers'?' dsh-studio-mobile-active':'')},
-            h('div',{className:'dsh-studio-sidehead'},
-              h('span',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':doc.format==='css'?'Règles CSS':'Calques'),
-              h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},
-                String(doc.format==='css'?cssRules.length:doc.format==='html'||doc.format==='htm'?htmlElements.length:nodes.length))),
-            h('div',{className:'dsh-studio-tabs',role:'tablist','aria-label':'Left panel tabs'},
-              h('button',{type:'button',role:'tab','aria-selected':true},'Calques'),
-              h('button',{type:'button',role:'tab','aria-selected':false,disabled:true,
-                title:'Non implémenté dans cette version'},'Ressources'),
-              h('button',{type:'button',role:'tab','aria-selected':false,disabled:true,
-                title:'Non implémenté dans cette version'},'Composants')),
-            h('input',{className:'dsh-studio-layer-search',value:layerSearch,
-              'aria-label':'Filter layers',placeholder:'Rechercher des calques',
-              onChange:e=>setLayerSearch(e.target.value)}),
-            h('div',{className:'dsh-studio-layer-list'},
-              doc.format==='css'?
-                (cssRules.length?cssRules.map(rule=>h('button',{
-                  key:rule.selector,type:'button','aria-label':'Select CSS rule '+rule.selector,
-                  style:{...button,textAlign:'left',background:cssActive===rule.selector?'#494034':'transparent'},
-                  onClick:()=>chooseCssRule(rule.selector)},
-                  rule.selector+(rule.editable?'':' · lecture seule'))):
-                  h('small',null,'Règles simples #id ou .classe uniquement.')):
-              (doc.format==='html'||doc.format==='htm')?
-                (htmlElements.length?htmlElements.map(n=>h('button',{key:n.id,type:'button',
-                  'aria-label':'Select HTML element '+n.id,
-                  style:{...button,textAlign:'left',background:htmlActive===n.id?'#494034':'transparent'},
-                  onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
-                  h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
-                (nodes.length?nodes.filter(n=>!layerSearch||
-                    (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>h('button',{key:n.id,
-                  type:'button',
-                  'aria-label':'Select layer '+n.tag+' #'+n.id+
-                    (n.hidden?' (hidden)':'')+(n.locked?' (locked)':'')+
-                    (extraSelection.includes(n.id)?' (in selection)':''),
-                  'aria-pressed':active===n.id,
-                  style:{...button,textAlign:'left',
-                    paddingLeft:8+(Math.max(0,Math.min(12,n.depth||0))*11),
-                    opacity:n.hidden?0.55:1,
-                    background:active===n.id?'#494034':extraSelection.includes(n.id)?'#3a3630':'transparent'},
-                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))},
-                  (n.hidden?'◌ ':'')+(n.locked?'⛔ ':'')+(n.isGroup?'▸ ':'')+(n.tag+' #'+n.id))):
-                  h('small',null,'Aucun nœud SVG adressable (un id unique est requis).'))),
-            h('div',{className:'dsh-studio-panel-note'},'Cliquez un calque pour le sélectionner ; les propriétés apparaissent à droite. Les fichiers du projet sont dans l’état d’accueil du canevas.')),
-          h('div',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',border:0,borderRadius:0,padding:18,display:'flex',flexDirection:'column',justifyContent:'center'}},
-            h('div',{className:'dsh-studio-stage-top'},
-              h('b',{title:doc.file||'Document'},doc.file||'Document'),
-              h('span',{'aria-hidden':'true'},'›'),
-              h('span',null,doc.format.toUpperCase()+' natif'),
-              doc.format==='svg'&&artboard&&h('span',{className:'dsh-studio-tag'},
-                Math.round(artboard.width)+' × '+Math.round(artboard.height)),
-              h('span',{style:{flex:1}}),
-              artboard&&doc.format==='svg'&&h('div',{role:'toolbar','aria-label':'Canvas navigation',style:{display:'flex',gap:5,alignItems:'center'}},
-                h('button',{type:'button',style:{...button,background:canvasTool==='select'?'#51483d':button.background},
-                  'aria-label':'Select canvas tool',onClick:()=>setCanvasTool('select'),title:'Sélection · V'},'↖'),
-                h('button',{type:'button',style:{...button,background:canvasTool==='hand'?'#51483d':button.background},
-                  'aria-label':'Pan canvas tool',onClick:()=>setCanvasTool('hand'),title:'Main · H / clic milieu'},'✋'),
-                h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
-                  onClick:()=>changeZoom(1/1.25)},'−'),
-                h('output',{'aria-label':'Canvas zoom level',style:{fontVariantNumeric:'tabular-nums',minWidth:48,textAlign:'center',color:ACCENT}},
-                  Math.round(camera.zoom*100)+'%'),
-                h('button',{type:'button',style:button,'aria-label':'Zoom in canvas',
-                  onClick:()=>changeZoom(1.25)},'+'),
-                h('button',{type:'button',style:button,'aria-label':'Fit canvas view',
-                  onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit'),
-                h('span',{style:{width:1,height:20,background:'var(--dsw-alias-border-l1, #47484b)',margin:'0 3px'}}),
-                h('button',{type:'button',style:{...button,background:gridVisible?'#51483d':button.background},
-                  'aria-label':'Toggle canvas grid','aria-pressed':gridVisible,
-                  onClick:()=>setGridVisible(v=>!v)},'Grille'),
-                h('button',{type:'button',style:{...button,background:snapToGrid?'#51483d':button.background},
-                  'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,
-                  onClick:()=>setSnapToGrid(v=>!v),title:'Magnétisme sur la grille · Alt désactive temporairement'},'Aimant'),
-                h('select',{style:{...field,width:68,padding:'5px 6px'},'aria-label':'Grid spacing',
-                  value:gridStep,onChange:e=>setGridStep(Number(e.target.value)),
-                  title:'Pas de grille en unités SVG'},
-                  [2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
-                h('button',{type:'button',style:{...button,background:smartGuides?'#51483d':button.background},
-                  'aria-label':'Toggle smart alignment guides','aria-pressed':smartGuides,
-                  onClick:()=>setSmartGuides(v=>!v),title:'Aligner automatiquement les bords et centres · Alt désactive temporairement'},'Repères')
-              )),
-
-            doc.format==='css'?
+                  'Ajoutez-en un depuis la conversation, ou ouvrez un dossier qui en contient un.'))):
+doc?.format==='css'?
                   h('div',{className:'dsh-studio-css-rule-preview',
                     style:{background:'var(--dsw-alias-bg-layer-2, #24262a)',border:'1px solid #414142',borderRadius:8,
                       padding:18,minHeight:240,display:'grid',alignContent:'start',gap:12}},
@@ -1408,7 +1732,7 @@ window.__ModuleLoader__.load({
                       h('code',{style:{color:'#e8cdb1'}},declaration.value))
                     )
                   ):
-              artboard && doc.format==='svg'?
+              artboard && doc?.format==='svg'?
                 h('div',{className:'dsh-studio-viewport',ref:viewportRefCallback.current,
                   'aria-label':'Canvas viewport',
                   onWheel:onCanvasWheel,
@@ -1428,18 +1752,21 @@ window.__ModuleLoader__.load({
                       // and every hit target drifts away from the rendered shape.
                       width:'min(100cqw, calc(100cqh * '+(artboard.width/artboard.height)+'))',
                       maxWidth:'100%',maxHeight:'100%',
-                      aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',
+                      '--art-ratio':artboard.width/artboard.height,'--art-width':artboard.width+'px',aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',
                       transform:'translate(-50%, -50%) translate('+camera.offsetX+'px, '+camera.offsetY+'px) scale('+camera.zoom+')',
                       transformOrigin:'center center',
                       boxShadow:'0 10px 42px #0009'}},
-                  h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
+                  h('div',{className:'dsh-studio-artboard-label'},doc.file,h('span',null,Math.round(artboard.width)+' × '+Math.round(artboard.height))),
+                   h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
                   gridVisible&&h('div',{className:'dsh-studio-document-grid','aria-hidden':true,style:{
                     position:'absolute',inset:0,pointerEvents:'none',zIndex:1,
                     backgroundImage:'linear-gradient(to right, #927f6670 1px, transparent 1px), linear-gradient(to bottom, #927f6670 1px, transparent 1px)',
                     backgroundSize:(gridStep/artboard.width*100)+'% '+(gridStep/artboard.height*100)+'%',
                     opacity:0.48
                   }}),
-                  h('div',{style:{position:'absolute',inset:0,touchAction:'none',zIndex:2},'aria-label':'Direct manipulation overlay'},
+                  h('div',{style:{position:'absolute',inset:0,touchAction:'none',zIndex:2,
+                      cursor:['rect','ellipse','text'].includes(canvasTool)?'crosshair':undefined},'aria-label':'Direct manipulation overlay',
+                      onPointerDownCapture:createShapeAtPointer},
                     handles.flatMap(handle=>{
                       const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0,mode:'move'}
                       let left=handle.x+(delta.mode==='move'?delta.dx:0)
@@ -1461,9 +1788,9 @@ window.__ModuleLoader__.load({
                       const main=h('button',{key:handle.id,type:'button',title:'Drag '+handle.id+' to move', 'aria-label':'Drag '+handle.tag+' '+handle.id,
                         style:{position:'absolute',left:((left-artboard.x)/artboard.width*100)+'%',top:((top-artboard.y)/artboard.height*100)+'%',
                           width:(width/artboard.width*100)+'%',height:(height/artboard.height*100)+'%',
-                          minWidth:5,minHeight:5,border:active===handle.id?'2px solid #c8ab87':'1px dashed #8b847c',
-                          borderRadius:handle.tag==='circle'||handle.tag==='ellipse'?'50%':0,
-                          background:active===handle.id?'rgba(201,171,126,.12)':'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'||spaceHeld?'grab':'move',touchAction:'none',padding:0},
+                          minWidth:5,minHeight:5,border:active===handle.id?'1.5px solid #c6aa89':'0',
+                          borderRadius:active!==handle.id&&(handle.tag==='circle'||handle.tag==='ellipse')?'50%':0,
+                          background:'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'||spaceHeld?'grab':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
                         onDoubleClick:handle.text&&canvasTool==='select'?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
@@ -1603,7 +1930,7 @@ window.__ModuleLoader__.load({
                   )
                   )
                 ):
-                  ['html','htm'].includes(doc.format)?
+                  ['html','htm'].includes(doc?.format)?
                     h('div',{className:'dsh-studio-responsive-preview',
                       style:{width:'100%',display:'grid',gap:8,alignContent:'start'}},
                       h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
@@ -1627,7 +1954,7 @@ window.__ModuleLoader__.load({
                           padding:8,boxSizing:'border-box'}},
                         h('iframe',{title:'Isolated design preview',sandbox:'allow-same-origin',
                           referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
-                          srcDoc:safePreview(source,doc.format,htmlActive,htmlPreviewCss),
+                          srcDoc:safePreview(source,doc?.format,htmlActive,htmlPreviewCss),
                           style:{display:'block',
                             width:({auto:'100%',desktop:'1280px',tablet:'768px',mobile:'390px'})[htmlViewport],
                             maxWidth:'none',height:520,border:'none',background:'#fff',borderRadius:6}})
@@ -1635,17 +1962,36 @@ window.__ModuleLoader__.load({
                     ):
                     h('iframe',{title:'Isolated design preview',sandbox:'',
                       referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
-                      srcDoc:safePreview(source,doc.format,htmlActive),
+                      srcDoc:safePreview(source,doc?.format,htmlActive),
                       style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
+artboard&&doc?.format==='svg'&&h('div',{className:'dsh-studio-canvas-bottom',role:'toolbar','aria-label':'Canvas navigation'},
+h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
+                  onClick:()=>changeZoom(1/1.25)},'−'),
+                h('output',{'aria-label':'Canvas zoom level',style:{fontVariantNumeric:'tabular-nums',minWidth:48,textAlign:'center',color:ACCENT}},
+                  Math.round(camera.zoom*100)+'%'),
+                h('button',{type:'button',style:button,'aria-label':'Zoom in canvas',
+                  onClick:()=>changeZoom(1.25)},'+'),
+                h('button',{type:'button',style:button,'aria-label':'Fit canvas view',
+                  onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit'),
+                ),
+          ),
           h('aside',{className:'dsh-studio-inspector'+(mobilePanel==='inspector'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
-            h('div',{style:{display:'flex',alignItems:'center',gap:8}},
-              h('span',{className:'dsh-studio-brandmark','aria-hidden':'true'},
-                selected?.tag==='text'?'T':(selected?.isGroup?'▤':(selected?'▢':'◌'))),
-              h('div',{style:{minWidth:0}},
-                h('strong',{style:{fontSize:12.5,display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},
-                  selectedCss?selectedCss.selector:(selected?(selected.tag+' #'+selected.id):'Aucune sélection')),
-                h('small',{style:{color:'var(--dsw-alias-label-tertiary, #8d8b88)'}},
-                  selectedCss?'Règle CSS native':(selected?(selected.isGroup?'Groupe':'Forme vectorielle · éditable'):'Sélectionnez un calque')))),geometryInspector,appearanceInspector,selectedCss?
+             h('div',{className:'dsh-studio-inspect-top'},
+               h('button',{className:'dsh-studio-it'+(!inspectAdvanced?' dsh-studio-on':''),type:'button',onClick:()=>setInspectAdvanced(false)},'Design'),
+               h('button',{className:'dsh-studio-it',type:'button',disabled:true,title:'Non implémenté'},'Prototype'),
+               h('button',{className:'dsh-studio-it'+(inspectAdvanced?' dsh-studio-on':''),type:'button',onClick:()=>setInspectAdvanced(true)},'Inspecter')),
+            h('div',{className:'dsh-studio-inspect-scroll'},
+            h('div',{className:'dsh-studio-inspect-head'},
+              glyph(selected?.tag==='text'?'text':selected?.isGroup?'Calques':selected?.tag==='ellipse'||selected?.tag==='circle'?'ellipse':'rect'),
+              h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
+                h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
+            (!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
+            (!doc||doc.format==='svg')&&['Contour','Effets'].map(title=>h('section',{className:'dsh-studio-ins-block',key:title},h('div',{className:'dsh-studio-ins-head'},title,h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Édition visuelle non implémentée ; source préservée'},'＋ Ajouter '+(title==='Contour'?'un contour':'un effet')),h('p',{className:'dsh-studio-hint'},'Non implémenté · source native préservée.'))),
+            h(doc&&doc.format!=='svg'?'section':'details',{className:'dsh-studio-technical',
+               ...(doc&&doc.format!=='svg'?{}:{open:inspectAdvanced,onToggle:event=>{
+                 setInspectAdvanced(event.currentTarget.open)
+                 if(event.currentTarget.open)event.currentTarget.scrollIntoView?.({block:'nearest'})
+               }})},(!doc||doc.format==='svg')&&h('summary',null,'Contrôles natifs avancés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
                 returnHtmlRef&&h('button',{type:'button',style:button,
@@ -1788,7 +2134,7 @@ window.__ModuleLoader__.load({
                   ),
                   h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
                     h('button',{type:'button',style:button,
-                      'aria-label':selected.hidden?'Show selected layer':'Hide selected layer',
+                      'aria-label':selected.hidden?'Show layer from native source':'Hide layer from native source',
                       disabled:busy||source!==doc.source||selected.locked,
                       onClick:()=>void save({kind:'svg-visibility',id:selected.id,property:'display',
                         value:selected.hidden?null:'none'})},
@@ -1800,7 +2146,7 @@ window.__ModuleLoader__.load({
                       selected.locked?'⛔ Verrouillé':'🔓 Verrouiller')
                   ),
                   h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-                    h('button',{type:'button',style:button,'aria-label':'Rotate selected layer 90 degrees',
+                    h('button',{type:'button',style:button,'aria-label':'Rotate layer from native source 90 degrees',
                       disabled:busy||source!==doc.source||selected.locked,
                       title:'Rotation de 90° autour du centre réel de la forme',
                       onClick:()=>void transformSelected('rotate')},'⟳ Pivoter 90°'),
@@ -1851,52 +2197,18 @@ window.__ModuleLoader__.load({
                     h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},'Tracé non pris en charge en édition visuelle ('+
                       (selectedPath?.reason||'unsupported-path')+'). Utiliser le code source sans conversion forcée.')
                 ),
-                selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
-                  h('strong',{style:{fontSize:12,color:ACCENT}},'Text / Typography'),
-                  h('textarea',{style:{...field,minHeight:80,resize:'vertical'},value:textDraft,
-                    'aria-label':'Text content',onChange:e=>setTextDraft(e.target.value),
-                    disabled:!selectedText.editable}),
-                  h('button',{style:button,disabled:busy||!selectedText.editable||textDraft===selectedText.text,
-                    onClick:()=>void commitText()},'Save text'),
-                  h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}},
-                    ['font-family','font-size','font-weight','font-style','letter-spacing','text-anchor'].map(key=>
-                      h('label',{key,style:{display:'grid',gap:3,color:'var(--dsw-alias-label-secondary, #aaa9a5)',fontSize:11}},
-                        key,
-                        key==='font-family'?
-                          h('select',{style:field,value:selected.attributes[key]||'Inter, Arial',
-                            disabled:busy||!selected.attributes[key],
-                            onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
-                            ['Inter, Arial','Arial','Georgia','Verdana','Times New Roman','Courier New'].map(font=>h('option',{key:font,value:font},font))):
-                        key==='font-weight'||key==='font-style'||key==='text-anchor'?
-                          h('select',{style:field,value:selected.attributes[key]||'normal',
-                            disabled:busy||!selected.attributes[key],
-                            onChange:e=>void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})},
-                            (key==='font-weight'?['normal','400','500','600','700','bold']:key==='font-style'?['normal','italic','oblique']:['start','middle','end']).map(value=>h('option',{key:value,value},value))):
-                          h('input',{style:field,type:'number',step:1,key:key+':'+selected.attributes[key],defaultValue:selected.attributes[key]||'',
-                            disabled:busy||!selected.attributes[key],
-                            onBlur:e=>{if(e.target.value&&e.target.value!==selected.attributes[key])void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})}})
-                      ))
-                  ),
-                  h('small',{style:{color:'var(--dsw-alias-label-tertiary, #989690)'}},'Double-click on a text layer in the canvas to edit directly.')),
                 h('label',null,'Property',h('select',{style:field,value:attribute,onChange:e=>{setAttribute(e.target.value);setValue(selected.attributes[e.target.value]||'')}},Object.keys(selected.attributes).map(k=>h('option',{value:k,key:k},k)))),
                 attribute&&h('label',null,'Value',h('input',{style:field,value,onChange:e=>setValue(e.target.value)})),
                 h('button',{style:button,disabled:busy||!attribute,onClick:()=>save({kind:'svg-attribute',id:active,attribute,value})},'Apply without AI')):
-              h('p',{style:{opacity:0.65}},'Select an SVG layer to edit existing attributes.'))),
-        doc&&h('details',{style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'var(--dsw-alias-bg-layer-1, #222427)'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
+              h('p',{style:{opacity:0.65}},'Sélectionnez un calque pour éditer ses attributs.')),
+            h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Fichier et code'),h('p',{className:'dsh-studio-panel-sub'},'Format natif · édition manuelle locale · aucune requête IA'))))),
+        doc&&h('details',{className:'dsh-studio-source',style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'var(--dsw-alias-bg-layer-1, #222427)'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
           h('textarea',{spellCheck:false,value:source,onChange:e=>setSource(e.target.value),style:{...field,minHeight:220,font:'12px monospace',marginTop:8}}),
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('footer',{className:'dsh-studio-footer'},
-          h('span',null,h('kbd',null,'V'),' sélection'),
-          h('span',null,h('kbd',null,'H'),' main'),
-          h('span',null,h('kbd',null,'P'),' plume'),
-          h('span',null,h('kbd',null,'Espace'),' + glisser'),
-          h('span',null,h('kbd',null,'Ctrl'),' + molette : zoom'),
-          h('span',null,h('kbd',null,'Alt'),' : précision libre'),
-          h('span',{style:{flex:1}}),
-          h('span',null,'Éditeur expérimental · les gestes ne sont écrits qu’une fois validés'),
-          h('span',null,'Grille en px écran, pas en unités SVG'))
+
+        h('footer',{className:'dsh-studio-footer'},h('span',null,'◇ DSH Design Studio'),h('span',null,h('kbd',null,'V'),' Sélection'),h('span',null,h('kbd',null,'H'),' Main'),h('span',null,h('kbd',null,'P'),' Plume'),h('span',null,'Ctrl + molette : zoom'),h('span',null,'SVG · HTML · CSS natifs'),h('span',null,'● Mode local · expérimental'))
       )
     }
     /**

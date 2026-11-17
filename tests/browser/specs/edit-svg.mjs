@@ -91,6 +91,7 @@ export const svgNavigationSpec = {
     assert.equal(await grid.getAttribute('aria-pressed'), before === 'true' ? 'false' : 'true',
       'the grid toggle must expose its pressed state')
 
+    await page.locator('.dsh-studio-settings > summary').click()
     const snap = page.getByRole('button', { name: 'Toggle snap to grid' })
     const snapBefore = await snap.getAttribute('aria-pressed')
     await snap.click()
@@ -99,6 +100,7 @@ export const svgNavigationSpec = {
     await page.getByLabel('Grid spacing').selectOption('20')
     assert.equal(await page.getByLabel('Grid spacing').inputValue(), '20', 'grid spacing is selectable')
 
+    await page.locator('.dsh-studio-settings > summary').click()
     // Switching to the pan tool must be reflected in the toolbar state.
     await page.getByRole('button', { name: 'Pan canvas tool' }).click()
     assert.equal(await page.evaluate(() => document.body.innerText.includes('nav.svg')), true,
@@ -113,7 +115,7 @@ export const svgLayersSpec = {
   name: 'svg: duplicate and delete keep unique ids and undo byte-exactly',
   async run({ page, harness, assert }) {
     await harness.write('layers.svg', SVG_DOCUMENT)
-    await openWorkspaceFile(page, 'layers.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'layers.svg', { expect: 'svg', advanced: true })
     await page.getByRole('button', { name: 'rect #card' }).click()
     await page.getByRole('button', { name: 'Duplicate selected layer' }).click()
 

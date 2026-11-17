@@ -36,7 +36,7 @@ export function assertSingleDifferingRange(assert, before, after, message) {
 
 /** The textarea labelled "Code source natif · avancé" mirrors the loaded document. */
 export async function sourceOf(page) {
-  return page.locator('textarea').first().inputValue()
+  return page.locator('.dsh-studio-source textarea').inputValue()
 }
 
 /**
@@ -45,19 +45,37 @@ export async function sourceOf(page) {
  * immediate comparison races the reload on slow machines.
  */
 export async function waitForEditorSource(page, expected, { timeout = 15000 } = {}) {
-  await page.waitForFunction((value) => document.querySelector('textarea')?.value === value, expected,
+  await page.waitForFunction((value) => document.querySelector('.dsh-studio-source textarea')?.value === value, expected,
     { timeout })
   return sourceOf(page)
 }
 
-/** Open a workspace file through the real UI: type the path and press Open. */
-export async function openWorkspaceFile(page, relativePath, { expect } = {}) {
+/** Open the real File menu before using the path field (Graphite toolbar). */
+export async function openFileMenu(page) {
+  const menu = page.locator('.dsh-studio-top details.dsh-studio-menu')
+  if (!(await menu.getAttribute('open')) && !(await page.getByLabel('Workspace file').isVisible())) {
+    await menu.locator('summary').click()
+  }
+}
+
+/** Open a workspace file through the visible UI, not a hidden menu input. */
+export async function openWorkspaceFile(page, relativePath, { expect, advanced = false } = {}) {
+  await openFileMenu(page)
   await page.getByLabel('Workspace file').fill(relativePath)
   await page.getByRole('button', { name: 'Open', exact: true }).click()
+  const menu = page.locator('.dsh-studio-top details.dsh-studio-menu')
+  if (await menu.evaluate(node => node.open)) await menu.locator('summary').click()
   if (expect === 'svg') await page.waitForSelector('[aria-label="Canvas viewport"]', { timeout: 20000 })
   if (expect === 'html') await page.waitForSelector('iframe[title="Isolated design preview"]', { timeout: 20000 })
   if (expect === 'css') await page.waitForSelector('[aria-label="Select CSS rule h1"]', { timeout: 20000 })
   await page.waitForTimeout(250)
+  if (advanced) await openAdvancedInspector(page)
+}
+
+/** Reveal the native action section using the same visible Inspecter tab as the user. */
+export async function openAdvancedInspector(page) {
+  await page.getByRole('button', { name: 'Inspecter', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.dsh-studio-technical')?.open === true)
 }
 
 /** Drag a pointer from the centre of a locator by a pixel offset. */

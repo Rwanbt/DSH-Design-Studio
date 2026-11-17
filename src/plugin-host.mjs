@@ -233,7 +233,8 @@ export function createRouteHandler(ctx) {
           createdId=operation.selectedId
         } else if (params.kind === 'svg-add-shape') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
-          const created=svgShapeInsertPatch(doc.source,params.shape)
+          const positioned=Object.hasOwn(params,'x') || Object.hasOwn(params,'y')
+          const created=svgShapeInsertPatch(doc.source,params.shape,positioned?{x:params.x,y:params.y}:null)
           patches=[created.patch];createdId=created.id
         } else if (params.kind === 'svg-pen') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
