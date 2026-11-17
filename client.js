@@ -89,7 +89,7 @@ window.__ModuleLoader__.load({
           try{old.frameDoc.removeEventListener('click',old.handler,true)}catch(_){}
         }
       }
-      async function load(force=false, targetFile=file, retainSelection='') {
+      async function load(force=false, targetFile=file, retainSelection='', onLoaded=null) {
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
         if(!sessionId) {setError('Open a conversation first');return false}
         setBusy(true);setError('')
@@ -130,6 +130,7 @@ window.__ModuleLoader__.load({
           setActive(remembered?retainSelection:'')
           const retainedAttr=remembered && remembered.attributes[attribute]?attribute:Object.keys(remembered?.attributes||{})[0]||''
           setAttribute(retainedAttr);setValue(remembered && retainedAttr ? remembered.attributes[retainedAttr]: '')
+          if(typeof onLoaded==='function')onLoaded(data)
           return true
         }catch(e){setError(String(e.message));return false}finally{setBusy(false)}
       }
@@ -339,13 +340,19 @@ window.__ModuleLoader__.load({
         if(!doc || !['html','htm'].includes(doc.format)||busy||reloadRequired||
            source!==doc.source || !match?.file || !match?.selector)return
         const back={file:doc.file,id:htmlActive}
-        const ok=await load(false,match.file)
-        if(!ok)return
-        setReturnHtmlRef(back)
-        setCssActive(match.selector)
-        const first=match.declarations?.find(entry=>htmlProps.includes(entry.property))
-        setCssProperty(first?.property||'color')
-        setCssValue(first?.value||'')
+        const ok=await load(false,match.file,'',data=>{
+          const current=data.cssRules?.find(rule=>rule.selector===match.selector)
+          if(!current) {
+            setCssActive('');setCssValue('')
+            setError('La règle CSS liée a changé ; réouvrez le HTML pour actualiser les correspondances.')
+            return
+          }
+          setCssActive(match.selector)
+          const first=current.declarations?.find(entry=>htmlProps.includes(entry.property))
+          setCssProperty(first?.property||'color')
+          setCssValue(first?.value||'')
+        })
+        if(ok)setReturnHtmlRef(back)
       }
       async function returnToHtml() {
         if(!returnHtmlRef || busy || reloadRequired || source!==doc?.source)return
