@@ -147,10 +147,10 @@ function fakeHtmlFrame({url='about:srcdoc',domIds=['app','title']}={}) {
     }
   }
   const frame={contentDocument}
-  const fire=(target)=>{
+  const fire=(target,extra={})=>{
     let prevented=false
     listeners.get('click')?.({
-      target,preventDefault(){prevented=true}
+      target,...extra,preventDefault(){prevented=true}
     })
     return prevented
   }
@@ -229,4 +229,17 @@ test('HTML preview refuses click mapping during an unsaved source draft',()=>har
   browser.fire(browser.targetTitle)
   const updated=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
   assert.equal(updated.props.srcDoc.includes('[id="title"]{outline:'),false)
+}))
+
+
+test('HTML preview blocks synthetic events and fails closed on DOM query errors',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const fake=fakeHtmlFrame()
+  frame.props.onLoad({currentTarget:fake.frame})
+  assert.equal(fake.fire(fake.targetTitle,{isTrusted:false}),true)
+  assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="title"]{outline:'),false)
+  fake.frame.contentDocument.querySelectorAll=()=>{throw new Error('DOM unavailable')}
+  assert.equal(fake.fire(fake.targetTitle,{isTrusted:true}),true)
+  assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="title"]{outline:'),false)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
 }))
