@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { listHtmlVisualElements, listHtmlStylesheetLinks } from './html-visual.mjs'
 import { listCssVisualRules } from './css-visual.mjs'
+import { buildSafeLinkedPreviewCss } from './html-responsive-preview.mjs'
 
 const MAX_LINKS=8
 const MAX_CSS_SOURCE=512*1024
@@ -31,6 +32,14 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
   const stylesheets=[],styleMatches=elements.map(el=>({id:el.id,matches:[]}))
   const byId=new Map(styleMatches.map(entry=>[entry.id,entry]))
   const visited=new Set()
+  const permittedSelectors=new Set()
+  const previewParts=[]
+  let previewLength=0,previewDeclarations=0,previewOmitted=0,previewTruncated=false
+  for(const item of elements) {
+    if(!item.editable)continue
+    permittedSelectors.add('#'+item.id)
+    for(const name of item.classes)permittedSelectors.add('.'+name)
+  }
   for(let index=0;index<refs.length;index++){
     const ref=refs[index]
     if(index>=MAX_LINKS) {
@@ -62,6 +71,14 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       continue
     }
     const rules=listCssVisualRules(sheet.source)
+    const safePreview=buildSafeLinkedPreviewCss(rules,permittedSelectors,previewLength)
+    if(safePreview.css) {
+      previewParts.push(safePreview.css)
+      previewLength+=safePreview.css.length
+    }
+    previewDeclarations+=safePreview.included
+    previewOmitted+=safePreview.omitted
+    previewTruncated ||= safePreview.truncated
     stylesheets.push({file,status:'inspected',identity:sheet.identity,
       ruleCount:rules.length})
     for(const item of elements){
@@ -86,5 +103,8 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       duplicates.add(key)
     }
   }
-  return {stylesheets,styleMatches}
+  return {stylesheets,styleMatches,
+    previewCss:previewParts.join('\n'),
+    previewCoverage:{status:'partial',includedDeclarations:previewDeclarations,
+      omittedDeclarations:previewOmitted,truncated:previewTruncated}}
 }
