@@ -69,7 +69,9 @@ test('HTML layer selection highlights isolated preview without mutating actual d
   title.props.onClick()
   const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
   assert.ok(frame)
-  assert.equal(frame.props.sandbox,'')
+  assert.equal(frame.props.sandbox,'allow-same-origin')
+  assert.equal(frame.props.sandbox.includes('allow-scripts'),false)
+  assert.ok(frame.props.srcDoc.includes("script-src 'none'"))
   assert.ok(frame.props.srcDoc.includes('[id="title"]{outline:2px solid #bda991'))
   assert.equal(await readFile(app.file,'utf8'),app.source)
   assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
@@ -105,4 +107,109 @@ test('visual HTML editor cannot save when unsaved source differs from the opened
   const save=find(app.render(),n=>n.props?.['aria-label']==='Apply HTML visual style')
   assert.ok(save.props.disabled)
   assert.equal(app.calls().filter(c=>c.method==='POST').length,0)
+}))
+
+
+function fakeHtmlFrame({url='about:srcdoc',domIds=['app','title']}={}) {
+  const listeners=new Map(),removed=[]
+  const element=(id,tagName='H1')=>({
+    tagName,getAttribute(name){return name==='id'?id:null},
+    closest(selector){return selector==='[id]'?this:null}
+  })
+  const targetTitle=element('title'),targetApp=element('app','MAIN')
+  const domNodes=domIds.map(id=>element(id,id==='app'?'MAIN':'H1'))
+  const contentDocument={
+    URL:url,
+    documentElement:{contains(node){return !!node}},
+    querySelectorAll(selector){
+      assert.equal(selector,'[id]')
+      return domNodes
+    },
+    addEventListener(event,handler,capture){
+      assert.equal(capture,true)
+      listeners.set(event,handler)
+    },
+    removeEventListener(event,handler,capture){
+      removed.push({event,handler,capture})
+      if(listeners.get(event)===handler)listeners.delete(event)
+    }
+  }
+  const frame={contentDocument}
+  const fire=(target)=>{
+    let prevented=false
+    listeners.get('click')?.({
+      target,preventDefault(){prevented=true}
+    })
+    return prevented
+  }
+  return {frame,element,targetTitle,targetApp,fire,listeners,removed,contentDocument}
+}
+test('clicking inert HTML preview selects a uniquely mapped element without modifying source',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.equal(frame.props.sandbox,'allow-same-origin')
+  assert.equal(frame.props.sandbox.includes('allow-scripts'),false)
+  assert.ok(frame.props.srcDoc.includes("script-src 'none'"))
+  const browser=fakeHtmlFrame()
+  frame.props.onLoad({currentTarget:browser.frame})
+  assert.equal(typeof browser.listeners.get('click'),'function')
+  const nested={closest:()=>browser.targetTitle}
+  assert.equal(browser.fire(nested),true)
+  const selected=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.ok(selected.props.srcDoc.includes('[id="title"]{outline:2px solid #bda991'))
+  assert.equal(await readFile(app.file,'utf8'),app.source)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}))
+test('HTML preview refuses unknown ids, DOM duplication and wrong tag mapping',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const browser=fakeHtmlFrame({domIds:['app','title','title']})
+  frame.props.onLoad({currentTarget:browser.frame})
+  assert.equal(browser.fire(browser.targetTitle),true)
+  assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="title"]{outline:'),false)
+  const fake=browser.element('nonexistent')
+  assert.equal(browser.fire(fake),true)
+  assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="nonexistent"]'),false)
+  const other=fakeHtmlFrame()
+  other.frame.contentDocument.querySelectorAll=()=>[other.element('title')]
+  frame.props.onLoad({currentTarget:other.frame})
+  assert.equal(browser.listeners.has('click'),false,'Old handler is detached')
+  assert.ok(browser.removed.length>=1)
+  const wrong=other.element('title','BUTTON')
+  assert.equal(other.fire(wrong),true)
+  assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="title"]{outline:'),false)
+}))
+test('HTML click selection ignores navigated frames and untrusted inaccessible frame documents',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const navigated=fakeHtmlFrame({url:'https://untrusted.example/'})
+  frame.props.onLoad({currentTarget:navigated.frame})
+  assert.equal(navigated.listeners.size,0)
+  frame.props.onLoad({currentTarget:{
+    get contentDocument(){throw new Error('cross-origin blocked')}
+  }})
+  assert.equal(navigated.listeners.size,0)
+}))
+test('HTML click handler refuses stale document identity after a native save',()=>harness(async app=>{
+  const initial=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const browser=fakeHtmlFrame()
+  initial.props.onLoad({currentTarget:browser.frame})
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element app').props.onClick()
+  find(app.render(),n=>n.props?.['aria-label']==='HTML style value')
+    .props.onChange({target:{value:'#aabbcc'}})
+  find(app.render(),n=>n.props?.['aria-label']==='Apply HTML visual style').props.onClick()
+  await settle()
+  const actual=(await readFile(app.file,'utf8'))
+  assert.ok(actual.includes('#aabbcc'))
+  browser.fire(browser.targetTitle)
+  const newFrame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.equal(newFrame.props.srcDoc.includes('[id="title"]{outline:'),false,
+    'Click from a previous file revision must not change the selection')
+}))
+test('HTML preview refuses click mapping during an unsaved source draft',()=>harness(async app=>{
+  const frame=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  const browser=fakeHtmlFrame()
+  frame.props.onLoad({currentTarget:browser.frame})
+  find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
+    .props.onChange({target:{value:app.source+'<!-- draft -->'}})
+  browser.fire(browser.targetTitle)
+  const updated=find(app.render(),n=>n.type==='iframe'&&n.props.title==='Isolated design preview')
+  assert.equal(updated.props.srcDoc.includes('[id="title"]{outline:'),false)
 }))
