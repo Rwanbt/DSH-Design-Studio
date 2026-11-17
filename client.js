@@ -795,8 +795,8 @@ window.__ModuleLoader__.load({
           '.dsh-studio-canvas{background-color:#191a1d;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
           '.dsh-studio-workbench{container-type:inline-size}',
           '.dsh-studio-mobile-tabs{display:none}',
-          '@container(max-width:1080px){.dsh-studio-layout{grid-template-columns:170px minmax(230px,1fr) 230px!important}}',
-          '@container(max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #414141;background:#232529}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
+          '@container (max-width:1080px){.dsh-studio-layout{grid-template-columns:170px minmax(230px,1fr) 230px!important}}',
+          '@container (max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #414141;background:#232529}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
         ].join('')),
         h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'#1e2023',minHeight:46}},
           h('strong',{style:{fontSize:14,letterSpacing:'.01em'}},'DSH · Design Studio'),
