@@ -12,6 +12,7 @@
  *    untrusted resources and asserts the outcome instead of silencing it
  */
 import { mountSpec } from './mount.mjs'
+import { dshThemeSpec } from './dsh-theme.mjs'
 import { svgEditSpec, svgNavigationSpec, svgLayersSpec } from './edit-svg.mjs'
 import { htmlSelectSpec, htmlClickInvalidationSpec, htmlLayoutSpec, layoutPresetExtrasSpec, cssRuleSpec } from './edit-web.mjs'
 import { externalConflictSpec, refusedWriteSpec, unsavedSourceGuardSpec } from './conflict.mjs'
@@ -24,6 +25,7 @@ import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-htm
 
 export const specs = [
   mountSpec,
+  dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,
   svgLayersSpec,

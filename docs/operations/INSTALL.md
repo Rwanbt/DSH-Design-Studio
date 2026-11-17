@@ -1,7 +1,10 @@
 # Installing DSH Design Studio in a DeepSeek Harness profile
 
-The plugin is **MIT**, has **zero runtime dependencies**, and is delivered as a
-DSH bundle: `package.json` → `dsh.bundle.patch` → `cordis.patch.yml`.
+This is an **internal DeepSeek Harness plugin**, not a separate application: it has
+no own process, window, port or installer build. It is delivered as a DSH bundle
+(`package.json` → `dsh.bundle.patch` → `cordis.patch.yml`) and its UI is a
+`conversation.view` of the host application, so it inherits the DSH theme, language
+and workspace. The plugin is **MIT** and has **zero runtime dependencies**.
 
 > Status: experimental. Gates G0–G4 are partially open (see
 > `docs/roadmap/DELIVERY-GATES-2026-11-17.md`). Do not install into the profile
@@ -15,6 +18,7 @@ DSH bundle: `package.json` → `dsh.bundle.patch` → `cordis.patch.yml`.
 | Node.js | 22 | `node --version` |
 | OS | Linux x64 verified | Windows verified by CI, macOS **NOT_RUN** |
 | AI provider | **none** | the editor never calls a model |
+| Shell | DSH Web or DSH Desktop | Web driven end-to-end; Desktop renderer **NOT_RUN** |
 
 ## 2. Install into a disposable profile (recommended first)
 

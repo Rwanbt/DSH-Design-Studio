@@ -9,6 +9,10 @@ require the owner's explicit approval.
 
 ## 1. What is ready
 
+**Product framing:** an internal DeepSeek Harness bundle (Host plugin + `conversation.view` client view). No
+standalone application, no separate process, no own window/port; installation is `dsh plugin --profile <p> add …`
+(see ADR-023).
+
 | Item | State | Evidence |
 |---|---|---|
 | Core suite | **398 / 398 PASS**, 0 fail, 0 skip, no dependencies installed | `npm run check` |

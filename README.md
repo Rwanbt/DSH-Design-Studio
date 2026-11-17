@@ -1,6 +1,9 @@
 # DSH Design Studio
 
-Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML and CSS** files manually, with AI, or in a hybrid workflow.
+An **internal plugin for DeepSeek Harness** — not a separate application. It adds a
+native `conversation.view` to the host, so it inherits DSH's theme, language and
+session workspace, and edits real **SVG, HTML and CSS** files manually (an optional
+AI workflow is planned on the same transactional API).
 
 > Status: **P0/P1 — experimental, `dev` only.** A native DeepSeek Harness Host/Client prototype edits real **SVG, HTML and CSS** files through byte-exact, revision-checked source patches, fully offline and without AI credentials: SVG primitive creation, direct manipulation with grid/snap/smart guides, hierarchical layers with group/ungroup, group dragging, visibility and lock, pivot rotation and scaling through normalised matrices, Bézier point/topology editing and a manual Pen, native SVG text and typography, HTML click-to-select in an inert preview frame with text and allowlisted attribute editing, linked-CSS inspection with selector lists and custom properties, bounded responsive previews, and cross-process write protection with exact Undo/Redo.
 > **Verification:** 398 core tests, a real Chromium + Firefox gate (62 checks), and a real DeepSeek Harness installation test (**19/19 PASS**: profile creation, bundle registration, real web app, real session, Host routes, a real save, a refused stale revision, and — with an opt-in real assistant turn — the workbench rendered inside the real DSH conversation, screenshot in `docs/operations/evidence/`). The packaged Desktop/Electron shell is still untested, and macOS/NFS/touch remain `NOT_RUN`; see `docs/roadmap/DELIVERY-GATES-2026-11-17.md`. **Not production ready.**
@@ -11,7 +14,7 @@ Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML a
 - **Native open files**: SVG, HTML and CSS are canonical; optional, documented JSON stores editor-only metadata.
 - **Shared editing semantics**: user and agent edits use validated transactional commands, with revision checks and undo/redo.
 - **No silent overwrites**: source snapshots, diffs and conflicts are explicit.
-- **Native DSH integration**: installable sidebar/workbench plugin, not a separate desktop application.
+- **Native DSH integration**: a bundle installed into a DSH profile, rendered as a `conversation.view`; no own process, window, port or build, and no colours pinned outside the host theme tokens (ADR-023).
 - **Licensing**: project MIT; reusable third-party code only after per-file/dependency license verification. Preserve required MIT and Apache-2.0 notices; source-available implementations are reference-only without permission.
 - **Security**: no unrestricted filesystem paths or untrusted script execution in the editor origin.
 

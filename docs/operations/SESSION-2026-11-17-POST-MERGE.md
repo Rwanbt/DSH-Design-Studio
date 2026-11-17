@@ -41,6 +41,15 @@ An independent read-only review of the whole session diff (`c97101e..HEAD`) retu
 
 P2 findings also fixed: an unregistered SVG sandbox spec, a composition assertion that could not fail, an over-claiming lock comment, ungrouping silently dropping group attributes (now refused with `unsupported-group`), a regex bypass in the preview neutraliser (entity-encoded `refresh` and a quoted `>`; now a quote-aware scanner), and evidence reports that were cited but gitignored (now tracked).
 
+### Internal-plugin integration (framing + theme)
+
+The product is an internal DSH bundle, not an external application (ADR-023). Two integration defects were found:
+
+- the client referenced **four DSH theme tokens that do not exist** (`--dsw-alias-surface-1/2`, `-content-primary`, `-border`), so the fallbacks always won and the workbench never followed DSH's theme despite appearing to. Structural colours now use the real semantic tokens (surfaces, borders, text, states) with hex fallbacks, the font follows `--dsw-font-family`, and the approved Graphite accent is kept as a design decision;
+- the client entry point was not resolvable as `<package>/client.js`, so DSH silently dropped the bundle (fixed earlier this session).
+
+Guardrails: `tests/dsh-theme-tokens.test.mjs` fails on any unknown token name, and the browser spec `dsh-theme` injects a light palette and asserts the workbench surfaces/text actually follow it.
+
 ### Windows intermittent failure: diagnosed, not papered over
 
 One HTML↔CSS navigation test failed intermittently on Windows only. Instead of raising a timeout again, the failure now reports the client's own state; the next failing run returned `{"alert":null,"hasReturnButton":true,"hasLinkedCssButton":false}` — proving the "return to HTML" click was a no-op because the client was still busy after the undo, not that the Host had failed. The test now waits until the button is actionable, and the same class of race is already guarded in the CSS integration tests.

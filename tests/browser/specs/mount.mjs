@@ -11,6 +11,27 @@ export const mountSpec = {
     assert.deepEqual(errors, [], 'no client-side errors during mount')
     const text = await page.locator('#root').innerText()
     assert.ok(text.trim().length > 0, 'the Design Studio view must render visible content')
+    // Internal-plugin integration: the workbench must paint with resolved theme
+    // values (not empty strings) so it inherits DSH's light/dark themes.
+    const theme = await page.evaluate(() => {
+      const workbench = document.querySelector('.dsh-studio-workbench')
+      const header = workbench?.querySelector('header')
+      const style = workbench ? getComputedStyle(workbench) : null
+      const headerStyle = header ? getComputedStyle(header) : null
+      return {
+        background: style?.backgroundColor ?? '',
+        color: style?.color ?? '',
+        font: style?.fontFamily ?? '',
+        headerBackground: headerStyle?.backgroundColor ?? '',
+        headerBorder: headerStyle?.borderBottomColor ?? '',
+      }
+    })
+    assert.match(theme.background, /^rgba?\(/, 'the workbench background must resolve to a colour')
+    assert.match(theme.color, /^rgba?\(/, 'the workbench text colour must resolve')
+    assert.match(theme.headerBackground, /^rgba?\(/, 'the header surface must resolve')
+    assert.match(theme.font, /\w/, 'the workbench must inherit a font family')
+    assert.ok(!/^var\(/.test(theme.background), 'no unresolved var() may leak into computed styles')
+
     // Manual-first: the editor must be usable without any provider/credential UI.
     assert.ok(!/api key|token|provider|chat with/i.test(text), 'no credential or chat chrome in the editor view')
   },

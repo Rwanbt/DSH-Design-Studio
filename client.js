@@ -6,9 +6,9 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const api = 'design-studio-native'
     const ACCENT='#bda991'
-    const pane = { background:'var(--dsw-alias-surface-1,#202124)', color:'var(--dsw-alias-content-primary,#e8e7e2)', border:'1px solid var(--dsw-alias-border,#37383b)', borderRadius:8, padding:12 }
-    const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'#292b2f', color:'inherit' }
-    const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-surface-2,#27292d)', color:'inherit', padding:'6px 8px' }
+    const pane = { background:'var(--dsw-alias-bg-base, #202124)', color:'var(--dsw-alias-label-primary, #e8e7e2)', border:'1px solid var(--dsw-alias-border-l1, #37383b)', borderRadius:8, padding:12 }
+    const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'var(--dsw-alias-bg-layer-2, #292b2f)', color:'inherit' }
+    const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-bg-layer-2,#27292d)', color:'inherit', padding:'6px 8px' }
     /** Decode numeric HTML character references, so an encoded `refresh` is seen. */
     function decodeNumericReferences(text) {
       return String(text)
@@ -537,9 +537,9 @@ window.__ModuleLoader__.load({
         return h('section',{className:'dsh-studio-layout-controls',
           'aria-label':'Visual layout controls',
           style:{display:'grid',gap:8,padding:10,marginTop:6,
-            background:'#292b2f',border:'1px solid #474343',borderRadius:8}},
+            background:'var(--dsw-alias-bg-layer-2, #292b2f)',border:'1px solid #474343',borderRadius:8}},
           h('strong',{style:{color:ACCENT}},'Disposition · Flex / Grid'),
-          h('small',{style:{color:'#b6afa7'}},
+          h('small',{style:{color:'var(--dsw-alias-label-secondary, #b6afa7)'}},
             'Préréglages natifs, une propriété par action. CSS externe et cascade non calculés.'),
           layoutGroups.map(group=>{
             const requires=group.mode
@@ -549,7 +549,7 @@ window.__ModuleLoader__.load({
             if(!compatible && requires && requires!=='layout' && displayMode!=='flex' && displayMode!=='grid')return null
             const off=editingBlocked||!compatible
             return h('div',{key:group.property,style:{display:'grid',gap:5}},
-              h('small',{style:{color:'#d6c7b2'}},group.label+
+              h('small',{style:{color:'var(--dsw-alias-label-secondary, #d6c7b2)'}},group.label+
                 (!compatible?' · choisir le mode correspondant':'')),
               h('div',{style:{display:'flex',flexWrap:'wrap',gap:5}},
                 group.options.map(([value,label])=>
@@ -560,7 +560,7 @@ window.__ModuleLoader__.load({
                     disabled:off,
                     style:{...button,minWidth:32,padding:'5px 8px',
                       background:values[group.property]===value?'#574939':button.background,
-                      borderColor:values[group.property]===value?ACCENT:'#44464b'},
+                      borderColor:values[group.property]===value?ACCENT:'var(--dsw-alias-border-l2, #44464b)'},
                     onClick:()=>void save(format==='css'
                       ?{kind:'css-rule',selector:item.selector,property:group.property,value}
                       :{kind:'html-style',id:item.id,property:group.property,value})
@@ -965,26 +965,26 @@ window.__ModuleLoader__.load({
       }
       return h('section',{className:'dsh-studio-workbench',lang:'fr',
         'aria-label':'DSH Design Studio workbench',
-        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'system-ui,sans-serif',fontSize:12}},
+        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'var(--dsw-font-family, system-ui, sans-serif)',fontSize:12}},
         h('style',null,[
           '.dsh-studio-workbench *{box-sizing:border-box}',
           '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid #bca58c;outline-offset:1px}',
           '.dsh-studio-workbench button:not(:disabled):hover{filter:brightness(1.12)}',
           '.dsh-studio-layout{min-height:0;flex:1;overflow:auto}',
-          '.dsh-studio-canvas{background-color:#191a1d;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
+          '.dsh-studio-canvas{background-color:var(--dsw-alias-bg-base, #191a1d) ;background-image:radial-gradient(#4a4a4a44 .8px,transparent .8px);background-size:18px 18px}',
           '.dsh-studio-workbench{container-type:inline-size}',
           '@media (prefers-reduced-motion:reduce){.dsh-studio-workbench,.dsh-studio-workbench *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}',
-          '@media (prefers-contrast:more){.dsh-studio-workbench{border-color:#e8e7e2}}',
+          '@media (prefers-contrast:more){.dsh-studio-workbench{border-color:var(--dsw-alias-label-primary, #e8e7e2) }}',
           '.dsh-studio-mobile-tabs{display:none}',
           '@container (max-width:1080px){.dsh-studio-layout{grid-template-columns:170px minmax(230px,1fr) 230px!important}}',
-          '@container (max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid #414141;background:#232529}.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
+          '@container (max-width:750px){.dsh-studio-mobile-tabs{display:flex!important;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--dsw-alias-border-l1, #414141) ;background:var(--dsw-alias-bg-layer-1, #232529) }.dsh-studio-layout{grid-template-columns:minmax(0,1fr)!important;min-height:0}.dsh-studio-layout>.dsh-studio-sidebar:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-canvas:not(.dsh-studio-mobile-active),.dsh-studio-layout>.dsh-studio-inspector:not(.dsh-studio-mobile-active){display:none!important}.dsh-studio-sidebar,.dsh-studio-inspector{max-height:none;min-height:300px}.dsh-studio-canvas{min-width:0;min-height:300px}}'
         ].join('')),
-        h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'#1e2023',minHeight:46}},
+        h('header',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'9px 14px',borderBottom:'1px solid #3a3b3e',background:'var(--dsw-alias-bg-layer-1, #1e2023)',minHeight:46}},
           h('strong',{style:{fontSize:14,letterSpacing:'.01em'}},'DSH · Design Studio'),
           h('span',{style:{fontSize:11,opacity:0.7}},'Édition native · sans IA'),
           h('button',{style:button,disabled:busy||reloadRequired||!undoStack.length||source!==doc?.source,onClick:()=>void undo(),'aria-label':'Undo saved edit'},'↶ Undo'),
           h('button',{style:button,disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷ Redo')),
-        h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'#232529'}},
+        h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
           h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open'),
           h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!sessionId,
@@ -995,7 +995,7 @@ window.__ModuleLoader__.load({
         }},
           h('div',{style:{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between'}},
             h('strong',null,'Fichiers du workspace'),
-            h('small',{style:{color:'#aaa9a5'}},workspaceFiles.length+' fichier(s)'+(filesTruncated?' · liste limitée':''))),
+            h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},workspaceFiles.length+' fichier(s)'+(filesTruncated?' · liste limitée':''))),
           h('input',{style:field,value:fileSearch,'aria-label':'Filter design files',
             placeholder:'Rechercher : nom, dossier, extension…',
             onChange:e=>setFileSearch(e.target.value)}),
@@ -1007,9 +1007,9 @@ window.__ModuleLoader__.load({
                 onClick:()=>void openPickedFile(item.path)},
                 h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
                 item.path))),
-          workspaceFiles.length===0&&h('small',{style:{color:'#aaa9a5'}},'Aucun fichier SVG, HTML ou CSS détecté.')
+          workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
         ),
-        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'#222427'},'aria-label':'SVG creation tools'},
+        doc?.format==='svg'&&h('nav',{style:{display:'flex',gap:7,flexWrap:'wrap',padding:'7px 12px',borderBottom:'1px solid #37383b',background:'var(--dsw-alias-bg-layer-1, #222427)'},'aria-label':'SVG creation tools'},
           h('button',{type:'button',
             'aria-label':'Activate Pen tool',
             style:{...button,background:canvasTool==='pen'?'#51483d':button.background},
@@ -1032,21 +1032,21 @@ window.__ModuleLoader__.load({
             disabled:busy||reloadRequired||source!==doc.source,
             onClick:()=>void save({kind:'svg-add-shape',shape})
           },'＋ '+(shape==='rect'?'Rectangle':shape==='circle'?'Circle':shape==='ellipse'?'Ellipse':shape==='text'?'Text':'Tracé')))),
-        error&&h('div',{role:'alert',style:{color:'#ff8585',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+        error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
           h('span',null,error),
           reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
             disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
-        warning&&h('div',{role:'status',style:{color:'#f5c36a'}},warning),
+        warning&&h('div',{role:'status',style:{color:'var(--dsw-alias-state-warn-primary, #f5c36a)'}},warning),
         doc&&h('nav',{className:'dsh-studio-mobile-tabs',role:'tablist',
           'aria-label':'Mobile editor panels'},
           [['layers','Calques'],['canvas','Canevas'],['inspector','Propriétés']].map(([tab,label])=>
             h('button',{key:tab,type:'button',role:'tab',
               'aria-label':'Mobile panel '+tab,'aria-selected':mobilePanel===tab,
               style:{...button,background:mobilePanel===tab?'#574939':button.background,
-                borderColor:mobilePanel===tab?ACCENT:'#44464b'},
+                borderColor:mobilePanel===tab?ACCENT:'var(--dsw-alias-border-l2, #44464b)'},
               onClick:()=>setMobilePanel(tab)},label))),
         doc&&h('div',{className:'dsh-studio-layout',style:{display:'grid',gridTemplateColumns:'220px minmax(330px,1fr) 280px',gap:0,minHeight:390}},
-          h('aside',{className:'dsh-studio-sidebar'+(mobilePanel==='layers'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'#232529'}},
+          h('aside',{className:'dsh-studio-sidebar'+(mobilePanel==='layers'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 1px 0 0',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
             h('strong',null,doc.format==='html'||doc.format==='htm'?'Éléments HTML':doc.format==='css'?'Règles CSS':'Calques'),
             h('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:12}},
               doc.format==='css'?
@@ -1091,7 +1091,7 @@ window.__ModuleLoader__.load({
                   onClick:()=>changeZoom(1.25)},'+'),
                 h('button',{type:'button',style:button,'aria-label':'Fit canvas view',
                   onClick:resetView,title:'Recentrer / adapter au canevas · 0'},'Fit'),
-                h('span',{style:{width:1,height:20,background:'#47484b',margin:'0 3px'}}),
+                h('span',{style:{width:1,height:20,background:'var(--dsw-alias-border-l1, #47484b)',margin:'0 3px'}}),
                 h('button',{type:'button',style:{...button,background:gridVisible?'#51483d':button.background},
                   'aria-label':'Toggle canvas grid','aria-pressed':gridVisible,
                   onClick:()=>setGridVisible(v=>!v)},'Grille'),
@@ -1109,10 +1109,10 @@ window.__ModuleLoader__.load({
 
             doc.format==='css'?
                   h('div',{className:'dsh-studio-css-rule-preview',
-                    style:{background:'#24262a',border:'1px solid #414142',borderRadius:8,
+                    style:{background:'var(--dsw-alias-bg-layer-2, #24262a)',border:'1px solid #414142',borderRadius:8,
                       padding:18,minHeight:240,display:'grid',alignContent:'start',gap:12}},
                     h('strong',{style:{color:ACCENT}},selectedCss?.selector||'Feuille de style native'),
-                    h('small',{style:{color:'#bbb9b4'}},
+                    h('small',{style:{color:'var(--dsw-alias-label-secondary, #bbb9b4)'}},
                       'Sélectionne une règle simple à gauche. Les changements ciblent le fichier .css ouvert.'),
                     selectedCss?.declarations?.map(declaration=>h('div',{key:declaration.property,
                       style:{display:'flex',gap:8,justifyContent:'space-between'}},
@@ -1262,9 +1262,9 @@ window.__ModuleLoader__.load({
                           transform:'translate(-50%, -50%)',zIndex:10,
                           cursor:canvasTool==='select'&&!spaceHeld?'crosshair':'grab',
                           touchAction:'none',
-                          border:'2px solid '+(control?'#bca991':'#292a2d'),
+                          border:'2px solid '+(control?'#bca991':'var(--dsw-alias-bg-layer-2, #292a2d)'),
                           borderRadius:control?'50%':'3px',
-                          background:control?'#292a2d':'#e4c3a2'},
+                          background:control?'var(--dsw-alias-bg-layer-2, #292a2d)':'#e4c3a2'},
                         onPointerDown:e=>startPathDrag(e,point),
                         onPointerMove:movePathDrag,
                         onPointerUp:e=>finishPathDrag(e),
@@ -1290,7 +1290,7 @@ window.__ModuleLoader__.load({
                           stroke:'#bda991',strokeWidth:artboard.width/600}),
                         h('circle',{cx:penPreview.anchor.x,cy:penPreview.anchor.y,
                           r:Math.max(1,artboard.width/180),
-                          fill:'#bda991',stroke:'#262626',strokeWidth:artboard.width/500}))
+                          fill:'#bda991',stroke:'var(--dsw-alias-border-l2, #262626)',strokeWidth:artboard.width/500}))
                     ),
                     editingText&&(()=> {
                       const item=handles.find(h=>h.id===editingText)
@@ -1325,17 +1325,17 @@ window.__ModuleLoader__.load({
                             'aria-label':'HTML viewport '+mode,'aria-pressed':htmlViewport===mode,
                             style:{...button,background:htmlViewport===mode?'#574939':button.background},
                             onClick:()=>setHtmlViewport(mode)},label)),
-                        h('small',{style:{color:'#aaa9a5',marginLeft:7}},
+                        h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)',marginLeft:7}},
                           htmlViewport==='auto'?'Largeur disponible':({desktop:'1280 px',tablet:'768 px',mobile:'390 px'})[htmlViewport])
                       ),
-                      h('small',{role:'status',style:{color:'#d6b787',fontSize:11}},
+                      h('small',{role:'status',style:{color:'var(--dsw-alias-state-warn-primary, #d6b787)',fontSize:11}},
                         'Aperçu partiel · CSS locaux simples uniquement (pas de cascade calculée). '+
                         (htmlPreviewCoverage?.includedDeclarations||0)+' déclarations compatibles, '+
                         (htmlPreviewCoverage?.omittedDeclarations||0)+' ignorées'+
                         (htmlPreviewCoverage?.truncated?' · limite atteinte':'')+'.'),
                       h('div',{className:'dsh-studio-html-frame-scroll',
                         style:{width:'100%',maxWidth:'100%',overflowX:'auto',overflowY:'hidden',
-                          border:'1px solid #474747',borderRadius:8,background:'#17191b',
+                          border:'1px solid #474747',borderRadius:8,background:'var(--dsw-alias-bg-base, #17191b)',
                           padding:8,boxSizing:'border-box'}},
                         h('iframe',{title:'Isolated design preview',sandbox:'allow-same-origin',
                           referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
@@ -1349,7 +1349,7 @@ window.__ModuleLoader__.load({
                       referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
                       srcDoc:safePreview(source,doc.format,htmlActive),
                       style:{width:'100%',height:350,border:'none',background:'#fff',borderRadius:6}})),
-          h('aside',{className:'dsh-studio-inspector'+(mobilePanel==='inspector'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'#232529'}},
+          h('aside',{className:'dsh-studio-inspector'+(mobilePanel==='inspector'?' dsh-studio-mobile-active':''),style:{...pane,overflow:'auto',borderRadius:0,borderWidth:'0 0 0 1px',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
             h('strong',null,'Design · Propriétés'),selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
@@ -1357,9 +1357,9 @@ window.__ModuleLoader__.load({
                   'aria-label':'Return to linked HTML page',
                   disabled:busy||reloadRequired||source!==doc.source,
                   onClick:()=>void returnToHtml()},'← Retour à la page HTML'),
-                h('small',{style:{color:'#a9a6a1'}},
+                h('small',{style:{color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},
                   'Édition ciblée d’une règle dans le fichier CSS natif. Les @media et sélecteurs complexes restent en lecture seule.'),
-                !selectedCss.editable?h('small',{style:{color:'#e7b2a8'}},
+                !selectedCss.editable?h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
                   'Lecture seule : '+(selectedCss.reason||'sélecteur complexe')):
                   h('div',{style:{display:'grid',gap:8}},
                     h('label',null,'Propriété',
@@ -1384,14 +1384,14 @@ window.__ModuleLoader__.load({
               selectedHtml?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedHtml.tag+' #'+selectedHtml.id),
-                h('small',{style:{color:'#a9a6a1'}},'HTML natif : clic dans l’aperçu pour sélectionner un élément à id unique. Scripts bloqués ; propriétés inline ciblées.'),
+                h('small',{style:{color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},'HTML natif : clic dans l’aperçu pour sélectionner un élément à id unique. Scripts bloqués ; propriétés inline ciblées.'),
                 h('div',{className:'dsh-studio-linked-css',style:{display:'grid',gap:5,padding:8,
-                  background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                  background:'var(--dsw-alias-bg-layer-2, #282a2d)',border:'1px solid #3e4042',borderRadius:6}},
                   h('strong',{style:{fontSize:12,color:'#c5ae94'}},'CSS externe · correspondances possibles'),
-                  h('small',{style:{fontSize:11,color:'#aaa9a5'}},
+                  h('small',{style:{fontSize:11,color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},
                     'Ce ne sont pas des styles calculés. Cascade, !important, media queries et héritage non résolus.'),
                   htmlStylesheets.filter(link=>link.status!=='inspected').map((link,index)=>
-                    h('small',{key:'blocked-'+index,style:{color:'#e5b39b'}},
+                    h('small',{key:'blocked-'+index,style:{color:'var(--dsw-alias-state-warn-primary, #e5b39b)'}},
                       (link.file||'Lien CSS')+' · '+link.status)),
                   selectedHtmlRules.length?
                     selectedHtmlRules.map((match,index)=>
@@ -1402,17 +1402,17 @@ window.__ModuleLoader__.load({
                         style:{...button,textAlign:'left',display:'grid',gap:3},
                         onClick:()=>void openLinkedCssRule(match)},
                         h('span',{style:{color:ACCENT}},match.selector+' · '+match.file),
-                        h('small',{style:{color:'#bdbbb7'}},
+                        h('small',{style:{color:'var(--dsw-alias-label-secondary, #bdbbb7)'}},
                           'Spécificité indicative '+match.specificity+
                           (match.editable?'':' · règle en lecture seule')+
                           (match.duplicateAcrossFiles?' · sélecteur répété':'')
                         )
                       )
                     ):
-                    h('small',{style:{color:'#aaa9a5'}},
+                    h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},
                       'Aucune règle simple #id ou .classe reconnue dans les CSS locaux référencés.')
                 ),
-                !selectedHtml.editable?h('small',{style:{color:'#f1b6aa'}},
+                !selectedHtml.editable?h('small',{style:{color:'var(--dsw-alias-state-error-primary, #f1b6aa)'}},
                   'Lecture seule : '+(selectedHtml.reason||'structure complexe')):
                 h('div',{style:{display:'grid',gap:8}},
                   h('label',null,'Propriété CSS',
@@ -1430,7 +1430,7 @@ window.__ModuleLoader__.load({
                   },'Appliquer au HTML · sans IA'),
                   h('small',{style:{opacity:.7}},'Modifie uniquement l’attribut style du nœud sélectionné, avec Undo/Redo.'),
                   h('div',{role:'group','aria-label':'HTML text and attributes',style:{display:'grid',gap:8,
-                    padding:8,background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                    padding:8,background:'var(--dsw-alias-bg-layer-2, #282a2d)',border:'1px solid #3e4042',borderRadius:6}},
                     h('strong',{style:{fontSize:12,color:'#c5ae94'}},'Texte et attributs natifs'),
                     h('label',null,'Texte de l’élément',
                       h('input',{style:{...field,marginTop:4},'aria-label':'HTML element text',
@@ -1443,7 +1443,7 @@ window.__ModuleLoader__.load({
                       onClick:()=>void save({kind:'html-text',key:selectedHtml.key,id:selectedHtml.id,
                         value:htmlText})
                     },'Appliquer le texte'),
-                    h('small',{role:'status',style:{color:'#aaa9a5',fontSize:11}},
+                    h('small',{role:'status',style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)',fontSize:11}},
                       'Uniquement les éléments dont le contenu est du texte simple ; le balisage est refusé.'),
                     h('label',null,'Attribut',
                       h('select',{style:{...field,marginTop:4},'aria-label':'HTML attribute name',
@@ -1460,7 +1460,7 @@ window.__ModuleLoader__.load({
                       onClick:()=>void save({kind:'html-attribute',key:selectedHtml.key,id:selectedHtml.id,
                         attribute:htmlAttrName,value:htmlAttrValue})
                     },'Appliquer l’attribut'),
-                    h('small',{role:'status',style:{color:'#aaa9a5',fontSize:11}},
+                    h('small',{role:'status',style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)',fontSize:11}},
                       'Liste blanche : class, title, alt, hidden, lang, dir, data-*. src, href, on* et style sont refusés côté Host.')
                   ),
                   renderLayoutControls('html',selectedHtml))):
@@ -1470,12 +1470,12 @@ window.__ModuleLoader__.load({
                 h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
                   h('button',{style:button,'aria-label':'Duplicate selected layer',disabled:busy||source!==doc.source,
                     onClick:()=>void layerAction('duplicate'),title:'Dupliquer le calque · Ctrl+D'},'⧉ Dupliquer'),
-                  h('button',{style:{...button,color:'#e7b2a8'},'aria-label':'Delete selected layer',
+                  h('button',{style:{...button,color:'var(--dsw-alias-state-error-primary, #e7b2a8)'},'aria-label':'Delete selected layer',
                     disabled:busy||source!==doc.source,
                     onClick:()=>void layerAction('delete'),title:'Supprimer le calque · Delete (annulable)'},'⌫ Supprimer')
                 ),
                 h('div',{role:'group','aria-label':'Layer structure',style:{display:'grid',gap:6,
-                  padding:8,background:'#282a2d',border:'1px solid #3e4042',borderRadius:6}},
+                  padding:8,background:'var(--dsw-alias-bg-layer-2, #282a2d)',border:'1px solid #3e4042',borderRadius:6}},
                   h('small',{style:{color:'#c5ae94'}},'Structure · '+(selected.isGroup?'groupe':'forme')+
                     ' · profondeur '+(selected.depth||0)+
                     (extraSelection.length?' · '+(extraSelection.length+1)+' calques sélectionnés':'')),
@@ -1523,9 +1523,9 @@ window.__ModuleLoader__.load({
                   h('strong',{style:{color:ACCENT}},'Tracé vectoriel · Nœuds'),
                   selectedPath?.editable?
                     h('div',{style:{display:'grid',gap:8}},
-                      h('small',{style:{color:'#aaa9a5'}},selectedPath.points.length+
+                      h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},selectedPath.points.length+
                         ' points · ancres carrées, poignées Bézier rondes. Les boutons + insèrent un point au milieu du segment.'),
-                      h('small',{style:{color:'#989690'}},
+                      h('small',{style:{color:'var(--dsw-alias-label-tertiary, #989690)'}},
                         'Insertion sur ligne ou courbe : le segment est subdivisé. Suppression limitée aux points terminant une ligne simple.'),
                       selectedPath.penExtendable&&h('button',{style:button,type:'button',
                         'aria-label':'Resume selected path with pen tool',
@@ -1535,7 +1535,7 @@ window.__ModuleLoader__.load({
                       h('div',{style:{display:'flex',flexDirection:'column',gap:5,maxHeight:190,overflow:'auto'}},
                         (selectedPath.segments||[]).map(segment=>
                           h('div',{key:segment.commandIndex,style:{display:'flex',gap:5,alignItems:'center'}},
-                            h('small',{style:{flex:1,color:'#aaa9a5'}},
+                            h('small',{style:{flex:1,color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},
                               segment.type+' · segment '+segment.commandIndex),
                             h('button',{type:'button',style:button,
                               'aria-label':'Insert midpoint segment '+segment.commandIndex,
@@ -1553,7 +1553,7 @@ window.__ModuleLoader__.load({
                         )
                       )
                     ):
-                    h('small',{style:{color:'#e7b2a8'}},'Tracé non pris en charge en édition visuelle ('+
+                    h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},'Tracé non pris en charge en édition visuelle ('+
                       (selectedPath?.reason||'unsupported-path')+'). Utiliser le code source sans conversion forcée.')
                 ),
                 selected.tag==='text'&&selectedText&&h('div',{style:{display:'grid',gap:8,padding:'9px 0'}},
@@ -1565,7 +1565,7 @@ window.__ModuleLoader__.load({
                     onClick:()=>void commitText()},'Save text'),
                   h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}},
                     ['font-family','font-size','font-weight','font-style','letter-spacing','text-anchor'].map(key=>
-                      h('label',{key,style:{display:'grid',gap:3,color:'#aaa9a5',fontSize:11}},
+                      h('label',{key,style:{display:'grid',gap:3,color:'var(--dsw-alias-label-secondary, #aaa9a5)',fontSize:11}},
                         key,
                         key==='font-family'?
                           h('select',{style:field,value:selected.attributes[key]||'Inter, Arial',
@@ -1582,17 +1582,17 @@ window.__ModuleLoader__.load({
                             onBlur:e=>{if(e.target.value&&e.target.value!==selected.attributes[key])void save({kind:'svg-attribute',id:active,attribute:key,value:e.target.value})}})
                       ))
                   ),
-                  h('small',{style:{color:'#989690'}},'Double-click on a text layer in the canvas to edit directly.')),
+                  h('small',{style:{color:'var(--dsw-alias-label-tertiary, #989690)'}},'Double-click on a text layer in the canvas to edit directly.')),
                 h('label',null,'Property',h('select',{style:field,value:attribute,onChange:e=>{setAttribute(e.target.value);setValue(selected.attributes[e.target.value]||'')}},Object.keys(selected.attributes).map(k=>h('option',{value:k,key:k},k)))),
                 attribute&&h('label',null,'Value',h('input',{style:field,value,onChange:e=>setValue(e.target.value)})),
                 h('button',{style:button,disabled:busy||!attribute,onClick:()=>save({kind:'svg-attribute',id:active,attribute,value})},'Apply without AI')):
               h('p',{style:{opacity:0.65}},'Select an SVG layer to edit existing attributes.'))),
-        doc&&h('details',{style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'#222427'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
+        doc&&h('details',{style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'var(--dsw-alias-bg-layer-1, #222427)'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
           h('textarea',{spellCheck:false,value:source,onChange:e=>setSource(e.target.value),style:{...field,minHeight:220,font:'12px monospace',marginTop:8}}),
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'#202124'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'var(--dsw-alias-bg-base, #202124)'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
       )
     }
     return {
