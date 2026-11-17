@@ -2,7 +2,7 @@
 
 **Mise à jour :** 17 novembre 2026 · **branche :** `feat/native-file-persistence` · **PR :** #8 (DRAFT vers `dev`).
 
-**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA17-EVIDENCE.md` ; les décisions de sécurité de l'aperçu HTML figurent dans `docs/adr/ADR-017-HTML-PREVIEW-CLICK-SELECTION.md`.
+**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA18-EVIDENCE.md` ; les décisions d'architecture de l'aperçu HTML et du mappage CSS figurent dans ADR-017 et ADR-018.
 
 ## 1. État observable et découpage du travail
 
@@ -11,7 +11,7 @@
 | **P0 · DSH Host/Client** | Enregistrement simulé, routes natives, viewport React simulé, isolation de prévisualisation | Installation réelle dans DSH Web/Desktop, compatibilité versions, capture et gestes réels | **BLOCKED / NOT_RUN** |
 | **P0 · Données natives** | SVG/HTML/CSS en source canonique, patches exacts, inverses, SHA et identity obligatoires, verrou coopératif entre processus, tests de remplacement | CAS universel face aux éditeurs externes, confinement fort via descripteurs OS, crash/power-loss, NFS/SMB, tests Windows/macOS | **PARTIAL** |
 | **P1 · HTML visuel** | Identification des éléments à ID unique, styles inline conservateurs et première sélection au clic dans un iframe sans scripts (test React simulé) | Validation réelle des iframes/CSP et sécurité, DOM↔source robuste, texte/attributs, composants dynamiques, formulaires et responsive | **PARTIAL** |
-| **P1 · CSS externe** | Alpha.16 : inspection et modification ciblée de règles uniques `#id`/`.classe` d'un fichier `.css` ouvert, exact Undo | Liaison à l'aperçu HTML, cascade/specificité, sélecteurs complexes, `@media`, variables, CSS Modules, plusieurs fichiers | **PARTIAL** |
+| **P1 · CSS externe** | Alpha.16 : édition ciblée de règles uniques `#id`/`.classe` de CSS ; Alpha.18 : correspondances **possibles** depuis une sélection HTML vers des CSS locaux, navigation + édition native/Undo | Cascade effective et rendu HTML CSS externe, gestion des sélecteurs complexes, `@media`, variables, CSS Modules, édition multi-fichiers atomique | **PARTIAL** |
 | **P1 · SVG manuel** | Formes primitives, sélection, déplacements, texte simple, calques feuille, outil Plume, M/L/Q/C/Z explicites, grille, guides et points Bézier | Groupes, transformations composées, arcs/relatif, tangentes lissées/symétriques, masques, dégradés, effets, opérations booléennes | **PARTIAL** |
 | **P1 · Ergonomie** | Structure V3 Graphite et contrôles clavier/souris simulés | Vérification UI réelle, sélection graphique précise, accessibilité, mobile, pinch, gros projets, thèmes | **PARTIAL / NOT_RUN** |
 | **P2 · Agent humain/IA** | Protocole de modifications natives réutilisable par l'interface manuelle | Outils exposés aux agents, diffs/approbation, provenance, orchestration et conflits multiagents | **NOT_IMPLEMENTED** |
@@ -33,7 +33,7 @@
 
 ### Gate G2 — HTML/CSS utilisable de manière visuelle
 1. Sélection **directe** dans un `iframe sandbox` sans exécuter le JavaScript du document. **Prototype alpha.17 :** parent DSH lit le DOM d'un `srcDoc` avec `allow-same-origin` mais sans `allow-scripts`, avec garde session/fichier/identité, ID source unique et DOM unique. Cette décision d'architecture est explicitée dans ADR-017 ; **tests réels navigateur/XSS restent NOT_RUN**. Toute alternative avec pont `postMessage` doit être authentifiée (origine/source/session/document/révision/nonce) et revue séparément.
-2. Relier de façon explicite l'élément HTML à une règle CSS du workspace, en affichant le fichier source, le sélecteur, la spécificité, le caractère `inline` ou externe et les cas de cascade ambigus.
+2. Relier explicitement l'élément HTML aux règles CSS locales. **Prototype alpha.18 :** références locales sûres, sélecteurs simples `#id`/`.classe`, fichier, spécificité indicative, navigation vers la feuille et sauvegarde native ; **aucune cascade effective ni style calculé**. ADR-018 ; analyse complète et tests navigateur toujours NOT_RUN.
 3. Modifier propriétés, texte/attributs simples, Flex/Grid et breakpoints en conservant les fichiers HTML/CSS octet pour octet hors plages choisies.
 4. Tests de fichiers réels + navigateur réel ; `@media`/complexité inconnue toujours refusés sans avertissement trompeur. **Actuellement PARTIAL**.
 
@@ -67,7 +67,7 @@
 
 - **Alpha.16 (branche actuelle)** : styles CSS externes simples, tests exacts et états read-only.
 - **Alpha.17 (prototype implémenté)** : clic HTML direct via accès DOM par le parent dans iframe sans scripts (ADR-017) ; tests React simulés PASS, tests navigateurs réels/sécurité NOT_RUN. La stratégie par messages demeure une option non implémentée.
-- **Alpha.18** : lien HTML↔CSS et inspection de cascade ; affichage visible des cas non supportés.
+- **Alpha.18 (prototype implémenté)** : liens HTML→CSS locaux et correspondances indicatives avec navigation vers un inspecteur de feuille native ; cascade, rendu CSS externe et calcul des styles non implémentés.
 - **Alpha.19** : édition visuelle Flex/Grid + breakpoints testés sur documents réels.
 - **Alpha.20+** : SVG groupes/tangentes/transformations et UI mobile au vu des résultats du smoke G0.
 - **Après gates** : outillage IA et préparation de RC.
