@@ -24,6 +24,7 @@ import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDr
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createRefusalSpec } from './create.mjs'
+import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
 
 export const specs = [
   mountSpec,
@@ -32,6 +33,9 @@ export const specs = [
   createSpec,
   createCssSpec,
   createRefusalSpec,
+  panelSpec,
+  panelUnavailableSpec,
+  panelEmptySpec,
   dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,

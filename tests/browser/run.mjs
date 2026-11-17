@@ -81,7 +81,9 @@ async function waitForShell(page) {
   const state = await page.evaluate(() => ({
     errors: window.__DSH_HARNESS__.errors,
     injected: window.__DSH_HARNESS__.injected,
+    injectedSlots: window.__DSH_HARNESS__.injectedSlots,
     registration: window.__DSH_HARNESS__.registration,
+    conversationRegistration: window.__DSH_HARNESS__.conversationRegistration,
     fatal: window.__DSH_HARNESS__.fatal,
   }))
   if (state.fatal) throw new Error('shell failed to mount: ' + state.errors.join(' | '))
@@ -125,7 +127,9 @@ async function main() {
     report.browsers[browserName] = browserRecord
     try {
       for (const spec of selected) {
-        const harness = await startHarness()
+        // A spec may need a different registry or session shape; everything
+        // else stays identical so no spec can weaken the shared setup.
+        const harness = await startHarness(spec.harness || {})
         const context = await browser.newContext({ viewport: spec.viewport || { width: 1280, height: 820 },
           ...(spec.contextOptions || {}) })
         const page = await context.newPage()

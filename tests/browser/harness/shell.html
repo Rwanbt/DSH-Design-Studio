@@ -25,13 +25,14 @@
   NOT simulated: tests/browser/harness/host-server.mjs mounts the real
   src/plugin-host.mjs route handler over a real filesystem.
 -->
-<div id="harness-bar"><span>conversation.view</span><span id="harness-slot">pending</span></div>
+<div id="harness-bar"><span>conversation.view</span><span id="harness-slot">pending</span>
+  <span id="harness-sidebar-button" role="img" aria-label="Design Studio"><span id="harness-sidebar-icon"></span></span></div>
 <div id="root"></div>
 <script src="/react.js"></script>
 <script src="/react-dom.js"></script>
 <script>
   window.__DSH_HARNESS__ = { sessionId: '__SESSION__', injected: null, registration: null,
-    ready: false, errors: [], fatal: false }
+    registrations: { conversation: [], main: [], sidebar: [] }, injectedSlots: [], ready: false, errors: [], fatal: false }
   window.__ModuleLoader__ = { load(definition) { window.__pluginDefinition = definition } }
   window.addEventListener('error', (event) => {
     window.__DSH_HARNESS__.errors.push(String(event.message || 'error'))
@@ -59,26 +60,53 @@
       })
     } catch (error) { return fail('factory threw: ' + String(error)) }
     if (!module || typeof module.apply !== 'function') return fail('plugin module exposes no apply()')
-    let component = null
+    // DSH renders one list id per sidebar cell and dispatches the main cell of
+    // the same name; the stand-in keeps every registration so a spec can assert
+    // what the real shell would have to work with.
+    const registrations = { conversation: [], main: new Map(), sidebar: new Map() }
     const slots = {
       inject(name, callback) {
         state.injected = name
+        state.injectedSlots = [...(state.injectedSlots || []), name]
         document.getElementById('harness-slot').textContent = 'inject ' + name
         callback()
       },
       register(details, view) {
-        state.registration = { id: details && details.id, order: details && details.order,
-          name: details && details.name,
-          label: typeof details?.label === 'function' ? String(details.label()) : null }
-        component = view
+        const name = details && details.name
+        state.registration = { name, id: details && details.id, key: details && details.key,
+          order: details && details.order,
+          label: typeof details?.label === 'function' ? String(details.label()) : (details?.label ?? null) }
+        if (name === 'conversation.view') {
+          registrations.conversation.push({ details, view })
+          state.conversationRegistration = state.registration
+        }
+        else if (name === 'main') registrations.main.set(details.key, { details, view })
+        else if (name === 'sidebar.panellist') registrations.sidebar.set(details.id, { details, view })
+        else state.errors.push('unexpected slot registration: ' + String(name))
+        state.registrations = {
+          conversation: registrations.conversation.map((entry) => entry.details.id),
+          main: Array.from(registrations.main.keys()),
+          sidebar: Array.from(registrations.sidebar.keys()),
+        }
         return () => {}
       },
     }
     try { module.apply({ slots }) } catch (error) { return fail('apply threw: ' + String(error)) }
-    if (!component) return fail('no conversation.view component registered')
+    if (registrations.conversation.length === 0) return fail('no conversation.view component registered')
+    const icon = registrations.sidebar.get('design-studio')
+    if (icon) {
+      try {
+        ReactDOM.createRoot(document.getElementById('harness-sidebar-icon')).render(
+          React.createElement(icon.view, { size: 16, active: false }))
+      } catch (error) { state.errors.push('sidebar icon render threw: ' + String(error)) }
+    }
+    const panelKey = new URLSearchParams(location.search).get('panel')
+    const panel = panelKey ? registrations.main.get(panelKey) : null
+    if (panelKey && !panel) return fail('no main panel registered for key ' + panelKey)
     try {
-      ReactDOM.createRoot(document.getElementById('root')).render(
-        React.createElement(component, { sessionId: state.sessionId }))
+      ReactDOM.createRoot(document.getElementById('root')).render(panel
+        ? React.createElement(panel.view)
+        : React.createElement(registrations.conversation[0].view, { sessionId: state.sessionId }))
     } catch (error) { return fail('render threw: ' + String(error)) }
     state.ready = true
   })()

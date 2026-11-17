@@ -94,7 +94,7 @@ async function withPenClient(fn) {
       document:{baseURI:'https://dsh.example/workspace/session/1/'}
     })
     const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
-    plugin.apply({slots:{inject:(_,cb)=>cb(),register:(_,view)=>{component=view}}})
+    plugin.apply({slots:{inject:(_,cb)=>cb(),register:(meta,view)=>{if(meta.name==='conversation.view')component=view}}})
     const render=()=>{index=0;return component({sessionId:'session'})}
     await find(render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
     await fn({render,calls:()=>calls,initial,file})

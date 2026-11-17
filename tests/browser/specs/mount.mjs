@@ -2,11 +2,14 @@
 export const mountSpec = {
   name: 'client registers conversation.view and mounts without AI credentials',
   async run({ page, assert, shell }) {
-    assert.equal(shell.injected, 'conversation.view', 'plugin must inject into the conversation.view slot')
-    assert.equal(shell.registration.id, 'dsh-design-studio', 'slot registration id')
-    assert.equal(shell.registration.name, 'conversation.view', 'slot name')
-    assert.equal(shell.registration.label, 'Design Studio', 'visible label')
-    assert.equal(typeof shell.registration.order, 'number', 'slot ordering must be numeric')
+    assert.ok(shell.injectedSlots.includes('conversation.view'),
+      'plugin must inject into the conversation.view slot: ' + JSON.stringify(shell.injectedSlots))
+    assert.ok(shell.injectedSlots.includes('main') && shell.injectedSlots.includes('sidebar.panellist'),
+      'the sidebar entry and its panel must be registered too: ' + JSON.stringify(shell.injectedSlots))
+    assert.equal(shell.conversationRegistration.id, 'dsh-design-studio', 'slot registration id')
+    assert.equal(shell.conversationRegistration.name, 'conversation.view', 'slot name')
+    assert.equal(shell.conversationRegistration.label, 'Design Studio', 'visible label')
+    assert.equal(typeof shell.conversationRegistration.order, 'number', 'slot ordering must be numeric')
     const errors = await page.evaluate(() => window.__DSH_HARNESS__.errors)
     assert.deepEqual(errors, [], 'no client-side errors during mount')
     const text = await page.locator('#root').innerText()

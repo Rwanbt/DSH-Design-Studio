@@ -43,7 +43,7 @@ function createHarness(extraHandles=[],extraPaths=[]) {
     },
   }
   let registration
-  const ctx={slots:{inject:(_name,callback)=>callback(),register:(details,view)=>{registration=details;component=view;return()=>{}}}}
+  const ctx={slots:{inject:(_name,callback)=>callback(),register:(details,view)=>{if(details.name==='conversation.view'){registration=details;component=view}return()=>{}}}}
   const fetch=async (url,options={})=>{
     assert.ok(new URL(String(url)).pathname.startsWith('/design-studio-native/'),'Editor must use same-origin root API routes, never an AI endpoint')
     if(options.method==='POST'){

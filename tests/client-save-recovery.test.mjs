@@ -75,7 +75,7 @@ async function harness(mode='reload-fails') {
     document:{baseURI:'https://dsh.example/conversation/current/'},fetch,
   })
   const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
-  plugin.apply({slots:{inject:(_,fn)=>fn(),register:(_,component)=>{view=component}}})
+  plugin.apply({slots:{inject:(_,fn)=>fn(),register:(meta,component)=>{if(meta.name==='conversation.view')view=component}}})
   const render=()=>{index=0;return view({sessionId:'known'})}
   await find(render(),n=>n.type==='button'&&n.children?.includes('Open')).props.onClick()
   return {render,setFailReload:v=>{failReload=v},writes:()=>writes,reads:()=>reads}

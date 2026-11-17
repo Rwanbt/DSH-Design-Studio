@@ -102,6 +102,19 @@ window.__ModuleLoader__.load({
     }
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
+      const workspaceId = props && typeof props.workspaceId === 'string' ? props.workspaceId : ''
+      const panelMode = props && props.panel === true
+      // Exactly one target: a conversation session, or a registered workspace
+      // (ADR-024). The Host refuses a request carrying both, so build one here.
+      const scope = workspaceId ? {workspaceId} : (sessionId ? {sessionId} : null)
+      const scopeReady = scope !== null
+      const scopeQuery = !scope ? '' : (scope.workspaceId
+        ? 'workspaceId='+encodeURIComponent(scope.workspaceId)
+        : 'sessionId='+encodeURIComponent(scope.sessionId))
+      const scopeBody = !scope ? {} : (scope.workspaceId
+        ? {workspaceId:scope.workspaceId} : {sessionId:scope.sessionId})
+      const scopeKey = !scope ? '' : (scope.workspaceId?'w:'+scope.workspaceId:'s:'+scope.sessionId)
+      const scopeMessage = workspaceId ? 'Sélectionnez un espace de travail' : 'Open a conversation first'
       const [file,setFile] = React.useState('design.svg')
       const [workspaceFiles,setWorkspaceFiles] = React.useState([])
       const [filesTruncated,setFilesTruncated] = React.useState(false)
@@ -187,10 +200,10 @@ window.__ModuleLoader__.load({
       }
       async function load(force=false, targetFile=file, retainSelection='', onLoaded=null) {
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
-        if(!sessionId) {setError('Open a conversation first');return false}
+        if(!scopeReady) {setError(scopeMessage);return false}
         setBusy(true);setError('')
         try {
-          const url='/document?sessionId='+encodeURIComponent(sessionId)+'&file='+encodeURIComponent(targetFile)
+          const url='/document?'+scopeQuery+'&file='+encodeURIComponent(targetFile)
           const data=await request(url)
           if(doc?.file!==targetFile) {
             setCamera({zoom:1,offsetX:0,offsetY:0})
@@ -234,7 +247,7 @@ window.__ModuleLoader__.load({
       }
       async function browseFiles() {
         if(showFiles){setShowFiles(false);return}
-        if(!sessionId){setError('Open a conversation first');return}
+        if(!scopeReady){setError(scopeMessage);return}
         setBusy(true);setError('')
         try {
           await loadWorkspaceFiles()
@@ -245,9 +258,9 @@ window.__ModuleLoader__.load({
       // Files can appear while the view is open (the conversation creates them),
       // so the list is reloadable instead of captured once at mount.
       async function loadWorkspaceFiles() {
-        if(!sessionId) return false
+        if(!scopeReady) return false
         try {
-          const response=await request('/files?sessionId='+encodeURIComponent(sessionId))
+          const response=await request('/files?'+scopeQuery)
           setWorkspaceFiles(response.files||[])
           setFilesTruncated(!!response.truncated)
           return true
@@ -257,11 +270,11 @@ window.__ModuleLoader__.load({
       // The tab used to open on an empty body: the workspace list only appeared
       // after clicking "Parcourir…", so a first visit looked broken.
       React.useEffect(()=>{
-        if(!sessionId) return undefined
+        if(!scopeReady) return undefined
         let cancelled=false
         void loadWorkspaceFiles().then(()=>{ if(cancelled) return })
         return ()=>{cancelled=true}
-      },[sessionId])
+      },[scopeKey])
 
       async function openPickedFile(picked) {
         const opened=await load(false,picked)
@@ -273,14 +286,14 @@ window.__ModuleLoader__.load({
        * file the user did not mean to touch.
        */
       async function createDocument(format) {
-        if(!sessionId||creating) return
+        if(!scopeReady||creating) return
         const typed=newName.trim()
         const base=typed.replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')
         const target=(base||'nouveau-fichier')+'.'+format
         setCreating(true);setError('')
         try {
           await request('/create',{method:'POST',headers:{'content-type':'application/json'},
-            body:JSON.stringify({sessionId,file:target,source:NEW_TEMPLATES[format]})})
+            body:JSON.stringify({...scopeBody,file:target,source:NEW_TEMPLATES[format]})})
           setNewName('')
           await loadWorkspaceFiles()
           await load(false,target)
@@ -296,7 +309,7 @@ window.__ModuleLoader__.load({
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
         setBusy(true);setError('')
         try {
-          const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
+          const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...scopeBody,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
           const reloaded=await load(true,doc.file,response.createdId||active)
           if(!reloaded) {
             setReloadRequired(true)
@@ -692,7 +705,7 @@ window.__ModuleLoader__.load({
       // *parent* reads its inert DOM and installs the selection event handler;
       // no script or postMessage bridge is injected into untrusted HTML.
       previewContextRef.current={
-        file:doc?.file,identity:doc?.identity,sessionId,
+        file:doc?.file,identity:doc?.identity,scope:scopeKey,
         htmlElements,validSource:source===doc?.source,busy,reloadRequired,
         choose:chooseHtmlElement
       }
@@ -705,7 +718,7 @@ window.__ModuleLoader__.load({
         // Do not attach to a navigated iframe or any cross-origin content.
         if(!frameDoc || frameDoc.URL!=='about:srcdoc' ||
             typeof frameDoc.addEventListener!=='function')return
-        const expectedFile=doc.file,expectedIdentity=doc.identity,expectedSession=sessionId
+        const expectedFile=doc.file,expectedIdentity=doc.identity,expectedScope=scopeKey
         const handler=event=>{
           // Neutralize hyperlinks, form controls and navigations in the preview.
           event.preventDefault()
@@ -715,7 +728,7 @@ window.__ModuleLoader__.load({
           const context=previewContextRef.current
           if(!context || context.file!==expectedFile ||
              context.identity!==expectedIdentity ||
-             context.sessionId!==expectedSession ||
+             context.scope!==expectedScope ||
              !context.validSource || context.busy || context.reloadRequired)return
           const target=event.target
           if(!target || typeof target.closest!=='function')return
@@ -1025,7 +1038,7 @@ window.__ModuleLoader__.load({
       }
       return h('section',{className:'dsh-studio-workbench',lang:'fr',
         'aria-label':'DSH Design Studio workbench',
-        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:'min(87vh,920px)',overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'var(--dsw-font-family, system-ui, sans-serif)',fontSize:12}},
+        onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{...pane,height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),overflow:'hidden',display:'flex',flexDirection:'column',gap:0,padding:0,fontFamily:'var(--dsw-font-family, system-ui, sans-serif)',fontSize:12}},
         h('style',null,[
           '.dsh-studio-workbench *{box-sizing:border-box}',
           '.dsh-studio-workbench input:focus-visible,.dsh-studio-workbench textarea:focus-visible,.dsh-studio-workbench button:focus-visible{outline:2px solid #bca58c;outline-offset:1px}',
@@ -1066,20 +1079,21 @@ window.__ModuleLoader__.load({
           h('button',{style:button,title:'Rétablir · Ctrl+Shift+Z',disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo(),'aria-label':'Redo saved edit'},'↷')),
         h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
           h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
-          h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open'),
+          h('button',{style:button,onClick:()=>load(false),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
           h('button',{style:button,onClick:()=>{ if(doc) void browseFiles(); else void loadWorkspaceFiles() },
-            disabled:busy||!sessionId,
+            disabled:busy||!scopeReady,
             'aria-label':'Browse workspace design files'},
             doc?(showFiles?'Fermer les fichiers':'Parcourir…'):'Actualiser')),
         !doc&&h('div',{className:'dsh-studio-canvas dsh-studio-empty',role:'region',
           'aria-label':'Open a design file',
-          style:{...pane,minHeight:340,padding:20,display:'flex',flexDirection:'column',gap:10,justifyContent:'flex-start'}},
+          style:{...pane,minHeight:340,padding:20,display:'flex',flexDirection:'column',gap:10,
+            justifyContent:'flex-start',overflow:'auto'}},
           h('strong',{style:{fontSize:14}},'Aucun fichier ouvert'),
           h('small',{style:{opacity:0.78,maxWidth:640,lineHeight:1.5}},
             'Choisissez un fichier de cet espace de travail ci-dessous, ou saisissez son chemin puis « Open ». '+
             'Le canevas, les calques et les propriétés apparaissent dès qu’un document est ouvert.'),
           h('div',{style:{display:'flex',gap:8,alignItems:'center'}},
-            h('button',{type:'button',style:button,disabled:busy||!sessionId,
+            h('button',{type:'button',style:button,disabled:busy||!scopeReady,
               'aria-label':'Refresh workspace design files',
               onClick:()=>void loadWorkspaceFiles()},'Actualiser'),
             h('small',{style:{opacity:0.7}},workspaceFiles.length+
@@ -1094,11 +1108,11 @@ window.__ModuleLoader__.load({
               placeholder:'nom (ex. accueil.svg)',
               onChange:e=>setNewName(e.target.value),
               onKeyDown:e=>{if(e.key==='Enter')void createDocument('svg')}}),
-            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+            h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
               'aria-label':'Create SVG file',onClick:()=>void createDocument('svg')},'+ SVG'),
-            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+            h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
               'aria-label':'Create HTML file',onClick:()=>void createDocument('html')},'+ HTML'),
-            h('button',{type:'button',style:button,disabled:busy||creating||!sessionId,
+            h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
               'aria-label':'Create CSS file',onClick:()=>void createDocument('css')},'+ CSS')),
           workspaceFiles.length
             ? h('input',{style:{...field,maxWidth:420},value:fileSearch,'aria-label':'Filter design files',
@@ -1736,12 +1750,102 @@ window.__ModuleLoader__.load({
         h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'var(--dsw-alias-bg-base, #202124)'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé.')
       )
     }
+    /**
+     * Sidebar entry glyph. DSH owns the sidebar button, its accessible name and
+     * its label; a panel icon only supplies the drawing at the requested size,
+     * so it inherits the current text colour and exposes nothing to a11y.
+     */
+    function StudioPanelIcon(props) {
+      const size = props && Number.isFinite(props.size) ? props.size : 16
+      return h('svg',{width:size,height:size,viewBox:'0 0 16 16',fill:'none',stroke:'currentColor',
+        strokeWidth:1.3,strokeLinejoin:'round','aria-hidden':'true',focusable:'false'},
+        h('path',{d:'M8 1.6 14.4 8 8 14.4 1.6 8z'}),
+        h('path',{d:'M8 5.3 10.7 8 8 10.7 5.3 8z',fill:'currentColor',stroke:'none'}))
+    }
+    /**
+     * Sidebar panel (ADR-024). It has no conversation, so it edits a registered
+     * workspace: the Host lists the workspaces it owns, this component picks
+     * one by id and the same workbench edits it. No path is ever sent here, and
+     * the Host refuses a path-shaped id.
+     */
+    function StudioPanel(props) {
+      const [listed,setListed] = React.useState({state:'loading',workspaces:[],available:true})
+      const [selected,setSelected] = React.useState('')
+      const [attempt,setAttempt] = React.useState(0)
+      React.useEffect(()=>{
+        let cancelled=false
+        setListed(current=>({...current,state:'loading'}))
+        void (async()=>{
+          try {
+            const response=await fetch(new URL('/'+api+'/workspaces',document.baseURI),{credentials:'same-origin'})
+            const data=await response.json()
+            if(cancelled) return
+            const workspaces=Array.isArray(data&&data.workspaces)?data.workspaces:[]
+            setListed({state:'ready',workspaces,available:data?data.available!==false:false})
+            setSelected(current=>{
+              if(current && workspaces.some(item=>item.id===current)) return current
+              const first=workspaces.find(item=>item.status==='ok')||workspaces[0]
+              return first?first.id:''
+            })
+          } catch(_) {
+            if(!cancelled) setListed({state:'error',workspaces:[],available:false})
+          }
+        })()
+        return ()=>{cancelled=true}
+      },[attempt])
+      const current = listed.workspaces.find(item=>item.id===selected)
+      const note = {padding:'14px 4px',opacity:0.8,lineHeight:1.5,fontSize:12}
+      return h('div',{className:'dsh-studio-panel',lang:'fr',
+        'aria-label':'Design Studio panel',
+        style:{display:'flex',flexDirection:'column',minHeight:0,height:'100%',padding:'10px 12px',gap:8,
+          boxSizing:'border-box',background:'var(--dsw-alias-bg-base, #202124)',
+          color:'var(--dsw-alias-label-primary, #e8e7e2)',
+          fontFamily:'var(--dsw-font-family, system-ui, sans-serif)'}},
+        h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          h('strong',{style:{fontSize:12.5,letterSpacing:'.02em'}},'Design Studio'),
+          listed.workspaces.length>1
+            ? h('label',{style:{display:'flex',gap:6,alignItems:'center',fontSize:11.5,opacity:0.9}},
+                'Espace de travail',
+                h('select',{style:{...field,maxWidth:300,width:'auto'},'aria-label':'Workspace',
+                  value:selected,onChange:e=>setSelected(e.target.value)},
+                  listed.workspaces.map(item=>h('option',{key:item.id,value:item.id,
+                    disabled:item.status!=='ok'},
+                    (item.title||item.id)+(item.status==='ok'?'':' · dossier introuvable')))))
+            : current?h('span',{style:{fontSize:11.5,opacity:0.8}},current.title||current.id):null,
+          h('button',{type:'button',style:{...button,padding:'3px 8px',marginLeft:'auto'},
+            disabled:listed.state==='loading','aria-label':'Refresh workspaces',
+            onClick:()=>setAttempt(n=>n+1)},'Actualiser')),
+        listed.state==='loading'
+          ? h('div',{role:'status',style:note},'Chargement des espaces de travail…')
+          : listed.state==='error'
+            ? h('div',{role:'alert',style:{...note,color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
+                'Impossible de lister les espaces de travail du Host. Réessayez avec « Actualiser ».')
+            : listed.available===false
+              ? h('div',{role:'status',style:note},
+                  'Le registre d’espaces de travail n’est pas disponible dans ce Host. ',
+                  'L’onglet Design Studio d’une conversation reste utilisable.')
+              : listed.workspaces.length===0
+                ? h('div',{role:'status',style:note},
+                    'Aucun espace de travail enregistré dans DSH. Enregistrez un dossier, puis « Actualiser ».')
+                : !current
+                  ? h('div',{role:'status',style:note},'Sélectionnez un espace de travail.')
+                  : current.status!=='ok'
+                    ? h('div',{role:'alert',style:{...note,color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
+                        'Le dossier de cet espace de travail est introuvable : restaurez-le avant d’éditer.')
+                    : h('div',{style:{flex:1,minHeight:0,minWidth:0,display:'flex',flexDirection:'column'}},
+                        h(Studio,{key:selected,workspaceId:selected,panel:true})))
+    }
     return {
       inject:['slots'],
       apply(ctx) {
         const slots=ctx.slots
         if (!slots || typeof slots.inject!=='function') return
         slots.inject('conversation.view',()=>slots.register({name:'conversation.view',id:'dsh-design-studio',order:25,label:()=> 'Design Studio'},Studio))
+        // A sidebar entry is the first place a user looks for an installed
+        // plugin. The list id addresses the main cell of the same name, so both
+        // registrations must keep one id: `design-studio`.
+        slots.inject('sidebar.panellist',()=>slots.register({name:'sidebar.panellist',id:'design-studio',order:20,label:()=> 'Design Studio'},StudioPanelIcon))
+        slots.inject('main',()=>slots.register({name:'main',key:'design-studio'},StudioPanel))
       },
     }
   },

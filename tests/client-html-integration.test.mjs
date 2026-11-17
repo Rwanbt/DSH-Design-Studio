@@ -110,7 +110,7 @@ async function harness(run,options={}) {
       document:{baseURI:'https://dsh.example/session/current/'}
     })
     const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
-    plugin.apply({slots:{inject:(_,cb)=>cb(),register:(_,view)=>{component=view}}})
+    plugin.apply({slots:{inject:(_,cb)=>cb(),register:(meta,view)=>{if(meta.name==='conversation.view')component=view}}})
     const render=()=>{index=0;return component({sessionId:'known'})}
     // Open default path, then choose a file in the same active workspace.
     await find(render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()

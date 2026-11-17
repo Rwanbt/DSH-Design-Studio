@@ -62,7 +62,7 @@ async function mockClient() {
     window:{__ModuleLoader__:{load:d=>plugin=d}},URL,fetch,document:{baseURI:'https://dsh.example/workspaces/conversation/session/'}
   })
   const p=plugin.factory(name=>{assert.equal(name,'react');return React})
-  p.apply({slots:{inject:(_,fn)=>fn(),register:(_,c)=>{component=c}}})
+  p.apply({slots:{inject:(_,fn)=>fn(),register:(meta,c)=>{if(meta.name==='conversation.view')component=c}}})
   const render=()=>{at=0;return component({sessionId:'known'})}
   await locate(render(),n=>n.type==='button'&&n.children.includes('Open')).props.onClick()
   return {render,writes}

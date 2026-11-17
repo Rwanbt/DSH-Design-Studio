@@ -70,7 +70,7 @@ const fileExists = (file) => {
  * @param {string} [options.sessionId] session identifier the Host handler will accept
  * @returns {Promise<object>} handle with url, workspace, sessionId, helpers and close()
  */
-export async function startHarness({ workspace, sessionId = 'e2e-session' } = {}) {
+export async function startHarness({ workspace, sessionId = 'e2e-session', workspaces } = {}) {
   const root = workspace ? path.resolve(workspace) : await mkdtemp(path.join(os.tmpdir(), 'dsh-design-e2e-'))
   await mkdir(root, { recursive: true })
   const umd = await findReactUmd()
@@ -79,9 +79,25 @@ export async function startHarness({ workspace, sessionId = 'e2e-session' } = {}
   const reactSource = await readFile(umd.react)
   const reactDomSource = await readFile(umd.reactDom)
 
+  // A registry stand-in, so the sidebar panel path (workspace ids, no session)
+  // is exercised against the real route handler. `workspaces: []` disables the
+  // entries; `workspaces: null` simulates a host without the service at all.
+  const registryEntries = (workspaces === undefined
+    ? [{ id: 'ws-e2e', title: 'Espace de test', status: 'ok' }]
+    : (workspaces || [])).map((entry) => ({
+    id: entry.id,
+    title: entry.title,
+    path: entry.path || root,
+    status: async () => entry.status || 'ok',
+  }))
+  const registryById = new Map(registryEntries.map((entry) => [entry.id, entry]))
   const ctx = {
     agents: { get: (id) => (typeof id === 'string' && id === sessionId ? { id } : undefined) },
     workingDirectory: { ensure: async () => root },
+    workspaceRegistry: workspaces === null ? undefined : {
+      get: (id) => registryById.get(id),
+      list: () => registryEntries.slice(),
+    },
     webServer: { register: () => () => {} },
   }
   const hostHandler = createRouteHandler(ctx)
@@ -89,7 +105,7 @@ export async function startHarness({ workspace, sessionId = 'e2e-session' } = {}
   const requests = []
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://harness.local')
-    requests.push({ method: req.method, path: url.pathname })
+    requests.push({ method: req.method, path: url.pathname, search: url.search })
     try {
       if (url.pathname.startsWith('/design-studio-native')) return hostHandler(req, res)
       if (url.pathname === '/' || url.pathname === '/index.html') {

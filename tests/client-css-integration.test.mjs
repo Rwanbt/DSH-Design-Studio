@@ -80,7 +80,7 @@ async function fixture(run) {
       document:{baseURI:'https://dsh.example/sessions/1/'},
     })
     const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
-    plugin.apply({slots:{inject:(_slot,cb)=>cb(),register:(_meta,view)=>{component=view}}})
+    plugin.apply({slots:{inject:(_slot,cb)=>cb(),register:(meta,view)=>{if(meta.name==='conversation.view')component=view}}})
     const render=()=>{index=0;return component({sessionId:'active'})}
     const browse=find(render(),n=>n.props?.['aria-label']==='Browse workspace design files')
     browse.props.onClick()

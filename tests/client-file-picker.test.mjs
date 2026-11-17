@@ -85,7 +85,7 @@ async function harness() {
     fetch,
   })
   const plugin=definition.factory(name=>{assert.equal(name,'react');return React})
-  plugin.apply({slots:{inject:(_,fn)=>fn(),register:(_,view)=>{component=view}}})
+  plugin.apply({slots:{inject:(_,fn)=>fn(),register:(meta,view)=>{if(meta.name==='conversation.view')component=view}}})
   const render=()=>{index=0;return component({sessionId:'known'})}
   return {render,requests}
 }
