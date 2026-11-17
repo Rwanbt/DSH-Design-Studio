@@ -2,7 +2,7 @@
 
 Native visual design workspace for **DeepSeek Harness**: edit real **SVG, HTML and CSS** files manually, with AI, or in a hybrid workflow.
 
-> Status: **P0/P1 — experimental alpha.18 on `feat/native-file-persistence`**. A native DSH Host/Client prototype supports SVG primitive creation, moving, resizing, properties, direct SVG layer duplicate/delete, session workspace file browsing, zoom/pan/fit canvas navigation, configurable grid/snap/smart guides, conservative Bézier point/topology editing and manual Pen drawing, and recovery after uncertain saves, cross-process cooperative write locks, revision identity tokens and guarded parent-directory identity checks, simple native SVG text editing, an initial HTML inline CSS inspector with parent-controlled scriptless preview click selection, a standalone CSS rule inspector and read-only matching of local stylesheets to selected HTML IDs/classes, plus manual SVG/HTML/CSS source editing. Simulated host/client tests pass; **real DSH installation, visual UX and production readiness remain unverified**.
+> Status: **P0/P1 — experimental alpha.19 on `feat/native-file-persistence`**. A native DSH Host/Client prototype supports SVG primitive creation, moving, resizing, properties, direct SVG layer duplicate/delete, session workspace file browsing, zoom/pan/fit canvas navigation, configurable grid/snap/smart guides, conservative Bézier point/topology editing and manual Pen drawing, and recovery after uncertain saves, cross-process cooperative write locks, revision identity tokens and guarded parent-directory identity checks, simple native SVG text editing, an initial HTML inline CSS inspector with parent-controlled scriptless preview click selection, a standalone CSS rule inspector, HTML↔CSS source associations, responsive HTML viewport presets and a bounded partial preview of validated local CSS declarations, plus manual SVG/HTML/CSS source editing. Simulated host/client tests pass; **real DSH installation, visual UX and production readiness remain unverified**.
 
 ## Non-negotiable principles
 
@@ -31,7 +31,7 @@ Read `docs/roadmap/IMPLEMENTATION-PLAN.md` and `docs/audits/SOURCE-MATRIX.md` on
 
 ### Experimental alpha
 
-See [alpha.18 evidence](docs/experiments/ALPHA18-EVIDENCE.md) for 249 automated tests and the limited HTML-to-CSS association/navigation. Architecture: [ADR-017](docs/adr/ADR-017-HTML-PREVIEW-CLICK-SELECTION.md) and [ADR-018](docs/adr/ADR-018-HTML-CSS-CANDIDATE-MAPPING.md). A consolidated gate-by-gate backlog is in [delivery gates](docs/roadmap/DELIVERY-GATES-2026-11-17.md).
+See [alpha.19 evidence](docs/experiments/ALPHA19-EVIDENCE.md) for 259 automated tests and the first responsive HTML preview with allowlisted local CSS subset. Architecture: [ADR-017](docs/adr/ADR-017-HTML-PREVIEW-CLICK-SELECTION.md), [ADR-018](docs/adr/ADR-018-HTML-CSS-CANDIDATE-MAPPING.md) and [ADR-019](docs/adr/ADR-019-RESPONSIVE-CSS-PREVIEW.md). A consolidated gate-by-gate backlog is in [delivery gates](docs/roadmap/DELIVERY-GATES-2026-11-17.md).
 
 Run `npm run check` with Node.js 22+ to execute the native patch/store, SVG adapter and mocked DSH Host/Client tests. No model credentials are needed. The native bundle is `@rwanbt/dsh-design-studio`; **do not treat it as a tested installer or stable release**. `examples/design.svg` is a sample document to open relative to a DSH session workspace. The alpha.7 **Parcourir…** picker can list supported files directly from the active conversation workspace, without searching unrelated local directories.
 
