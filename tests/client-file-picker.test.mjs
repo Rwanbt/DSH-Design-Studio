@@ -27,6 +27,7 @@ const settle=()=>new Promise(resolve=>setTimeout(resolve,12))
 async function harness() {
   const state=[];let index=0,definition,component
   const requests=[]
+  const effects={}; const cleanups=[]
   const React={
     createElement:(type,props,...children)=>({type,props:props||{},children}),
     useState(initial){
@@ -34,6 +35,19 @@ async function harness() {
       if(!(i in state))state[i]=initial
       return [state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]
     },
+      // The client half receives DSH's full React 18, so effects are part of its
+      // contract. This mock keeps hook order stable and runs an effect when its
+      // dependencies change; behaviour is covered by the browser gate.
+      useEffect(effect, deps) {
+        const i=index++
+        const previous=effects[i]
+        const changed=!previous||!deps||deps.length!==previous.length||
+          deps.some((value,index)=>value!==previous[index])
+        if(!changed) return
+        effects[i]=deps
+        const cleanup=effect()
+        if(typeof cleanup==='function') cleanups.push(cleanup)
+      },
     useRef(initial){
       const i=index++
       if(!(i in state))state[i]={current:initial}
@@ -76,13 +90,20 @@ async function harness() {
   return {render,requests}
 }
 
-test('Browse button obtains only session-local native files and renders file list',async()=>{
+test('the list loads on mount and Browse refreshes only session-local native files',async()=>{
   const app=await harness()
+  // Renders once: the mount effect is the first read (the tab used to open blank).
+  app.render()
+  await settle()
+  assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/files').length,1,
+    'mounting must read the workspace list once')
   const browse=find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files')
   assert.ok(browse)
   await browse.props.onClick();await settle()
-  assert.deepEqual(app.requests.map(x=>x.pathname),['/design-studio-native/files'])
-  assert.ok(app.requests[0].search.includes('sessionId=known'))
+  assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/files').length,2,
+    'an explicit refresh reads it again')
+  assert.ok(app.requests.every(x=>x.search.includes('sessionId=known')),
+    'every read must stay scoped to this session')
   const shown=findAll(app.render(),n=>n.props?.['aria-label']?.startsWith('Open file ')).map(n=>n.props['aria-label'])
   assert.deepEqual(shown,['Open file assets/icon.svg','Open file pages/layout.html'])
 })

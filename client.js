@@ -219,13 +219,32 @@ window.__ModuleLoader__.load({
         if(!sessionId){setError('Open a conversation first');return}
         setBusy(true);setError('')
         try {
-          const response=await request('/files?sessionId='+encodeURIComponent(sessionId))
-          setWorkspaceFiles(response.files||[])
-          setFilesTruncated(!!response.truncated)
+          await loadWorkspaceFiles()
           setFileSearch('')
           setShowFiles(true)
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
       }
+      // Files can appear while the view is open (the conversation creates them),
+      // so the list is reloadable instead of captured once at mount.
+      async function loadWorkspaceFiles() {
+        if(!sessionId) return false
+        try {
+          const response=await request('/files?sessionId='+encodeURIComponent(sessionId))
+          setWorkspaceFiles(response.files||[])
+          setFilesTruncated(!!response.truncated)
+          return true
+        } catch(_) { return false }
+      }
+
+      // The tab used to open on an empty body: the workspace list only appeared
+      // after clicking "Parcourir…", so a first visit looked broken.
+      React.useEffect(()=>{
+        if(!sessionId) return undefined
+        let cancelled=false
+        void loadWorkspaceFiles().then(()=>{ if(cancelled) return })
+        return ()=>{cancelled=true}
+      },[sessionId])
+
       async function openPickedFile(picked) {
         const opened=await load(false,picked)
         if(opened)setShowFiles(false)
@@ -987,9 +1006,43 @@ window.__ModuleLoader__.load({
         h('div',{style:{display:'flex',gap:8,padding:'9px 12px',borderBottom:'1px solid #35373b',background:'var(--dsw-alias-bg-layer-1, #232529)'}},
           h('input',{style:{...field,flex:1,maxWidth:460},'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
           h('button',{style:button,onClick:()=>load(false),disabled:busy||!sessionId},busy?'Loading…':'Open'),
-          h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!sessionId,
-            'aria-label':'Browse workspace design files'},showFiles?'Fermer les fichiers':'Parcourir…')),
-        showFiles&&h('div',{className:'dsh-studio-file-picker',style:{
+          h('button',{style:button,onClick:()=>{ if(doc) void browseFiles(); else void loadWorkspaceFiles() },
+            disabled:busy||!sessionId,
+            'aria-label':'Browse workspace design files'},
+            doc?(showFiles?'Fermer les fichiers':'Parcourir…'):'Actualiser')),
+        !doc&&h('div',{className:'dsh-studio-canvas dsh-studio-empty',role:'region',
+          'aria-label':'Open a design file',
+          style:{...pane,minHeight:340,padding:20,display:'flex',flexDirection:'column',gap:10,justifyContent:'flex-start'}},
+          h('strong',{style:{fontSize:14}},'Aucun fichier ouvert'),
+          h('small',{style:{opacity:0.78,maxWidth:640,lineHeight:1.5}},
+            'Choisissez un fichier de cet espace de travail ci-dessous, ou saisissez son chemin puis « Open ». '+
+            'Le canevas, les calques et les propriétés apparaissent dès qu’un document est ouvert.'),
+          h('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+            h('button',{type:'button',style:button,disabled:busy||!sessionId,
+              'aria-label':'Refresh workspace design files',
+              onClick:()=>void loadWorkspaceFiles()},'Actualiser'),
+            h('small',{style:{opacity:0.7}},workspaceFiles.length+
+              (workspaceFiles.length===1?' fichier de design':' fichiers de design')+
+              (filesTruncated?' · liste limitée':''))),
+          workspaceFiles.length
+            ? h('input',{style:{...field,maxWidth:420},value:fileSearch,'aria-label':'Filter design files',
+                placeholder:'Filtrer : nom, dossier, extension…',
+                onChange:e=>setFileSearch(e.target.value)})
+            : null,
+          workspaceFiles.length
+            ? h('div',{role:'list','aria-label':'Workspace design files',
+                style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:6,marginTop:4}},
+                ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase()))
+                  .slice(0,60)
+                  .map(item=>h('button',{key:item.path,type:'button',
+                    style:{...button,textAlign:'left',overflowWrap:'anywhere'},
+                    'aria-label':'Open file '+item.path,disabled:busy,
+                    onClick:()=>void openPickedFile(item.path)},item.path)))
+            : h('div',{role:'status',style:{...pane,padding:12,marginTop:4,background:'var(--dsw-alias-bg-layer-1, #232529)'}},
+                h('span',null,'Aucun fichier SVG, HTML ou CSS dans cet espace de travail.'),
+                h('small',{style:{opacity:0.7,display:'block',marginTop:4}},
+                  'Ajoutez-en un depuis la conversation, ou ouvrez un dossier qui en contient un.'))),
+        showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
           padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
           maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
         }},
@@ -1592,7 +1645,7 @@ window.__ModuleLoader__.load({
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
             h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
-        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'var(--dsw-alias-bg-base, #202124)'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé. Installation DSH réelle non validée.')
+        h('small',{style:{opacity:0.65,padding:'7px 14px',borderTop:'1px solid #38393b',background:'var(--dsw-alias-bg-base, #202124)'}},'Éditeur expérimental · Grille (pas en unités SVG), magnétisme et repères de centres/bords réglables (Alt = précision libre). V sélection, H main, Espace+glisser, Ctrl+molette zoom. Aucun changement de fichier tant que le geste n’est pas validé.')
       )
     }
     return {

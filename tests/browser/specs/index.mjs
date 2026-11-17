@@ -22,9 +22,12 @@ import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
 import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
+import { landingSpec, landingEmptySpec } from './landing.mjs'
 
 export const specs = [
   mountSpec,
+  landingSpec,
+  landingEmptySpec,
   dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,

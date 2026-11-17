@@ -41,6 +41,16 @@ An independent read-only review of the whole session diff (`c97101e..HEAD`) retu
 
 P2 findings also fixed: an unregistered SVG sandbox spec, a composition assertion that could not fail, an over-claiming lock comment, ungrouping silently dropping group attributes (now refused with `unsupported-group`), a regex bypass in the preview neutraliser (entity-encoded `refresh` and a quoted `>`; now a quote-aware scanner), and evidence reports that were cited but gitignored (now tracked).
 
+### The workbench opened on an empty body (reported by the owner)
+
+The owner opened the real `Design Studio` view and saw *"l'onglet est vide je ne peux rien créer et faire dedans"*. Both halves of that sentence were true:
+
+- `doc && h('div',{className:'dsh-studio-layout'…})` meant the entire body — layers, canvas, inspector — was absent until a document was open, leaving only the header and a path field;
+- the workspace file list only existed after clicking `Parcourir…`, so nothing invited the first open;
+- and nothing anywhere could *create* a file.
+
+Fixed (first half): a real landing region that lists the workspace's design files, loaded on mount, filterable, with a refresh control for files that appear while the view is open, and an honest "no design file in this workspace" state. The stale footer claim ("installation DSH réelle non validée") is gone. Proven by two new browser specs — `landing.mjs` opens a nested file straight from the list and asserts the canvas mounts; the empty spec asserts zero rows *and* a zero count, so an empty list can no longer masquerade as success. Remaining: creating a file still has no Host path (next slice, with the same transactional guarantees).
+
 ### Internal-plugin integration (framing + theme)
 
 The product is an internal DSH bundle, not an external application (ADR-023). Two integration defects were found:

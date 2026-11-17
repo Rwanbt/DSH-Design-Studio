@@ -15,6 +15,7 @@ function createHarness(extraHandles=[],extraPaths=[]) {
   let index=0
   let component
   let writes=[]
+  const effects={}; const cleanups=[]
   const React = {
     createElement:(type,props,...children)=>({type,props:props||{},children}),
     useState(initial) {
@@ -22,6 +23,19 @@ function createHarness(extraHandles=[],extraPaths=[]) {
       if(!(i in state))state[i]=initial
       return [state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]
     },
+      // The client half receives DSH's full React 18, so effects are part of its
+      // contract. This mock keeps hook order stable and runs an effect when its
+      // dependencies change; behaviour is covered by the browser gate.
+      useEffect(effect, deps) {
+        const i=index++
+        const previous=effects[i]
+        const changed=!previous||!deps||deps.length!==previous.length||
+          deps.some((value,index)=>value!==previous[index])
+        if(!changed) return
+        effects[i]=deps
+        const cleanup=effect()
+        if(typeof cleanup==='function') cleanups.push(cleanup)
+      },
     useRef(initial) {
       const i=index++
       if(!(i in state))state[i]={current:initial}

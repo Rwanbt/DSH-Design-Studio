@@ -17,12 +17,27 @@ function locate(node,predicate) {
 async function mockClient() {
   const state=[];let at=0,component,plugin
   const writes=[]
+  const effects={}; const cleanups=[]
   const React={
     createElement:(type,props,...children)=>({type,props:props||{},children}),
     useState(initial) {
       const i=at++
       if(!(i in state))state[i]=initial
       return [state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]
+    },
+    // The real client half receives DSH's full React 18, so effects are part of
+    // its contract. This mock only has to keep hook order stable and run an
+    // effect when its dependencies change; behavioural coverage of the effects
+    // lives in the browser gate (tests/browser/specs/landing.mjs).
+    useEffect(effect, deps) {
+      const i=at++
+      const previous=effects[i]
+      const changed=!previous||!deps||deps.length!==previous.length||
+        deps.some((value,index)=>value!==previous[index])
+      if(!changed) return
+      effects[i]=deps
+      const cleanup=effect()
+      if(typeof cleanup==='function') cleanups.push(cleanup)
     },
     useRef(initial) {
       const i=at++
