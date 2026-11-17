@@ -2,7 +2,7 @@
 
 **Mise à jour :** 17 novembre 2026 · **branche :** `feat/native-file-persistence` · **PR :** #8 (DRAFT vers `dev`).
 
-**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves de l'alpha.16 sont dans `docs/experiments/ALPHA16-EVIDENCE.md`.
+**Règle de lecture :** un test unitaire ou une simulation du Host n'est pas un test dans l'application réelle. Un sous-ensemble fonctionnel implémenté n'implique pas que tout le chantier soit terminé. Les preuves du dernier jalon sont dans `docs/experiments/ALPHA17-EVIDENCE.md` ; les décisions de sécurité de l'aperçu HTML figurent dans `docs/adr/ADR-017-HTML-PREVIEW-CLICK-SELECTION.md`.
 
 ## 1. État observable et découpage du travail
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **P0 · DSH Host/Client** | Enregistrement simulé, routes natives, viewport React simulé, isolation de prévisualisation | Installation réelle dans DSH Web/Desktop, compatibilité versions, capture et gestes réels | **BLOCKED / NOT_RUN** |
 | **P0 · Données natives** | SVG/HTML/CSS en source canonique, patches exacts, inverses, SHA et identity obligatoires, verrou coopératif entre processus, tests de remplacement | CAS universel face aux éditeurs externes, confinement fort via descripteurs OS, crash/power-loss, NFS/SMB, tests Windows/macOS | **PARTIAL** |
-| **P1 · HTML visuel** | Identification limitée à certains éléments à ID unique ; styles inline conservateurs | Sélection dans l'iframe, mappage DOM robuste, texte/attributs, composants dynamiques, formulaires et responsive | **PARTIAL** |
+| **P1 · HTML visuel** | Identification des éléments à ID unique, styles inline conservateurs et première sélection au clic dans un iframe sans scripts (test React simulé) | Validation réelle des iframes/CSP et sécurité, DOM↔source robuste, texte/attributs, composants dynamiques, formulaires et responsive | **PARTIAL** |
 | **P1 · CSS externe** | Alpha.16 : inspection et modification ciblée de règles uniques `#id`/`.classe` d'un fichier `.css` ouvert, exact Undo | Liaison à l'aperçu HTML, cascade/specificité, sélecteurs complexes, `@media`, variables, CSS Modules, plusieurs fichiers | **PARTIAL** |
 | **P1 · SVG manuel** | Formes primitives, sélection, déplacements, texte simple, calques feuille, outil Plume, M/L/Q/C/Z explicites, grille, guides et points Bézier | Groupes, transformations composées, arcs/relatif, tangentes lissées/symétriques, masques, dégradés, effets, opérations booléennes | **PARTIAL** |
 | **P1 · Ergonomie** | Structure V3 Graphite et contrôles clavier/souris simulés | Vérification UI réelle, sélection graphique précise, accessibilité, mobile, pinch, gros projets, thèmes | **PARTIAL / NOT_RUN** |
@@ -32,7 +32,7 @@
 4. Obtenir les rapports de mutation/rollback et comparer les SHAs. **Actuellement PARTIAL**.
 
 ### Gate G2 — HTML/CSS utilisable de manière visuelle
-1. Sélection **directe** d'un élément dans une prévisualisation `iframe sandbox`, avec protocole message authentifié (origine/source/session/document/revision), refus des injections et sans exécuter le JavaScript du document.
+1. Sélection **directe** dans un `iframe sandbox` sans exécuter le JavaScript du document. **Prototype alpha.17 :** parent DSH lit le DOM d'un `srcDoc` avec `allow-same-origin` mais sans `allow-scripts`, avec garde session/fichier/identité, ID source unique et DOM unique. Cette décision d'architecture est explicitée dans ADR-017 ; **tests réels navigateur/XSS restent NOT_RUN**. Toute alternative avec pont `postMessage` doit être authentifiée (origine/source/session/document/révision/nonce) et revue séparément.
 2. Relier de façon explicite l'élément HTML à une règle CSS du workspace, en affichant le fichier source, le sélecteur, la spécificité, le caractère `inline` ou externe et les cas de cascade ambigus.
 3. Modifier propriétés, texte/attributs simples, Flex/Grid et breakpoints en conservant les fichiers HTML/CSS octet pour octet hors plages choisies.
 4. Tests de fichiers réels + navigateur réel ; `@media`/complexité inconnue toujours refusés sans avertissement trompeur. **Actuellement PARTIAL**.
@@ -66,7 +66,7 @@
 ## 4. Prochaine séquence de développement proposée
 
 - **Alpha.16 (branche actuelle)** : styles CSS externes simples, tests exacts et états read-only.
-- **Alpha.17** : sélection HTML directe par iframe sans scripts utilisateurs exécutés, protocole de message strict, tests d'abus et de sécurité.
+- **Alpha.17 (prototype implémenté)** : clic HTML direct via accès DOM par le parent dans iframe sans scripts (ADR-017) ; tests React simulés PASS, tests navigateurs réels/sécurité NOT_RUN. La stratégie par messages demeure une option non implémentée.
 - **Alpha.18** : lien HTML↔CSS et inspection de cascade ; affichage visible des cas non supportés.
 - **Alpha.19** : édition visuelle Flex/Grid + breakpoints testés sur documents réels.
 - **Alpha.20+** : SVG groupes/tangentes/transformations et UI mobile au vu des résultats du smoke G0.
