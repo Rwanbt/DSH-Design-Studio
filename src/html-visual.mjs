@@ -20,6 +20,8 @@ export const HTML_STYLE_PROPERTIES={
   'border-radius':/^\d+(?:\.\d+)?(?:px|rem|em|%)$/i,
   'font-weight':/^(?:normal|bold|[1-9]00)$/i,
   'text-align':/^(?:left|right|center|justify|start|end)$/i,
+  'grid-template-columns':/^(?:1fr|repeat\((?:2|3|4),\s*minmax\(0,\s*1fr\)\))$/i,
+  'grid-auto-flow':/^(?:row|column)$/i,
   'flex-direction':/^(?:row|column|row-reverse|column-reverse)$/i,
   'justify-content':/^(?:start|end|center|space-between|space-around|space-evenly|flex-start|flex-end)$/i,
   'align-items':/^(?:start|end|center|stretch|baseline|flex-start|flex-end)$/i,
