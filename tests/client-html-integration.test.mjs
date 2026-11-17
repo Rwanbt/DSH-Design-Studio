@@ -22,13 +22,17 @@ async function until(predicate,message) {
   }
   assert.fail(message)
 }
-async function harness(run) {
+async function harness(run,options={}) {
   const root=await mkdtemp(path.join(os.tmpdir(),'dsh-html-client-'))
-  const source='<!doctype html><html><body><main id="app" style="display: block;">'+
-    '<h1 id="title" style="color: red;">Hello</h1></main></body></html>'
+  const source=options.html||('<!doctype html><html><body><main id="app" style="display: block;">'+
+    '<h1 id="title" style="color: red;">Hello</h1></main></body></html>')
   const file=path.join(root,'page.html')
   try {
     await writeFile(file,source)
+    for(const [name,content] of Object.entries(options.css||{})){
+      assert.match(name,/^[A-Za-z0-9_-]+\.css$/)
+      await writeFile(path.join(root,name),content)
+    }
     let index=0,definition,component
     const states=[],calls=[]
     const React={
@@ -68,7 +72,7 @@ async function harness(run) {
     find(render(),n=>n.props?.['aria-label']==='Open file page.html').props.onClick()
     await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Select HTML element title'),
       'HTML document did not open')
-    await run({render,source,file,calls:()=>calls})
+    await run({render,source,file,root,calls:()=>calls})
   }finally{await rm(root,{recursive:true,force:true})}
 }
 test('HTML layer selection highlights isolated preview without mutating actual document',()=>harness(async app=>{
@@ -242,4 +246,65 @@ test('HTML preview blocks synthetic events and fails closed on DOM query errors'
   assert.equal(fake.fire(fake.targetTitle,{isTrusted:true}),true)
   assert.equal(find(app.render(),n=>n.type==='iframe')?.props.srcDoc.includes('[id="title"]{outline:'),false)
   assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}))
+
+
+test('HTML CSS candidate navigation uses the real CSS inspector and native Undo, then returns',()=>harness(async app=>{
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element title').props.onClick()
+  const match=find(app.render(),n=>n.props?.['aria-label']==='Open linked CSS #title in theme.css')
+  assert.ok(match,'Recognized local linked CSS ID should have an open button')
+  assert.ok(find(app.render(),n=>n.props?.className==='dsh-studio-linked-css'))
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+  match.props.onClick()
+  await until(()=>!!find(app.render(),n=>n.props?.['aria-label']==='CSS rule value'),
+    'Linked CSS file did not open')
+  assert.equal(find(app.render(),n=>n.props?.['aria-label']==='CSS rule value').props.value,'red')
+  find(app.render(),n=>n.props?.['aria-label']==='CSS rule value')
+    .props.onChange({target:{value:'#bda991'}})
+  find(app.render(),n=>n.props?.['aria-label']==='Apply CSS rule style').props.onClick()
+  const cssFile=path.join(app.root,'theme.css')
+  await until(async()=>(await readFile(cssFile,'utf8')).includes('#bda991'),'CSS write not completed')
+  await until(()=>find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit')?.props.disabled===false,
+    'Undo not ready')
+  assert.equal(await readFile(app.file,'utf8'),app.source,'HTML is never rewritten by CSS edit')
+  const writes=app.calls().filter(call=>call.method==='POST')
+  assert.equal(writes.length,1)
+  assert.equal(writes[0].body.file,'theme.css')
+  assert.match(writes[0].body.baseIdentity,/^[a-f0-9]{64}$/)
+  find(app.render(),n=>n.props?.['aria-label']==='Undo saved edit').props.onClick()
+  await until(async()=>await readFile(cssFile,'utf8')==='#title{color:red}\n.card{gap:8px}\n',
+    'Native stylesheet Undo failed')
+  const back=find(app.render(),n=>n.props?.['aria-label']==='Return to linked HTML page')
+  assert.ok(back)
+  back.props.onClick()
+  await until(()=>!!find(app.render(),n=>n.props?.['aria-label']==='Open linked CSS #title in theme.css'),
+    'Return to HTML did not restore selected element')
+  assert.equal(await readFile(app.file,'utf8'),app.source)
+}, {
+  html:'<link rel="stylesheet" href="theme.css"><h1 id="title" class="card">Hello</h1>',
+  css:{'theme.css':'#title{color:red}\n.card{gap:8px}\n'}
+}))
+test('linked CSS navigation reloads fresh external revisions rather than using stale match values',()=>harness(async app=>{
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element title').props.onClick()
+  await writeFile(path.join(app.root,'theme.css'),'#title{color:blue}')
+  find(app.render(),n=>n.props?.['aria-label']==='Open linked CSS #title in theme.css').props.onClick()
+  await until(()=>!!find(app.render(),n=>n.props?.['aria-label']==='CSS rule value'),
+    'Fresh CSS file was not opened')
+  assert.equal(find(app.render(),n=>n.props?.['aria-label']==='CSS rule value').props.value,'blue')
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}, {
+  html:'<link rel="stylesheet" href="theme.css"><h1 id="title">Hello</h1>',
+  css:{'theme.css':'#title{color:red}'}
+}))
+test('HTML-to-CSS file navigation is disabled while source contains unsaved changes',()=>harness(async app=>{
+  find(app.render(),n=>n.props?.['aria-label']==='Select HTML element title').props.onClick()
+  find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false)
+    .props.onChange({target:{value:app.source+'<!-- dirty -->'}})
+  const linked=find(app.render(),n=>n.props?.['aria-label']==='Open linked CSS #title in theme.css')
+  assert.ok(linked)
+  assert.equal(linked.props.disabled,true)
+  assert.equal(app.calls().filter(call=>call.method==='POST').length,0)
+}, {
+  html:'<link rel="stylesheet" href="theme.css"><h1 id="title">Hello</h1>',
+  css:{'theme.css':'#title{color:red}'}
 }))
