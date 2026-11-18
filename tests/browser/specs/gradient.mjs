@@ -427,3 +427,22 @@ export const gradientStopMoveSpec = {
     assert.equal(applies(),2,'Undo reverts both spans in one transaction')
   },
 }
+
+
+export const gradientSharedWarningSpec = {
+  name: 'gradient: shared gradient warns before an edit that affects multiple layers',
+  async run({page,harness,assert}) {
+    const shared=GRADIENT_SVG.replace(
+      '  <rect id="ghost"',
+      '  <rect id="panel-2" x="24" y="175" width="90" height="65" fill="url(#sky)"/>\n  <rect id="ghost"')
+    await harness.write('shared-gradient.svg',shared)
+    await openWorkspaceFile(page,'shared-gradient.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer rect #panel',exact:true}).click()
+    const section=await openGradientSection(page,'sky')
+    const warning=section.locator('[data-gradient-shared-count]')
+    assert.equal(await warning.getAttribute('data-gradient-shared-count'),'2')
+    assert.match(await warning.innerText(),/partagé par 2 éléments/)
+    assert.equal(await harness.read('shared-gradient.svg'),shared,
+      'the shared-gradient warning is read-only')
+  },
+}
