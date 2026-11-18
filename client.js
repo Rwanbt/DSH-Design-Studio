@@ -119,6 +119,17 @@ window.__ModuleLoader__.load({
       {key:'middleY',axis:'y',edge:'center',label:'Aligner au milieu vertical',text:'Milieu'},
       {key:'bottom',axis:'y',edge:'end',label:'Aligner en bas',text:'Bas'},
     ])
+    /**
+     * Equal-gap distribution: the same single-coordinate primitive as alignment,
+     * but the target is derived from the free space between the first and the
+     * last box instead of from one shared edge. Both modes write exactly one
+     * attribute per layer (`x` or `y`) and therefore ride the same atomic Host
+     * batch: one request, one Undo step.
+     */
+    const DISTRIBUTION_MODES = Object.freeze([
+      {key:'distributeX',axis:'x',label:'Distribuer horizontalement',text:'Distribuer ↔'},
+      {key:'distributeY',axis:'y',label:'Distribuer verticalement',text:'Distribuer ↕'},
+    ])
     /** Edge of one handle along the mode's axis, in artboard coordinates. */
     function alignmentEdge(handle, mode) {
       const start = mode.axis === 'x' ? handle.x : handle.y
@@ -132,6 +143,28 @@ window.__ModuleLoader__.load({
     function alignmentCoordinate(value) {
       const rounded = Math.round(value * 1000) / 1000
       return String(Object.is(rounded, -0) ? 0 : rounded)
+    }
+    /**
+     * A pure local-x move only stays horizontal when the accumulated matrix has
+     * b=0 (`inverse[1]=0`); a pure local-y move only stays vertical when
+     * c=0 (`inverse[2]=0`). Under a rotation/pivot the single-axis write cannot
+     * reach the target: alignment AND distribution share this refusal so both
+     * gestures name the same cause instead of approximating.
+     */
+    function alignmentAxisRefusal(entry, axis) {
+      const inverse = entry.move.inverse
+      const scale = axis === 'x' ? inverse[0] : inverse[3]
+      const cross = axis === 'x' ? inverse[1] : inverse[2]
+      // A 90°/270° rotation keeps the matrix invertible but makes the axis
+      // scale vanish while the cross term dominates: report the axis problem,
+      // not a false "not invertible".
+      if (!Number.isFinite(scale) || !Number.isFinite(cross) ||
+          Math.abs(scale) < 1e-12 || Math.abs(cross) > 1e-9) {
+        return 'Transform non alignable sur l’axe ' +
+          (axis === 'x' ? 'horizontal' : 'vertical') + ' pour #' + entry.id +
+          ' : rotation/pivot détecté, aucune approximation.'
+      }
+      return ''
     }
     // Rename pre-checks mirror `src/svg-rename.mjs` for the UI only; the Host is
     // still the only writer and re-validates every rule before touching bytes.
@@ -1165,14 +1198,17 @@ window.__ModuleLoader__.load({
        * accepted: both carry a real `x`/`y` attribute, and both already have a
        * transform-aware handle used by the drag gesture. Groups and circle/
        * ellipse are refused rather than converted to `cx`/`cy`/`translate`.
+       *
+       * `minimum` is 2 for alignment and 3 for distribution, so both gestures
+       * share the exact same refusal order and wording family.
        */
-      function alignmentSelectionState() {
+      function alignmentSelectionState(minimum=2) {
         const wanted=new Set(extraSelection)
         if(active) wanted.add(active)
         const ids=nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
         const missing=[...wanted].filter(id=>!nodes.some(node=>node.id===id))
         const blocked=reason=>({ok:false,reason,ids,entries:[]})
-        if(!doc) return blocked('Ouvrez un document SVG pour aligner des calques.')
+        if(!doc) return blocked('Ouvrez un document SVG pour '+(minimum>2?'distribuer':'aligner')+' des calques.')
         if(doc.format!=='svg') return blocked('Alignement indisponible : ce document n’est pas un SVG.')
         if(busy) return blocked('Enregistrement en cours : réessayez ensuite.')
         if(reloadRequired) return blocked('Document à recharger avant de modifier.')
@@ -1180,8 +1216,14 @@ window.__ModuleLoader__.load({
           return blocked('Modifications non enregistrées : enregistrez ou abandonnez-les avant d’aligner.')
         }
         if(missing.length) return blocked('Un calque sélectionné n’existe plus : resélectionnez les calques.')
-        if(ids.length<2) return blocked('Sélectionnez au moins deux calques (Ctrl+clic) pour aligner.')
-        if(ids.length>16) return blocked('Alignement refusé : 16 calques maximum par écriture (limite du Host).')
+        if(ids.length<minimum) {
+          return blocked('Sélectionnez au moins '+(minimum>2?'trois':'deux')+' calques (Ctrl+clic) pour '+
+            (minimum>2?'distribuer':'aligner')+'.')
+        }
+        if(ids.length>16) {
+          return blocked((minimum>2?'Distribution refusée':'Alignement refusé')+
+            ' : 16 calques maximum par écriture (limite du Host).')
+        }
         const entries=[]
         for(const id of ids) {
           const node=nodes.find(item=>item.id===id)
@@ -1230,18 +1272,8 @@ window.__ModuleLoader__.load({
       function alignmentModePlan(state,mode) {
         if(!state.ok) return {ok:false,reason:state.reason}
         for(const entry of state.entries) {
-          const inverse=entry.move.inverse
-          const scale=mode.axis==='x'?inverse[0]:inverse[3]
-          const cross=mode.axis==='x'?inverse[1]:inverse[2]
-          // A 90°/270° rotation keeps the matrix invertible but makes the axis
-          // scale vanish while the cross term dominates: report the axis problem,
-          // not a false "not invertible".
-          if(!Number.isFinite(scale)||!Number.isFinite(cross)||
-             Math.abs(scale)<1e-12||Math.abs(cross)>1e-9) {
-            return {ok:false,reason:'Transform non alignable sur l’axe '+
-              (mode.axis==='x'?'horizontal':'vertical')+' pour #'+entry.id+
-              ' : rotation/pivot détecté, aucune approximation.'}
-          }
+          const axisRefusal=alignmentAxisRefusal(entry,mode.axis)
+          if(axisRefusal) return {ok:false,reason:axisRefusal}
           if(entry.handle.tag==='text') {
             if(mode.axis==='y') {
               return {ok:false,reason:'#'+entry.id+' : alignement vertical du texte non calculable (ligne de base).'}
@@ -1310,6 +1342,107 @@ window.__ModuleLoader__.load({
         const count=plan.edits.length
         void save({kind:'svg-attributes',edits:plan.edits},'record',()=>{
           setAlignNotice(count+' '+(count>1?'calques alignés':'calque aligné')+
+            ' · une seule écriture, Undo exact.')
+        })
+      }
+      /**
+       * Plan an equal-gap distribution along one axis.
+       *
+       * The boxes are ordered by their LEADING edge in artboard space; the
+       * first and the last one stay strictly fixed, and the remaining space is
+       * shared equally between the boxes in between (n-1 equal gaps). Only the
+       * leading-edge coordinate that actually changes is written (`x` for the
+       * horizontal mode, `y` for the vertical one), through the same
+       * `move.inverse` mapping as alignment and the pointer drag.
+       *
+       * A negative equal gap means the boxes already overlap too much to be
+       * distributed: the gesture is refused instead of writing a negative
+       * spacing that would push the middle boxes through each other.
+       */
+      function distributionPlan(state,mode) {
+        if(!state.ok) return {ok:false,reason:state.reason}
+        for(const entry of state.entries) {
+          const axisRefusal=alignmentAxisRefusal(entry,mode.axis)
+          if(axisRefusal) return {ok:false,reason:axisRefusal}
+          if(entry.handle.tag==='text') {
+            // The text box height is a font-size estimate around the baseline:
+            // a vertical distribution would space lines from a number that is
+            // not the rendered one. A horizontal shift is a pure translation of
+            // the same estimated box, so it stays exact -- but only an explicit
+            // anchor makes the box provable.
+            if(mode.axis==='y') {
+              return {ok:false,reason:'#'+entry.id+
+                ' : distribution verticale du texte non calculable (ligne de base).'}
+            }
+            if(!Object.hasOwn(entry.node.attributes,'text-anchor')) {
+              return {ok:false,reason:'#'+entry.id+
+                ' : texte sans text-anchor explicite, ancrage hérité non prouvable.'}
+            }
+          }
+        }
+        const boxes=state.entries.map(entry=>({
+          entry,
+          start:mode.axis==='x'?entry.handle.x:entry.handle.y,
+          size:mode.axis==='x'?entry.handle.width:entry.handle.height,
+        }))
+        for(const box of boxes) {
+          if(!Number.isFinite(box.start)||!Number.isFinite(box.size)||box.size<=0) {
+            return {ok:false,reason:'Géométrie incomplète pour #'+box.entry.id+' : distribution refusée.'}
+          }
+        }
+        // Leading edge is the only ordering key; the sort is stable, so equal
+        // edges keep the selection (document) order.
+        boxes.sort((a,b)=>a.start-b.start)
+        const first=boxes[0],last=boxes[boxes.length-1]
+        let middleSize=0
+        for(let index=1;index<boxes.length-1;index+=1) middleSize+=boxes[index].size
+        const span=last.start+last.size-first.start
+        const gap=(span-first.size-middleSize-last.size)/(boxes.length-1)
+        if(!Number.isFinite(gap)) {
+          return {ok:false,reason:'Géométrie de la sélection indisponible : distribution refusée.'}
+        }
+        if(gap<-1e-9) {
+          return {ok:false,reason:'Distribution refusée : les calques se chevauchent, '+
+            'l’espacement égal serait négatif ('+alignmentCoordinate(gap)+').'}
+        }
+        const edits=[]
+        let cursor=first.start+first.size+gap
+        for(let index=1;index<boxes.length-1;index+=1) {
+          const box=boxes[index]
+          const delta=cursor-box.start
+          if(Math.abs(delta)>1e-9) {
+            const inverse=box.entry.move.inverse
+            const scale=mode.axis==='x'?inverse[0]:inverse[3]
+            const initial=mode.axis==='x'?box.entry.move.initialX:box.entry.move.initialY
+            const attribute=mode.axis==='x'?box.entry.move.x:box.entry.move.y
+            const next=alignmentCoordinate(initial+scale*delta)
+            const current=box.entry.node.attributes[attribute]
+            // A layer already on its target produces no cosmetic edit: the
+            // whole gesture must stay a no-op when nothing needs to move.
+            if(!(typeof current==='string'&&Math.abs(Number(current)-Number(next))<=1e-9)) {
+              edits.push({id:box.entry.id,attribute,value:next})
+            }
+          }
+          cursor+=box.size+gap
+        }
+        return {ok:true,edits}
+      }
+      /** Execute one distribution through the single atomic `svg-attributes` batch. */
+      function distributeSelection(modeKey) {
+        const mode=DISTRIBUTION_MODES.find(item=>item.key===modeKey)
+        if(!mode) return
+        setAlignNotice('')
+        const plan=distributionPlan(alignmentSelectionState(3),mode)
+        if(!plan.ok) {setError(plan.reason);return}
+        if(plan.edits.length===0) {
+          setError('')
+          setAlignNotice('Déjà distribué : aucune écriture nécessaire.')
+          return
+        }
+        setError('')
+        const count=plan.edits.length
+        void save({kind:'svg-attributes',edits:plan.edits},'record',()=>{
+          setAlignNotice(count+' '+(count>1?'calques distribués':'calque distribué')+
             ' · une seule écriture, Undo exact.')
         })
       }
@@ -1446,7 +1579,12 @@ window.__ModuleLoader__.load({
         // the selection made at drag start).
         layerDragClickRef.current=true
         if(cancelled)return
-        const overId=layerRowAtPoint(event.clientX,event.clientY)||gesture.overId
+        // The row under the release point can be the source itself (selection
+        // scrolls the list, so rows shift mid-gesture). Fall back to the last
+        // row the pointer really hovered, so a genuine drop is not lost.
+        const releaseId=layerRowAtPoint(event.clientX,event.clientY)
+        const overId=(releaseId && releaseId!==gesture.id) ? releaseId
+          : (gesture.overId && gesture.overId!==gesture.id ? gesture.overId : releaseId)
         const plan=layerDropPlan(gesture.id,overId)
         if(!plan.ok) {
           // Same row: no write and no error, just a quiet acknowledgement.
@@ -1715,20 +1853,35 @@ window.__ModuleLoader__.load({
         if(active) wanted.add(active)
         return nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
       }
-      // One validation + six plans per render is bounded (16 layers max) and
-      // keeps the disabled state and its visible reason in sync with the real
-      // document, not with a separate optimistic model.
+      // One validation + six alignment plans + two distribution plans per
+      // render is bounded (16 layers max) and keeps the disabled state and its
+      // visible reason in sync with the real document, not with a separate
+      // optimistic model. Distribution shares the validation, with a
+      // three-layer minimum and its own gap/overlap rules.
       const alignmentState=alignmentSelectionState()
       const alignmentPlans={}
       for(const mode of ALIGNMENT_MODES) alignmentPlans[mode.key]=alignmentModePlan(alignmentState,mode)
       const alignmentBlockedReasons=[...new Set(ALIGNMENT_MODES
         .filter(mode=>!alignmentPlans[mode.key].ok)
         .map(mode=>alignmentPlans[mode.key].reason))]
-      // A successful alignment must stay visible: the reasons are then only
-      // shown in each button's title, never in place of the confirmation.
-      const alignmentHint=alignNotice || (alignmentBlockedReasons.length
-        ? alignmentBlockedReasons.join(' ')
-        : 'Six alignements, une seule écriture · Undo exact.')
+      const distributionState=alignmentSelectionState(3)
+      const distributionPlans={}
+      for(const mode of DISTRIBUTION_MODES) distributionPlans[mode.key]=distributionPlan(distributionState,mode)
+      const distributionBlockedReasons=[...new Set(DISTRIBUTION_MODES
+        .filter(mode=>!distributionPlans[mode.key].ok)
+        .map(mode=>distributionPlans[mode.key].reason))]
+      // A successful gesture must stay visible: the reasons are then only shown
+      // in each button's title, never in place of the confirmation. Both
+      // families share one visible hint, so a refusal that only affects the
+      // distribution (overlap, three-layer minimum, vertical text) is named even
+      // when the six alignments themselves stay available.
+      const gestureBlockedReasons=[...new Set([
+        ...alignmentBlockedReasons,
+        ...distributionBlockedReasons,
+      ])]
+      const alignmentHint=alignNotice || (gestureBlockedReasons.length
+        ? gestureBlockedReasons.join(' ')
+        : 'Six alignements, deux distributions, une seule écriture · Undo exact.')
       const selected=nodes.find(n=>n.id===active)
       const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
       const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
@@ -2315,9 +2468,10 @@ window.__ModuleLoader__.load({
           :{cx:round(next.x+next.width/2),cy:round(next.y+next.height/2),rx:round(next.width/2),ry:round(next.height/2)})
       }
       const displayGeometry=Object.keys(boxValues).length?Object.keys(boxValues):['x','y','width','height']
-      // Alignment controls. They are real buttons in the inspector, not canvas
-      // commands, so every disabled state carries its reason in the visible hint
-      // (a silent no-op button is exactly what this gate forbids).
+      // Alignment and distribution controls. They are real buttons in the
+      // inspector, not canvas commands, so every disabled state carries its
+      // reason in the visible hint (a silent no-op button is exactly what this
+      // gate forbids).
       const alignmentInspector=h('section',{className:'dsh-studio-ins-block','data-align-panel':''},
         h('div',{className:'dsh-studio-ins-head'},'Alignement',h('span',null,'⌗')),
         ['x','y'].map(axis=>h('div',{key:axis,role:'group',
@@ -2330,6 +2484,15 @@ window.__ModuleLoader__.load({
               'aria-label':mode.label,title:plan.ok?mode.label+' · une seule écriture':plan.reason,
               disabled:!plan.ok,onClick:()=>alignSelection(mode.key)},mode.text)
           }))),
+        h('div',{role:'group','aria-label':'Distribution',
+          style:{display:'flex',gap:6,marginTop:8}},
+          DISTRIBUTION_MODES.map(mode=>{
+            const plan=distributionPlans[mode.key]
+            return h('button',{key:mode.key,type:'button',className:'dsh-studio-prop',
+              style:{flex:1,justifyContent:'center',padding:'0 6px',fontSize:11},
+              'aria-label':mode.label,title:plan.ok?mode.label+' · une seule écriture':plan.reason,
+              disabled:!plan.ok,onClick:()=>distributeSelection(mode.key)},mode.text)
+          })),
         h('p',{className:'dsh-studio-hint','data-align-reason':alignmentHint},alignmentHint))
       const geometryInspector=h('section',{className:'dsh-studio-ins-block'},
         h('div',{className:'dsh-studio-ins-head'},'Transformation',h('span',null,'⌘')),

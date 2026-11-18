@@ -668,3 +668,327 @@ export const alignLockedAncestorSpec = {
     assert.equal(await harness.read('ancetre.svg'), source, 'nothing may be written')
   },
 }
+
+/* ------------------------------------------------------------------------- *
+ * Equal-gap distribution (extension of multi-layer alignment)
+ *
+ * Distribution reuses the alignment primitive: artboard boxes from the
+ * transform-aware handles, targets mapped back through `move.inverse`, and ONE
+ * `svg-attributes` batch. The first and the last boxes stay fixed and the free
+ * space between them is shared as equal gaps. These assertions read the real
+ * file bytes, measure the gaps from the written attributes and count real Host
+ * calls: one gesture = one POST = one Undo step.
+ * ------------------------------------------------------------------------- */
+
+const DISTRIBUTE_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240" viewBox="0 0 400 240">
+  <rect id="p" x="10" y="40" width="30" height="20" fill="#bda991"/>
+  <g id="shift" transform="translate(100,0) scale(2)">
+    <rect id="q" x="20" y="20" width="20" height="20" fill="#8a9a7b"/>
+  </g>
+  <rect id="r" x="300" y="60" width="40" height="25" fill="#5b6b7b"/>
+</svg>
+`
+
+const DISTRIBUTE_VERTICAL_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300" viewBox="0 0 240 300">
+  <rect id="a" x="20" y="20" width="30" height="20" fill="#bda991"/>
+  <rect id="b" x="90" y="90" width="40" height="50" fill="#8a9a7b"/>
+  <rect id="c" x="160" y="210" width="50" height="30" fill="#5b6b7b"/>
+</svg>
+`
+
+const DISTRIBUTE_REFUSAL_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200">
+  <rect id="a" x="10" y="10" width="40" height="20" fill="#bda991"/>
+  <rect id="b" x="90" y="10" width="50" height="20" fill="#8a9a7b"/>
+  <rect id="c" x="230" y="10" width="30" height="20" fill="#5b6b7b"/>
+  <rect id="lock" x="10" y="80" width="40" height="20" fill="#bda991" data-locked="true"/>
+  <rect id="o1" x="10" y="150" width="50" height="20" fill="#bda991"/>
+  <rect id="o2" x="20" y="150" width="50" height="20" fill="#8a9a7b"/>
+  <rect id="o3" x="30" y="150" width="50" height="20" fill="#5b6b7b"/>
+</svg>
+`
+
+const DISTRIBUTE_DONE_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="120" viewBox="0 0 300 120">
+  <rect id="a" x="10" y="20" width="40" height="20" fill="#bda991"/>
+  <rect id="b" x="100" y="20" width="50" height="20" fill="#8a9a7b"/>
+  <rect id="c" x="200" y="20" width="30" height="20" fill="#5b6b7b"/>
+</svg>
+`
+
+const DISTRIBUTE_TEXT_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+  <rect id="a" x="10" y="10" width="40" height="20" fill="#bda991"/>
+  <rect id="b" x="120" y="10" width="40" height="20" fill="#8a9a7b"/>
+  <text id="t1" x="200" y="80" text-anchor="start" font-size="16" fill="#202124">Hello</text>
+  <text id="t2" x="300" y="140" font-size="16" fill="#202124">Plain</text>
+</svg>
+`
+
+export const distributeSpec = {
+  name: 'distribute: three layers of different widths get equal gaps through one write and Undo restores the bytes',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+    const reason = () => page.locator('[data-align-reason]').innerText()
+
+    await harness.write('distribute.svg', DISTRIBUTE_DOCUMENT)
+    await openWorkspaceFile(page, 'distribute.svg', { expect: 'svg' })
+
+    // The two controls live in the alignment panel but stay disabled until three
+    // layers are selected, and the hint states why.
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), true,
+      'distribution exists but is disabled without a selection')
+    assert.equal(await button('Distribuer verticalement').isDisabled(), true)
+
+    await layer('rect', 'p').click()
+    await layer('rect', 'q').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), true,
+      'two layers are not enough to distribute')
+    assert.match(await reason(), /au moins trois calques/,
+      'the visible reason names the three-layer minimum')
+    assert.equal(await harness.read('distribute.svg'), DISTRIBUTE_DOCUMENT,
+      'an insufficient selection writes nothing')
+    assert.equal(applies, 0)
+
+    await layer('rect', 'r').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), false,
+      'three layers enable the horizontal distribution')
+    assert.equal(applies, 0, 'enabling a control never writes')
+
+    const before = await harness.read('distribute.svg')
+    await button('Distribuer horizontalement').click()
+    const distributed = await waitForDisk(harness, 'distribute.svg',
+      (text) => attributeOf(elementTag(text, 'q'), 'x') === '25', { label: 'distribute horizontal' })
+    assert.equal(applies, 1, 'the whole distribution is exactly one Host write')
+
+    // q is inside translate(100,0) scale(2): the artboard target 150 is reached
+    // by the local x = 20 + (150 - 140) / 2 = 25. The first and the last layer
+    // stay fixed.
+    assert.equal(attributeOf(elementTag(distributed, 'p'), 'x'), '10', 'the first layer stays fixed')
+    assert.equal(attributeOf(elementTag(distributed, 'r'), 'x'), '300', 'the last layer stays fixed')
+    assert.equal(attributeOf(elementTag(distributed, 'q'), 'y'), '20', 'distribution never rewrites y')
+    assert.equal(attributeOf(elementTag(distributed, 'q'), 'width'), '20',
+      'distribution never rewrites width')
+    assert.equal(attributeOf(elementTag(distributed, 'q'), 'height'), '20',
+      'distribution never rewrites height')
+    assert.equal(distributed, before.replace('<rect id="q" x="20"', '<rect id="q" x="25"'),
+      'only that one x attribute changed: every other byte is preserved')
+
+    // Equal gaps measured from the written bytes: p ends at 40, q now spans
+    // 150..190 in artboard space and r starts at 300.
+    const pTag = elementTag(distributed, 'p')
+    const qTag = elementTag(distributed, 'q')
+    const qStart = 100 + 2 * Number(attributeOf(qTag, 'x'))
+    const firstGap = qStart - (Number(attributeOf(pTag, 'x')) + 30)
+    const lastGap = 300 - (qStart + 2 * Number(attributeOf(qTag, 'width')))
+    assert.equal(firstGap, 110, 'the gap before the middle box is the computed equal gap')
+    assert.equal(lastGap, 110, 'the gap after the middle box is the same gap')
+    assert.equal(firstGap, lastGap, 'the two gaps are equal')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    const restored = await waitForDisk(harness, 'distribute.svg', (text) => text === before,
+      { label: 'undo distribute' })
+    assert.equal(restored, before, 'Undo restores the original bytes exactly')
+    assert.equal(applies, 2, 'Undo is one more Host call')
+  },
+}
+
+export const distributeVerticalSpec = {
+  name: 'distribute: vertical distribution equalises the gaps and never rewrites x',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+
+    await harness.write('distribute-vertical.svg', DISTRIBUTE_VERTICAL_DOCUMENT)
+    await openWorkspaceFile(page, 'distribute-vertical.svg', { expect: 'svg' })
+    await layer('rect', 'a').click()
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer verticalement').isDisabled(), false,
+      'three layers enable the vertical distribution')
+
+    const before = await harness.read('distribute-vertical.svg')
+    await button('Distribuer verticalement').click()
+    const distributed = await waitForDisk(harness, 'distribute-vertical.svg',
+      (text) => attributeOf(elementTag(text, 'b'), 'y') === '100', { label: 'distribute vertical' })
+    assert.equal(applies, 1, 'vertical distribution is exactly one Host write')
+
+    assert.equal(attributeOf(elementTag(distributed, 'a'), 'y'), '20', 'the first box stays fixed')
+    assert.equal(attributeOf(elementTag(distributed, 'c'), 'y'), '210', 'the last box stays fixed')
+    assert.equal(attributeOf(elementTag(distributed, 'b'), 'x'), '90', 'distribution never rewrites x')
+    assert.equal(attributeOf(elementTag(distributed, 'b'), 'width'), '40',
+      'distribution never rewrites width')
+    assert.equal(attributeOf(elementTag(distributed, 'b'), 'height'), '50',
+      'distribution never rewrites height')
+    assert.equal(distributed, before.replace('<rect id="b" x="90" y="90"', '<rect id="b" x="90" y="100"'),
+      'only the middle y attribute changed: every other byte is preserved')
+
+    const aTag = elementTag(distributed, 'a')
+    const bTag = elementTag(distributed, 'b')
+    const cTag = elementTag(distributed, 'c')
+    const firstGap = Number(attributeOf(bTag, 'y')) - (Number(attributeOf(aTag, 'y')) + 20)
+    const lastGap = Number(attributeOf(cTag, 'y')) - (Number(attributeOf(bTag, 'y')) + 50)
+    assert.equal(firstGap, 60, 'the gap above the middle box is the computed equal gap')
+    assert.equal(lastGap, 60, 'the gap below the middle box is the same gap')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    const restored = await waitForDisk(harness, 'distribute-vertical.svg', (text) => text === before,
+      { label: 'undo distribute vertical' })
+    assert.equal(restored, before, 'Undo restores the original bytes exactly')
+    assert.equal(applies, 2, 'Undo is one more Host call')
+  },
+}
+
+export const distributeRefusalSpec = {
+  name: 'distribute: two layers, a locked layer and overlapping boxes are refused without writing',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+    const reason = () => page.locator('[data-align-reason]').innerText()
+    const bothDisabled = async () => {
+      assert.equal(await button('Distribuer horizontalement').isDisabled(), true,
+        'horizontal distribution must stay disabled')
+      assert.equal(await button('Distribuer verticalement').isDisabled(), true,
+        'vertical distribution must stay disabled')
+    }
+
+    await harness.write('distribute-refus.svg', DISTRIBUTE_REFUSAL_DOCUMENT)
+    await openWorkspaceFile(page, 'distribute-refus.svg', { expect: 'svg' })
+
+    // Two layers: alignment is available, distribution is not.
+    await layer('rect', 'a').click()
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Aligner à gauche').isDisabled(), false,
+      'the same selection stays alignable')
+    await bothDisabled()
+    assert.match(await reason(), /au moins trois calques/)
+    assert.equal(await harness.read('distribute-refus.svg'), DISTRIBUTE_REFUSAL_DOCUMENT,
+      'a two-layer selection writes nothing')
+    assert.equal(applies, 0)
+
+    // A third unlocked layer really does enable the action.
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), false,
+      'three unlocked rects enable the horizontal distribution')
+    assert.equal(applies, 0, 'enabling the control never writes')
+
+    // A locked layer blocks the whole operation, exactly like alignment.
+    await layer('rect', 'a').click()
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    await layer('rect', 'lock').click({ modifiers: ['ControlOrMeta'] })
+    await bothDisabled()
+    assert.match(await reason(), /verrouillé/)
+    assert.equal(await harness.read('distribute-refus.svg'), DISTRIBUTE_REFUSAL_DOCUMENT,
+      'a locked layer writes nothing')
+    assert.equal(applies, 0)
+
+    // Three 50-wide boxes starting at 10/20/30: the equal gap would be negative,
+    // so the gesture is refused instead of writing a negative spacing.
+    await layer('rect', 'o1').click()
+    await layer('rect', 'o2').click({ modifiers: ['ControlOrMeta'] })
+    await layer('rect', 'o3').click({ modifiers: ['ControlOrMeta'] })
+    await bothDisabled()
+    assert.match(await reason(), /chevauche/)
+    assert.equal(await harness.read('distribute-refus.svg'), DISTRIBUTE_REFUSAL_DOCUMENT,
+      'overlapping boxes write nothing')
+    assert.equal(applies, 0)
+
+    // A disabled button is not a silent no-op that still fires underneath.
+    await page.locator('[aria-label="Distribuer horizontalement"]').evaluate((node) => node.click())
+    await page.waitForTimeout(200)
+    assert.equal(applies, 0, 'a refused distribution cannot reach the Host')
+    assert.equal(await harness.read('distribute-refus.svg'), DISTRIBUTE_REFUSAL_DOCUMENT)
+  },
+}
+
+export const distributeNoopSpec = {
+  name: 'distribute: an already distributed selection sends no request and writes no byte',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+
+    await harness.write('distribute-done.svg', DISTRIBUTE_DONE_DOCUMENT)
+    await openWorkspaceFile(page, 'distribute-done.svg', { expect: 'svg' })
+    await layer('rect', 'a').click()
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), false,
+      'three equally spaced layers are still a valid target')
+
+    // Gaps are already 50 and 50: the middle box is already on target, so the
+    // gesture must produce zero edits and zero requests.
+    await button('Distribuer horizontalement').click()
+    await page.waitForFunction(() =>
+      document.querySelector('[data-align-reason]')?.textContent.includes('Déjà distribué'))
+    assert.equal(applies, 0, 'an already distributed selection sends no request')
+    assert.equal(await harness.read('distribute-done.svg'), DISTRIBUTE_DONE_DOCUMENT,
+      'an already distributed selection changes no byte')
+    assert.equal(await page.locator('[aria-label="Undo saved edit"]').isDisabled(), true,
+      'no empty history entry is created')
+  },
+}
+
+export const distributeTextSpec = {
+  name: 'distribute: text needs an explicit anchor and is refused for vertical distribution',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+
+    await harness.write('distribute-text.svg', DISTRIBUTE_TEXT_DOCUMENT)
+    await openWorkspaceFile(page, 'distribute-text.svg', { expect: 'svg' })
+
+    // A text layer with an explicit anchor can be shifted horizontally: the
+    // same estimated box is translated, so the gap stays exact.
+    await layer('rect', 'a').click()
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    await layer('text', 't1').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), false,
+      'an explicitly anchored text can take part in a horizontal distribution')
+    assert.equal(await button('Distribuer verticalement').isDisabled(), true,
+      'text cannot be distributed vertically')
+    assert.match(await button('Distribuer verticalement').getAttribute('title'),
+      /distribution verticale du texte/)
+    assert.equal(applies, 0, 'a vertical text refusal writes nothing')
+
+    // An inherited anchor cannot be resolved from this flat layer model.
+    await layer('text', 't2').click()
+    await layer('rect', 'a').click({ modifiers: ['ControlOrMeta'] })
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Distribuer horizontalement').isDisabled(), true,
+      'a text layer without an explicit anchor blocks the distribution')
+    assert.match(await button('Distribuer horizontalement').getAttribute('title'), /text-anchor/)
+    assert.equal(await harness.read('distribute-text.svg'), DISTRIBUTE_TEXT_DOCUMENT,
+      'a text refusal writes nothing')
+    assert.equal(applies, 0)
+  },
+}

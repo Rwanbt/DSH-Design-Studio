@@ -295,6 +295,21 @@ export const reorderSpec = {
  * bytes on disk and count real Host calls, so "no write before the drop" is not
  * inferred from the UI.
  */
+/** Wait for the disk, then annotate a failure with the UI state that explains it. */
+async function waitForDiskExplained(page, harness, file, predicate, label) {
+  try {
+    return await waitForDisk(harness, file, predicate, { label })
+  } catch (error) {
+    const alert = await page.getByRole('alert').innerText().catch(() => '')
+    const notice = await page.locator('[data-created]').innerText().catch(() => '')
+    const status = await page.locator('[data-layer-drop-status]').innerText().catch(() => '')
+    const bytes = await harness.read(file).catch(() => null)
+    const ids = bytes ? [...bytes.matchAll(/id="([a-z]+)"/g)].map((m) => m[1]).join(',') : 'none'
+    throw new Error(`${error.message} | alert=${JSON.stringify(alert)} notice=${JSON.stringify(notice)} ` +
+      `dropStatus=${JSON.stringify(status)} ids=${JSON.stringify(ids)}`)
+  }
+}
+
 async function dragLayerRow(page, source, target, { steps = 8, beforeRelease = null } = {}) {
   const from = await source.boundingBox()
   const to = await target.boundingBox()
@@ -308,6 +323,15 @@ async function dragLayerRow(page, source, target, { steps = 8, beforeRelease = n
   for (let step = 1; step <= steps; step += 1) {
     await page.mouse.move(start.x + ((end.x - start.x) * step) / steps,
       start.y + ((end.y - start.y) * step) / steps)
+    if (step === 2) {
+      // Selecting the dragged row can scroll the layer list, so the target moves
+      // under the pointer. Re-read it and finish on the live row, exactly as a
+      // user aims at what they currently see.
+      const live = await target.boundingBox()
+      if (!live) throw new Error('layer row disappeared during the drag')
+      end.x = live.x + live.width / 2
+      end.y = live.y + live.height / 2
+    }
   }
   if (beforeRelease) await beforeRelease()
   await page.mouse.up()
@@ -374,7 +398,7 @@ export const layerDragSpec = {
     // disk timeout, which would hide the real cause in a full-suite run.
     let dragged
     try {
-      dragged = await waitForDisk(harness, 'glisser.svg',
+      dragged = await waitForDiskExplained(page, harness, 'glisser.svg',
         (text) => JSON.stringify(order(text)) === JSON.stringify(['card', 'bg', 'dot', 'title']))
     } catch (error) {
       const alert = await page.getByRole('alert').innerText().catch(() => '')
@@ -431,7 +455,7 @@ export const layerDragSpec = {
     // --- 2. Undo restores the exact original bytes --------------------------
     await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
-    await waitForDisk(harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
+    await waitForDiskExplained(page, harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
     assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'Undo restores the original bytes exactly')
     assert.equal(applies, beforeHover + 2, 'Undo is one more Host call')
 
@@ -534,13 +558,13 @@ export const layerDragSpec = {
     await keyboardCard.focus()
     const beforeKeyboard = applies
     await page.keyboard.press('Control+]')
-    const forwarded = await waitForDisk(harness, 'glisser.svg',
+    const forwarded = await waitForDiskExplained(page, harness, 'glisser.svg',
       (text) => JSON.stringify(order(text)) === JSON.stringify(['bg', 'dot', 'card', 'title']))
     assert.ok(forwarded.includes('<rect id="card" x="40" y="40" width="240" height="140" fill="#bda991" rx="8" data-note="keep-me"/>'))
     assert.equal(applies, beforeKeyboard + 1, 'Ctrl+] keeps using the same single Host path')
     await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     await page.keyboard.press('Control+[')
-    await waitForDisk(harness, 'glisser.svg',
+    await waitForDiskExplained(page, harness, 'glisser.svg',
       (text) => JSON.stringify(order(text)) === JSON.stringify(['bg', 'card', 'dot', 'title']))
     assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT,
       'the keyboard round trip is byte-exact too')
@@ -550,7 +574,7 @@ export const layerDragSpec = {
     // card (index 1) onto bg (index 0) is an adjacent *backward* move and sits at
     // the top of the list, so the gesture never depends on scroll position.
     await dragLayerRow(page, row('Select layer rect #card'), row('Select layer rect #bg'))
-    const backwards = await waitForDisk(harness, 'glisser.svg',
+    const backwards = await waitForDiskExplained(page, harness, 'glisser.svg',
       (text) => JSON.stringify(order(text)) === JSON.stringify(['card', 'bg', 'dot', 'title']))
     assert.ok(backwards.includes('<circle id="dot" cx="420" cy="120" r="48" fill="#3a3f45"/>'),
       'the moved layer keeps its exact bytes')
@@ -558,7 +582,7 @@ export const layerDragSpec = {
     assert.ok(applies - beforeBackward <= 1, 'a backward drop is at most one Host write: ' + (applies - beforeBackward))
     await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
-    await waitForDisk(harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
+    await waitForDiskExplained(page, harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
 
     // --- 8. an unsaved text draft blocks the drop, like every other action ---
     // The draft lives only in memory; a drag must not bypass it and write.
