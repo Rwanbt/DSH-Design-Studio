@@ -42,7 +42,7 @@ La création est volontairement refusée pour :
 - plusieurs `<defs>` racine ou un `<defs/>` autofermant ;
 - source SVG structurellement ambiguë ou non scannable.
 
-Les deux arrêts initiaux sont noir et blanc. L'éditeur ne gère pas ici
+Les deux arrêts initiaux utilisent la couleur hexadécimale solide déjà présente sur la forme (sinon noir) puis blanc. L'éditeur ne gère pas ici
 la création d'un dégradé multi-étapes à partir d'une palette, le déplacement
 sur canevas des points `x1/y1/x2/y2` ou la conversion d'un dégradé existant.
 Les valeurs inconnues dans le reste du fichier ne sont pas re-sérialisées.
