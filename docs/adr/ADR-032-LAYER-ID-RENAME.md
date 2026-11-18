@@ -200,3 +200,8 @@ demandée, couverte par cette spec et par la symétrie du code.
 dans deux moteurs sur une coquille DSH simulée ; pas dans le vrai DSH, ni au
 tactile, ni avec un lecteur d'écran. Aucune réécriture de références n'est
 revendiquée.
+## CI du commit candidat
+
+`875fef646d9eedb5d53ac9e8b19fdb20a545882e` : [run 44341423795](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/44341423795)
+**entièrement vert** — Ubuntu core, Windows core, navigateurs Chromium + Firefox,
+et l'étape benchmark.
