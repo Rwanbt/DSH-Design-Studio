@@ -1,0 +1,150 @@
+{
+  "results": [
+    {
+      "step": "resolve DSH installation",
+      "status": "PASS",
+      "detail": "/mnt/Stockage/App/DeepSeekHarness/deepseek-harness (228605256 bytes), archive present"
+    },
+    {
+      "step": "reuse caller credentials for a real turn",
+      "status": "NOT_RUN",
+      "detail": "disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)"
+    },
+    {
+      "step": "create disposable profile",
+      "status": "PASS",
+      "detail": "/tmp/dsh-g0-IBzw1h/dsh-home/profiles/e2e (shipped web template)"
+    },
+    {
+      "step": "install plugin into profile",
+      "status": "PASS",
+      "detail": "bundles: [\"@deepseek-ai/dsh-base\",\"@deepseek-ai/dsh-web-app\",\"@rwanbt/dsh-design-studio\"]"
+    },
+    {
+      "step": "model overlay for a real turn",
+      "status": "NOT_RUN",
+      "detail": "requires explicit credential reuse plus DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL"
+    },
+    {
+      "step": "boot real DSH web app",
+      "status": "PASS",
+      "detail": "http://127.0.0.1:33055"
+    },
+    {
+      "step": "load real DSH Web UI",
+      "status": "PASS",
+      "detail": "\"Version locale de DSH\""
+    },
+    {
+      "step": "credential-free sidebar opens registered workspace SVG",
+      "status": "PASS",
+      "detail": "real sidebar → Workspace id → g0-art.svg → visible canvas and box layer; no AI turn"
+    },
+    {
+      "step": "ADR-026 local Graphite and unrecoloured real host",
+      "status": "PASS",
+      "detail": "{\"before\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}},\"background\":\"rgb(32, 33, 37)\",\"hostAfter\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}},\"light\":{\"background\":\"rgb(32, 33, 37)\",\"host\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(250, 250, 248)\",\"color\":\"rgb(24, 24, 26)\",\"base\":\"rgb(250, 250, 248)\",\"layer\":\"rgb(255, 255, 255)\"},\"probe\":{\"background\":\"rgb(250, 250, 248)\",\"color\":\"rgb(24, 24, 26)\",\"base\":\"rgb(250, 250, 248)\",\"layer\":\"rgb(255, 255, 255)\"}}},\"restored\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}}}"
+    },
+    {
+      "step": "sidebar UI save persists exact SVG bytes",
+      "status": "PASS",
+      "detail": "Geometry x=25 committed; unrelated bytes unchanged"
+    },
+    {
+      "step": "sidebar UI Undo restores exact SVG bytes",
+      "status": "PASS",
+      "detail": "Undo restored original file byte-for-byte"
+    },
+    {
+      "step": "sidebar UI reopen reads persisted SVG",
+      "status": "PASS",
+      "detail": "workspace remount and file reopen read Geometry x=25 from disk"
+    },
+    {
+      "step": "screenshot of the real DSH workbench",
+      "status": "PASS",
+      "detail": "/tmp/dsh-studio-real-web-v2.png + /tmp/dsh-studio-real-web-v2-element.png"
+    },
+    {
+      "step": "create a real DSH session",
+      "status": "PASS",
+      "detail": "session-f9416724-70f4-4d37-9335-25ffdadb590f"
+    },
+    {
+      "step": "resolve real session workspace",
+      "status": "PASS",
+      "detail": "registry membership 787c3c5d-07cb-4c61-b5e4-ac23232b3d94; fixture written inside its owned root"
+    },
+    {
+      "step": "plugin route /health on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"ok\":true,\"editor\":\"native-prototype\",\"version\":1}"
+    },
+    {
+      "step": "plugin route /files on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 1 files"
+    },
+    {
+      "step": "open a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 nodes=1"
+    },
+    {
+      "step": "save a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 \"ok\" bytes=164"
+    },
+    {
+      "step": "stale revision refused on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 409"
+    },
+    {
+      "step": "one real assistant turn",
+      "status": "NOT_RUN",
+      "detail": "needs DSH_E2E_REUSE_CREDENTIALS=1 plus DSH_E2E_MODEL_PROVIDER/DSH_E2E_MODEL (one short message is sent)"
+    },
+    {
+      "step": "client bundle served by the real Host",
+      "status": "PASS",
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 189647 bytes, immediately=true, inject=[\"slots\"]"
+    },
+    {
+      "step": "client bundle registers the conversation view",
+      "status": "PASS",
+      "detail": "bundle declares conversation.view"
+    },
+    {
+      "step": "legacy conversation workbench gate",
+      "status": "NOT_RUN",
+      "detail": "separate optional conversation path; sidebar manual gate needs neither session nor AI"
+    },
+    {
+      "step": "no plugin JavaScript errors in the real DSH page",
+      "status": "PASS",
+      "detail": "none"
+    },
+    {
+      "step": "boot the real DSH Desktop shell",
+      "status": "NOT_RUN",
+      "detail": "disabled with DSH_E2E_DESKTOP=0"
+    },
+    {
+      "step": "stop disposable DSH server",
+      "status": "PASS",
+      "detail": "close observed before directory cleanup"
+    },
+    {
+      "step": "cleanup disposable environment",
+      "status": "PASS",
+      "detail": "removed owned temporary root after server close"
+    }
+  ],
+  "summary": {
+    "pass": 23,
+    "fail": 0,
+    "notRun": 5
+  },
+  "at": "2026-11-18T03:19:36.182Z"
+}
