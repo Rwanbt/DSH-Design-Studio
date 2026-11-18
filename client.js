@@ -23,6 +23,140 @@ window.__ModuleLoader__.load({
     // used instead of React.useId because the level-1 client harness renders the
     // component with a minimal React mock.
     let pngReasonSequence = 0
+    /**
+     * Unsaved-recovery journal (ADR-035). DSH can close, reload or crash while a
+     * document has unsaved edits, and those bytes live only in the renderer.
+     * The journal copies the SOURCE OF AN OPEN, DIRTY DOCUMENT into
+     * `localStorage`, under a key that names this plugin, the entry format
+     * version and the workspace (or conversation) scope. It is never read back
+     * into a file automatically: recovery only loads it into the editor after an
+     * explicit click, and the normal save path remains the only writer.
+     *
+     * Only the edited source, its workspace-relative path and the revision it
+     * was based on are stored: no profile path, token, preference or host
+     * configuration ever reaches it. Storage is bounded per scope, and every
+     * refusal (too large, too many entries, storage disabled) is reported rather
+     * than silently truncating the user's work.
+     */
+    const RECOVERY_PREFIX = 'dsh-design-studio:recovery:v1:'
+    const RECOVERY_PREF_KEY = 'dsh-design-studio:pref:v1:recovery-enabled'
+    const RECOVERY_VERSION = 1
+    const RECOVERY_MAX_ENTRIES = 8
+    const RECOVERY_MAX_BYTES = 256 * 1024
+    /**
+     * The browser storage, or null when it is absent or refuses access.
+     * Reading `window.localStorage` itself can throw (a browser with site data
+     * blocked raises SecurityError), so both the lookup and every use below are
+     * guarded: the journal must never break the editor.
+     */
+    function recoveryStorage() {
+      try {
+        if(typeof window === 'undefined' || !window) return null
+        const storage = window.localStorage
+        if(!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function' ||
+          typeof storage.removeItem !== 'function' || typeof storage.key !== 'function') return null
+        return storage
+      } catch(_) { return null }
+    }
+    /** UTF-8 byte length, so the per-entry budget is a real size, not a guess. */
+    function recoveryBytes(text) {
+      let bytes = 0
+      for(const character of String(text)) {
+        const point = character.codePointAt(0)
+        bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4
+      }
+      return bytes
+    }
+    /** One key per (scope, file): the workspace id is part of the key, never shared. */
+    function recoveryKey(scope, file) {
+      return RECOVERY_PREFIX + encodeURIComponent(String(scope)) + ':' + encodeURIComponent(String(file))
+    }
+    function recoveryScopePrefix(scope) {
+      return RECOVERY_PREFIX + encodeURIComponent(String(scope)) + ':'
+    }
+    /**
+     * Every valid entry of one scope, most recent first. A malformed or foreign
+     * value is ignored, never repaired: a corrupt journal must not break a mount.
+     */
+    function recoveryEntries(scope) {
+      const storage = recoveryStorage()
+      if(!storage || !scope) return []
+      const prefix = recoveryScopePrefix(scope)
+      const entries = []
+      try {
+        for(let index = 0; index < storage.length; index += 1) {
+          const key = storage.key(index)
+          if(typeof key !== 'string' || !key.startsWith(prefix)) continue
+          const raw = storage.getItem(key)
+          if(typeof raw !== 'string') continue
+          let entry
+          try { entry = JSON.parse(raw) } catch(_) { continue }
+          if(!entry || entry.v !== RECOVERY_VERSION) continue
+          if(typeof entry.file !== 'string' || !entry.file) continue
+          if(typeof entry.source !== 'string' || entry.source.length > RECOVERY_MAX_BYTES * 2) continue
+          const savedAt = Number(entry.savedAt)
+          if(!Number.isFinite(savedAt) || savedAt <= 0) continue
+          entries.push({...entry, savedAt})
+        }
+      } catch(_) { return [] }
+      return entries.sort((a, b) => b.savedAt - a.savedAt)
+    }
+    /**
+     * Journal one dirty document. Returns `{ok:true}` or `{ok:false, reason}`;
+     * it never throws, never truncates and never replaces another file's entry.
+     * Refusal reasons are rendered verbatim by the workbench.
+     */
+    function recoveryWrite(scope, entry) {
+      const storage = recoveryStorage()
+      if(!storage || !scope) return {ok:false, reason:'storage-unavailable'}
+      const key = recoveryKey(scope, entry.file)
+      const payload = JSON.stringify({v:RECOVERY_VERSION, file:entry.file, format:entry.format||'',
+        source:entry.source, baseHash:entry.baseHash||'', baseIdentity:entry.baseIdentity||'',
+        savedAt:Number(entry.savedAt)||Date.now()})
+      const bytes = recoveryBytes(payload)
+      if(bytes > RECOVERY_MAX_BYTES) return {ok:false, reason:'entry-too-large', bytes}
+      try {
+        if(storage.getItem(key) === null) {
+          const existing = recoveryEntries(scope)
+          if(existing.length >= RECOVERY_MAX_ENTRIES) {
+            return {ok:false, reason:'journal-full', entries:existing.length}
+          }
+        }
+        storage.setItem(key, payload)
+        return {ok:true, bytes}
+      } catch(error) {
+        return {ok:false, reason:'storage-refused', message:String(error && error.message ? error.message : error)}
+      }
+    }
+    /** Remove the entry of one file; a failure is reported by the caller if needed. */
+    function recoveryClear(scope, file) {
+      const storage = recoveryStorage()
+      if(!storage || !scope || !file) return false
+      try { storage.removeItem(recoveryKey(scope, file)); return true } catch(_) { return false }
+    }
+    /** The persisted preference; journaling is opt-out and enabled by default. */
+    function recoveryPreference() {
+      const storage = recoveryStorage()
+      if(!storage) return true
+      try { return storage.getItem(RECOVERY_PREF_KEY) !== '0' } catch(_) { return true }
+    }
+    function recoverySetPreference(enabled) {
+      const storage = recoveryStorage()
+      if(!storage) return false
+      try { storage.setItem(RECOVERY_PREF_KEY, enabled ? '1' : '0'); return true } catch(_) { return false }
+    }
+    /** Human age of a journal entry, in French, without a new dependency. */
+    function recoveryAge(savedAt, now = Date.now()) {
+      const stamp = Number(savedAt)
+      if(!Number.isFinite(stamp) || stamp <= 0) return 'âge inconnu'
+      const delta = Math.max(0, now - stamp)
+      if(delta < 60000) return 'il y a quelques secondes'
+      const minutes = Math.floor(delta / 60000)
+      if(minutes < 60) return 'il y a ' + minutes + ' min'
+      const hours = Math.floor(minutes / 60)
+      if(hours < 24) return 'il y a ' + hours + ' h'
+      return 'il y a ' + Math.floor(hours / 24) + ' j'
+    }
     const pane = { background:'var(--dsw-alias-bg-base, #202124)', color:'var(--dsw-alias-label-primary, #e8e7e2)', border:'1px solid var(--dsw-alias-border-l1, #37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'var(--dsw-alias-bg-layer-2, #292b2f)', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-bg-layer-2,#27292d)', color:'inherit', padding:'6px 8px' }
@@ -641,6 +775,26 @@ window.__ModuleLoader__.load({
         ? {workspaceId:scope.workspaceId} : {sessionId:scope.sessionId})
       const scopeKey = !scope ? '' : (scope.workspaceId?'w:'+scope.workspaceId:'s:'+scope.sessionId)
       const scopeMessage = workspaceId ? 'Sélectionnez un espace de travail' : 'Open a conversation first'
+      // Unsaved-recovery journal (ADR-035). `recoveryPending` is what could be
+      // recovered for the CURRENT scope; `recoveryNotice` reports a storage
+      // refusal once; `recoveryNote` states what the last recovery/ignore did.
+      // Nothing here ever writes a document: recovery only fills the editor.
+      const [recoveryEnabled,setRecoveryEnabled] = React.useState(recoveryPreference())
+      const [recoveryPending,setRecoveryPending] = React.useState([])
+      const [recoveryNotice,setRecoveryNotice] = React.useState('')
+      const [recoveryNote,setRecoveryNote] = React.useState(null)
+      const recoveryReportedRef = React.useRef({})
+      const recoveryTimerRef = React.useRef(null)
+      // Files already recovered in this session. Their entry is kept (a second
+      // crash must still find it) but the banner stays dismissed until a save,
+      // an ignore, or a return to the clean disk bytes.
+      const recoveryHandledRef = React.useRef({})
+      // Latest render state, readable from a timer or a page-hide listener whose
+      // closure is older than the source being typed.
+      const recoveryRuntimeRef = React.useRef({})
+      // The revision currently loaded on disk (`/document`), updated
+      // synchronously by `load()` so a recovery can compare it after an await.
+      const currentDocRef = React.useRef(null)
       const [file,setFile] = React.useState('design.svg')
       // `file` is the path of the ACTIVE document. `pathInput` is only the text
       // typed in the File menu, kept apart so typing a future path can never
@@ -821,6 +975,11 @@ window.__ModuleLoader__.load({
       const [gridStep,setGridStep]=React.useState(10)
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
+      // Every value the journal needs, mirrored after the whole state list is
+      // declared so a debounced timer or a `pagehide` listener never reads a
+      // value captured by an older render (which could target another scope).
+      recoveryRuntimeRef.current = {scope:scopeKey, scopeReady, enabled:recoveryEnabled,
+        source:typeof source==='string'?source:'', tabs:tabsRef.current, activeTabId, file}
       function disconnectHtmlPreview() {
         const old=previewBindingRef.current
         previewBindingRef.current=null
@@ -929,6 +1088,167 @@ window.__ModuleLoader__.load({
         return !!(doc && (source!==doc.source || hasTextDraft()))
       }
       /**
+       * Report one storage refusal, once per reason for this session. The
+       * journal functions stay silent (they return a status); the workbench
+       * speaks here exactly once, so typing cannot flood the UI.
+       */
+      function reportRecoveryFailure(reason) {
+        if(!reason || recoveryReportedRef.current[reason]) return
+        recoveryReportedRef.current[reason] = true
+        const messages = {
+          'storage-unavailable':'Journal de récupération indisponible : le stockage local de ce navigateur est désactivé ou inaccessible. Les modifications ne sont pas journalisées ; le document reste éditable et enregistrable.',
+          'storage-refused':'Journal de récupération impossible : le stockage local a refusé l’écriture (quota dépassé ou accès bloqué). Aucune troncature : le document reste éditable, mais seules les sauvegardes explicites le protègent.',
+          'entry-too-large':'Journal de récupération : ce document dépasse la limite de 256 Kio par entrée et n’est pas journalisé (aucune troncature). Enregistrez-le explicitement pour le sécuriser.',
+          'journal-full':'Journal de récupération plein : '+RECOVERY_MAX_ENTRIES+' documents sont déjà journalisés dans cet espace de travail. Aucune entrée n’a été remplacée et ce document n’est pas journalisé. Récupérez ou ignorez une entrée existante.',
+        }
+        setRecoveryNotice(messages[reason] || ('Journal de récupération indisponible ('+reason+').'))
+      }
+      /**
+       * Copy every dirty open tab to the journal, synchronously and without any
+       * request. The ACTIVE tab is read from the live mirror; background tabs
+       * from their captured state, so a crash does not lose either.
+       */
+      function journalDirtyTabs() {
+        const runtime = recoveryRuntimeRef.current || {}
+        if(!runtime.enabled || !runtime.scopeReady || !runtime.scope) return
+        const candidates = []
+        const activeDoc = currentDocRef.current
+        if(activeDoc && runtime.source !== activeDoc.source) {
+          candidates.push({file:activeDoc.file, format:activeDoc.format, source:runtime.source,
+            baseHash:activeDoc.hash, baseIdentity:activeDoc.identity})
+        }
+        for(const entry of (runtime.tabs || [])) {
+          if(entry.id === runtime.activeTabId) continue
+          const state = entry.state
+          const tabDoc = state && state.doc
+          if(!tabDoc || typeof state.source !== 'string' || state.source === tabDoc.source) continue
+          candidates.push({file:tabDoc.file || entry.file, format:tabDoc.format, source:state.source,
+            baseHash:tabDoc.hash, baseIdentity:tabDoc.identity})
+        }
+        if(!candidates.length) return
+        const savedAt = Date.now()
+        for(const candidate of candidates) {
+          const result = recoveryWrite(runtime.scope, {...candidate, savedAt})
+          if(!result.ok) reportRecoveryFailure(result.reason)
+        }
+      }
+      function cancelRecoveryTimer() {
+        if(recoveryTimerRef.current === null) return
+        if(typeof clearTimeout === 'function') clearTimeout(recoveryTimerRef.current)
+        recoveryTimerRef.current = null
+      }
+      /**
+       * Debounced journal write. The delay keeps `localStorage` off the typing
+       * path; `pagehide`, `beforeunload` and unmount flush the pending entry, so
+       * a crash never depends on one timer having fired.
+       */
+      function scheduleRecoveryJournal() {
+        const runtime = recoveryRuntimeRef.current || {}
+        if(!runtime.enabled) { cancelRecoveryTimer(); return }
+        if(typeof setTimeout !== 'function') { journalDirtyTabs(); return }
+        cancelRecoveryTimer()
+        recoveryTimerRef.current = setTimeout(()=>{
+          recoveryTimerRef.current = null
+          journalDirtyTabs()
+        }, 250)
+      }
+      function visibleRecoveryEntries() {
+        const handled = recoveryHandledRef.current || {}
+        return recoveryEntries(scopeKey).filter(entry=>!handled[entry.file])
+      }
+      function refreshRecoveryEntries() {
+        if(!scopeReady) { setRecoveryPending([]); return }
+        setRecoveryPending(visibleRecoveryEntries())
+      }
+      /** Changing the preference is the only thing the Options checkbox does. */
+      function chooseRecoveryPreference(next) {
+        const enabled = !!next
+        setRecoveryEnabled(enabled)
+        if(!recoverySetPreference(enabled)) reportRecoveryFailure('storage-refused')
+        if(!enabled) cancelRecoveryTimer()
+        setRecoveryNote(null)
+      }
+      /** Discard one entry: the explicit “no, I do not want it” answer. */
+      function ignoreRecoveryEntry(entry) {
+        if(!entry) return
+        delete recoveryHandledRef.current[entry.file]
+        setRecoveryPending(visibleRecoveryEntries().filter(item=>item.file!==entry.file))
+        if(!recoveryClear(scopeKey, entry.file)) reportRecoveryFailure('storage-refused')
+        setRecoveryNote({kind:'ignored', file:entry.file, changed:false,
+          text:'Récupération ignorée pour '+entry.file+' : la copie locale a été supprimée. Aucune écriture sur le disque.'})
+      }
+      /**
+       * Load one journaled source INTO THE EDITOR. This is the only recovery
+       * action and it never writes: it opens the file (read only), compares the
+       * current revision with the one the entry was based on, then installs the
+       * journaled text as an ordinary unsaved edit. Saving stays explicit and
+       * goes through the existing precondition checks.
+       */
+      async function recoverRecoveryEntry(entry) {
+        if(!entry || busy || creating) return
+        if(refuseTextDraft()) return
+        const openTab = tabsRef.current.find(item=>item.file===entry.file) || null
+        if(openTab) {
+          const dirty = openTab.id===activeTabId ? isDirty() : !!openTab.dirty
+          if(dirty) {
+            setError('Des modifications non enregistrées existent déjà pour '+entry.file+
+              ' : enregistrez-les ou abandonnez-les avant de récupérer la copie locale.')
+            return
+          }
+        }
+        setError(''); setRecoveryNote(null)
+        if(openTab) activateTab(openTab.id)
+        else if(!await openInTab(entry.file)) return
+        const current = currentDocRef.current
+        if(!current || current.file!==entry.file) {
+          setError('Récupération impossible : '+entry.file+' n’a pas pu être ouvert. Aucune écriture n’a été faite.')
+          return
+        }
+        const changed = !!(entry.baseHash && current.hash && entry.baseHash!==current.hash)
+        setSource(entry.source)
+        recoveryHandledRef.current[entry.file] = true
+        setRecoveryPending(visibleRecoveryEntries())
+        setRecoveryNote({kind:'recovered', file:entry.file, changed,
+          text:'Source journalisée chargée dans l’éditeur pour '+entry.file+
+            '. Aucune écriture : le fichier sur le disque est inchangé.'+
+            (changed?' Attention : le fichier a changé sur le disque depuis la journalisation (révision différente). Comparez avant d’enregistrer ; un enregistrement explicite remplacerait la version actuelle.':'')})
+      }
+      // At mount (and on a scope change) offer what can be recovered for THIS
+      // workspace. It is only read: no file is opened and nothing is written.
+      React.useEffect(()=>{
+        refreshRecoveryEntries()
+      },[scopeKey])
+      // Journal the active and background dirty tabs whenever the document or
+      // the tab set changes. A source identical to disk clears a provably stale
+      // entry instead of resurfacing work that no longer exists.
+      React.useEffect(()=>{
+        if(!scopeReady) return
+        if(!recoveryEnabled) { cancelRecoveryTimer(); return }
+        const current = currentDocRef.current
+        if(current && typeof source==='string' && source===current.source) {
+          const stale = recoveryEntries(scopeKey).find(item=>item.file===current.file && item.source===current.source)
+          if(stale) {
+            recoveryClear(scopeKey, current.file)
+            delete recoveryHandledRef.current[current.file]
+            setRecoveryPending(visibleRecoveryEntries())
+          }
+        }
+        scheduleRecoveryJournal()
+      },[scopeKey,source,doc,tabs,recoveryEnabled])
+      // A page hide/reload/unmount must not lose the entry the debounce has not
+      // written yet. The listener reads the live mirror, never a stale closure.
+      React.useEffect(()=>{
+        if(typeof window==='undefined' || !window || typeof window.addEventListener!=='function') return undefined
+        const flush = () => { cancelRecoveryTimer(); journalDirtyTabs() }
+        window.addEventListener('pagehide',flush)
+        window.addEventListener('beforeunload',flush)
+        return ()=>{
+          window.removeEventListener('pagehide',flush)
+          window.removeEventListener('beforeunload',flush)
+          flush()
+        }
+      },[])
+      /**
        * Every piece of state that belongs to one document. Missing a field here
        * would leak one document's inspector or selection into another, so the
        * list is deliberately exhaustive and mirrored by `emptyTabState()`.
@@ -974,6 +1294,7 @@ window.__ModuleLoader__.load({
         disconnectHtmlPreview()
         setFile(next.file); setPathInput(next.file)
         setDoc(next.doc); setSource(next.source)
+        currentDocRef.current = next.doc || null
         setNodes(next.nodes||[]); setGradients(next.gradients||[])
         setHtmlElements(next.htmlElements||[]); setHtmlActive(next.htmlActive||'')
         setHtmlProperty(next.htmlProperty||'background-color'); setHtmlValue(next.htmlValue||'')
@@ -1165,6 +1486,9 @@ window.__ModuleLoader__.load({
           setFile(targetFile)
           setPathInput(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[]);setGradients(data.gradients||[])
+          // The revision now on disk, kept synchronously so a recovery that
+          // resumes after an `await` compares the real one, not a stale render.
+          currentDocRef.current = data.document
           setHtmlElements(data.htmlElements||[])
           setHtmlStylesheets(data.stylesheets||[])
           setHtmlPreviewCss(data.previewCss||'')
@@ -1366,6 +1690,15 @@ window.__ModuleLoader__.load({
         setBusy(true);setError('')
         try {
           const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...scopeBody,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
+          // A successful save makes the journal entry for that file obsolete:
+          // the disk now holds those bytes, so nothing is left to recover. The
+          // removal is best-effort and never affects the save outcome.
+          if(scopeReady && doc?.file) {
+            recoveryClear(scopeKey, doc.file)
+            delete recoveryHandledRef.current[doc.file]
+            setRecoveryPending(visibleRecoveryEntries().filter(entry=>entry.file!==doc.file))
+            setRecoveryNote(previous=>previous && previous.file===doc.file ? null : previous)
+          }
           const reloaded=await load(true,doc.file,response.createdId||retainSelection||active)
           if(!reloaded) {
             setReloadRequired(true)
@@ -3432,6 +3765,17 @@ window.__ModuleLoader__.load({
             h('button',{style:button,'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,onClick:()=>setSnapToGrid(v=>!v)},'Magnétisme'),
             h('select',{style:field,'aria-label':'Grid spacing',value:gridStep,onChange:e=>setGridStep(Number(e.target.value))},[2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
             h('button',{style:button,'aria-label':'Toggle smart alignment guides','aria-pressed':smartGuides,onClick:()=>setSmartGuides(v=>!v)},'Repères intelligents'),
+            // Opt-out journal (ADR-035). The preference is persisted; existing
+            // entries are never deleted by toggling it, only by recovery/ignore.
+            h('label',{style:{display:'flex',gap:6,alignItems:'center',padding:'4px 2px',fontSize:11.5,cursor:'pointer'}},
+              h('input',{type:'checkbox','aria-label':'Journal de récupération',
+                checked:recoveryEnabled,onChange:e=>chooseRecoveryPreference(e.target.checked)}),
+              'Journal de récupération'),
+            h('small',{style:{opacity:.66,lineHeight:1.45}},
+              recoveryEnabled
+                ?'Copie les documents modifiés non enregistrés dans le stockage local : max '+RECOVERY_MAX_ENTRIES+
+                  ' documents, 256 Kio chacun, par espace de travail. Aucune écriture sur le disque, aucune donnée de profil.'
+                :'Désactivé : une fermeture brutale peut perdre les modifications non enregistrées. Les entrées déjà présentes restent proposées jusqu’à « Récupérer » ou « Ignorer ».'),
             ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
@@ -3485,7 +3829,38 @@ window.__ModuleLoader__.load({
           workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
         ),
 
-        h('div',{className:'dsh-studio-alerts'},error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+        h('div',{className:'dsh-studio-alerts'},
+        // Unsaved-recovery journal (ADR-035). The banner only OFFERS a source:
+        // it never opens, applies or saves anything by itself, and it states
+        // that the file on disk is untouched.
+        recoveryPending.length>0&&h('div',{role:'alert','data-recovery-banner':recoveryPending[0].file,
+          'aria-label':'Récupération après fermeture pour '+recoveryPending[0].file,
+          style:{...pane,padding:'10px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',
+            border:'1px solid '+ACCENT,background:'var(--dsw-alias-bg-layer-2, #2a2c31)'}},
+          h('strong',null,'Modifications non enregistrées récupérables'),
+          h('span',null,' : ',h('code',null,recoveryPending[0].file),' · '+recoveryAge(recoveryPending[0].savedAt)+
+            (recoveryPending.length>1?' · '+(recoveryPending.length-1)+' autre'+
+              (recoveryPending.length>2?'s':'')+' document journalisé':'')+
+            ' · rien n’a été écrit sur le disque'),
+          h('span',{style:{flex:1}}),
+          h('button',{type:'button',style:button,
+            'aria-label':'Récupérer les modifications de '+recoveryPending[0].file,
+            disabled:busy||creating,
+            title:'Charger cette source dans l’éditeur, sans écrire le fichier',
+            onClick:()=>void recoverRecoveryEntry(recoveryPending[0])},'Récupérer les modifications'),
+          h('button',{type:'button',style:button,
+            'aria-label':'Ignorer la récupération de '+recoveryPending[0].file,
+            disabled:busy||creating,
+            title:'Supprimer la copie locale de ce document',
+            onClick:()=>ignoreRecoveryEntry(recoveryPending[0])},'Ignorer')),
+        recoveryNotice&&h('div',{role:'status','data-recovery-warning':'','aria-live':'polite',
+          style:{color:'var(--dsw-alias-state-warn-primary, #f5c36a)',padding:'8px 12px',lineHeight:1.5}},
+          recoveryNotice),
+        recoveryNote&&h('div',{role:'status','data-recovery-note':recoveryNote.kind,
+          style:{color:recoveryNote.changed?'var(--dsw-alias-state-warn-primary, #f5c36a)'
+              :'var(--dsw-alias-label-secondary, #bbb9b4)',padding:'8px 12px',lineHeight:1.5}},
+          recoveryNote.text),
+        error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
           h('span',null,error),
           reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
             disabled:busy,onClick:()=>void load(true,doc?.file||pathInput)},'Recharger le fichier')),

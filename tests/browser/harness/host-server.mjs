@@ -82,12 +82,16 @@ export async function startHarness({ workspace, sessionId = 'e2e-session', works
   // A registry stand-in, so the sidebar panel path (workspace ids, no session)
   // is exercised against the real route handler. `workspaces: []` disables the
   // entries; `workspaces: null` simulates a host without the service at all.
+  // A relative `path` is resolved inside the temporary root, so two workspaces
+  // can own two real, different directories in one harness.
   const registryEntries = (workspaces === undefined
     ? [{ id: 'ws-e2e', title: 'Espace de test', status: 'ok' }]
     : (workspaces || [])).map((entry) => ({
     id: entry.id,
     title: entry.title,
-    path: entry.path || root,
+    path: typeof entry.path === 'string' && entry.path
+      ? (path.isAbsolute(entry.path) ? entry.path : path.join(root, entry.path))
+      : root,
     status: async () => entry.status || 'ok',
   }))
   const registryById = new Map(registryEntries.map((entry) => [entry.id, entry]))

@@ -84,7 +84,7 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 | 3.1 | **Onglets de documents** — livré : plusieurs fichiers ouverts, un état complet par onglet (source, sélection, Undo/Redo, brouillon), changement/fermeture sans écriture, limite de 8 onglets ([ADR-034](../adr/ADR-034-DOCUMENT-TABS.md)) |
 | 3.2 | Planche redimensionnable depuis l'UI (`viewBox`/`width`/`height` explicites) |
 | 3.3 | Export PNG du document courant, sans réécrire la source |
-| 3.4 | Historique local de session (journal de patches) pour la récupération après crash |
+| 3.4 | **Journal local de récupération des modifications non enregistrées** — livré : la source des documents modifiés est copiée dans `localStorage` (bornée, une clé par espace de travail), un bandeau explicite la propose après un crash, la récupération ne charge que l'éditeur et n'écrit jamais le fichier ([ADR-035](../adr/ADR-035-UNSAVED-RECOVERY-JOURNAL.md)) |
 
 > **3.1 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Le workbench
 > garde jusqu'à **8 onglets de documents** ouverts, chacun avec son état complet :
@@ -167,6 +167,44 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 > ou d'une image distante peut rendre différemment ; pas de fond opaque ni de
 > choix de qualité (PNG sans perte uniquement) ; niveau 3 (`test:dsh`/Desktop)
 > `NOT_RUN`.
+
+> **3.4 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Le journal
+> couvre le cas réel qui manquait : une fermeture brutale de DSH (plantage,
+> fermeture de fenêtre, rechargement) alors qu'un document a des modifications
+> non enregistrées. Chaque onglet modifié (actif ou en arrière-plan, ADR-034) est
+> copié — source exacte, chemin relatif, révision de base, horodatage — sous
+> `dsh-design-studio:recovery:v1:<w:espace|s:session>:<fichier>`, après 250 ms de
+> frappe avec vidage forcé sur `pagehide`/`beforeunload`/démontage. Bornes
+> annoncées : **256 Kio** UTF-8 par entrée et **8 entrées par scope**, sans
+> éviction ni troncature ; un dépassement n'est pas journalisé et le dit. Au
+> montage, un bandeau `role="alert"` nomme le fichier et l'âge de la dernière
+> copie, avec « Récupérer les modifications » et « Ignorer » : **aucune action
+> automatique**. « Récupérer » ouvre le fichier en lecture seule, compare la
+> révision, signale une divergence et installe la source comme brouillon non
+> enregistré — **0 `/apply`**, fichier byte-identique ; l'enregistrement reste
+> explicite et passe par les préconditions existantes. L'entrée est effacée par
+> une sauvegarde réussie, par « Ignorer », ou quand la source redevient
+> identique au disque. Un `localStorage` absent/plein/refusant l'écriture ne
+> casse ni l'édition ni la sauvegarde : échec silencieux dans la fonction,
+> avertissement affiché **une fois**. Case « Journal de récupération » dans
+> *Options*, préférence conservée, désactivée = plus de nouvelles copies.
+> Preuves : `npm run check` → **598/598 PASS / 0 FAIL** (dont 7 tests
+> `tests/client-recovery.test.mjs`) ; navigateur Chromium 145 + Firefox 146,
+> `--grep=recovery:` → **14 PASS / 0 FAIL** (7 specs, **47 vérifications par
+> moteur**) ; non-régression ciblée sur `tab:` (8), `conflict:` (4), `panel:`
+> (6), `a11y:` (8), `png:` (12) → **38 PASS / 0 FAIL**. Limites honnêtes : ce
+> n'est **pas une sauvegarde** (copie unique, aucune version, aucun retour après
+> « Ignorer ») ; elle ne survit ni au nettoyage des données du navigateur, ni à
+> un autre profil/navigateur/machine ; rien n'est chiffré ; les brouillons de
+> texte inline, les onglets, Undo/Redo et la sélection ne sont pas restaurés ;
+> pas de fusion de révisions (une divergence est signalée, pas résolue) ; deux
+> onglets du même fichier partagent une clé (dernier écrivain gagnant) ; le
+> quota est partagé avec le reste de l'origine ; le niveau 2 simule le crash par
+> `page.reload()`, un vrai processus tué n'est pas testé ; niveau 3
+> (`test:dsh`/Desktop) **NOT_RUN**. Choix de portée : le plan parlait d'un
+> « journal de patches » ; rejouer des patches sur une révision périmée est un
+> conflit silencieux, donc la tranche livre la **source exacte récupérable**, pas
+> un historique de patches.
 
 Sortie de vague : usage quotidien sans friction, sans élargir le périmètre
 fonctionnel.

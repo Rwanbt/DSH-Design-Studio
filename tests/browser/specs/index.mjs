@@ -38,6 +38,7 @@ import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interaction
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
 import { tabsSwitchSpec, tabsSaveIsolationSpec, tabsCloseConfirmSpec, tabsKeyboardSpec } from './tabs.mjs'
 import { pngExportSpec, pngUnsavedSourceSpec, pngNonSvgSpec, pngScriptRefusalSpec, pngDimensionSpec, pngInertImageSpec } from './png-export.mjs'
+import { recoveryAfterCrashSpec, recoveryIgnoreSpec, recoverySaveClearsSpec, recoveryWorkspaceIsolationSpec, recoveryStorageFailureSpec, recoveryPreferenceSpec, recoveryChangedOnDiskSpec } from './recovery.mjs'
 
 export const specs = [
   mountSpec,
@@ -59,6 +60,13 @@ export const specs = [
   pngScriptRefusalSpec,
   pngDimensionSpec,
   pngInertImageSpec,
+  recoveryAfterCrashSpec,
+  recoveryIgnoreSpec,
+  recoverySaveClearsSpec,
+  recoveryWorkspaceIsolationSpec,
+  recoveryStorageFailureSpec,
+  recoveryPreferenceSpec,
+  recoveryChangedOnDiskSpec,
   landingSpec,
   landingEmptySpec,
   createSpec,
