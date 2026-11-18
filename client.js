@@ -3591,12 +3591,18 @@ window.__ModuleLoader__.load({
         // Identical value: no request at all, matching the Host refusal.
         if(value===String(current??'').trim())return
         const valid=attribute==='stop-color'
-          ?/^(?:none|#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}))$/.test(value)
-          :/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)&&Number(value)>=0&&Number(value)<=1
+          ?/^(?:#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value)
+          :attribute==='offset'
+            ?(/^(?:\d+(?:\.\d+)?|\.\d+)%$/.test(value)
+              ?Number(value.slice(0,-1))<=100
+              :/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)&&Number(value)<=1)
+            :/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)&&Number(value)<=1
         if(!valid) {
           setError(attribute==='stop-color'
-            ?'Couleur d’arrêt refusée : utilisez #rgb, #rrggbb ou none.'
-            :'Opacité d’arrêt refusée : nombre entre 0 et 1.')
+            ?'Couleur d’arrêt refusée : utilisez #rgb ou #rrggbb.'
+            :attribute==='offset'
+              ?'Position d’arrêt refusée : utilisez 0 à 1 ou 0% à 100%.'
+              :'Opacité d’arrêt refusée : nombre entre 0 et 1.')
           return
         }
         // One attribute value, one exact patch, one Undo step.
@@ -3644,7 +3650,14 @@ window.__ModuleLoader__.load({
               h('span',{style:{display:'flex',flexDirection:'column',minWidth:0}},
                 h('span',{style:{fontSize:11,color:ACCENT}},'Arrêt '+(stop.index+1)),
                 h('small',{style:{fontSize:10,color:'var(--muted)'},'data-gradient-offset':stop.offset??''},
-                  'offset '+(stop.offset??'0'))),
+                  'offset '+(stop.offset??'0')),
+                h('input',{type:'text',defaultValue:stop.offset??'',
+                  key:active+':stop-offset:'+stop.index+':'+(stop.offset??''),
+                  style:{...field,height:26,width:72,fontSize:11},'aria-label':'Gradient stop '+stop.index+' offset',
+                  title:stop.offsetSpan?'Position native (0..1 ou 0%..100%)':'offset absent : édition indisponible',
+                  disabled:!editable||!stop.offsetSpan,
+                  onBlur:e=>commitGradientStop(stop.index,'offset',e.target.value,stop.offset),
+                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
               h('div',{style:{display:'flex',gap:4,minWidth:0}},
                 h('input',{type:'color',value:stopHex(stop.color),
                   'aria-label':'Gradient stop '+stop.index+' colour picker',
