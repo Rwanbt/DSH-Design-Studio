@@ -81,12 +81,19 @@ export const copyPasteSpec = {
     await page.getByRole('button', { name: 'Select layer rect #card' }).click()
     await page.getByRole('button', { name: 'Select layer rect #card' }).focus()
     await page.keyboard.press('Control+c')
+    // The copy is announced before the paste is attempted, so a failure here
+    // says "the shortcut did not reach the editor" instead of "the paste failed".
+    const copied = page.locator('[data-created]')
+    await copied.waitFor({ state: 'visible', timeout: 20000 })
+    assert.ok((await copied.innerText()).includes('Calque copié'),
+      'the copy must be confirmed: ' + JSON.stringify(await copied.innerText()))
     assert.equal(await harness.read('source.svg'), SVG_DOCUMENT, 'copying must not write anything')
 
-    // Open the other document and paste there.
+    // Open the other document and paste there. Focus a real control inside the
+    // workbench first: the shortcuts are handled by the section, so pressing a
+    // key while focus sits outside it would legitimately do nothing.
     await openWorkspaceFile(page, 'cible.svg', { expect: 'svg' })
-    const overlay = page.getByLabel('Direct manipulation overlay')
-    await overlay.focus()
+    await page.getByRole('button', { name: 'Select canvas tool' }).click()
     await page.keyboard.press('Control+v')
     const pasted = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy"'))
     assert.ok(pasted.includes('id="card"'), 'the original layer stays in the target document')
