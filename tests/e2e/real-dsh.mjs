@@ -22,6 +22,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { checkDesktopShell } from './desktop-shell.mjs'
+import { disposableEnvironment } from './environment.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../..')
@@ -90,15 +91,8 @@ async function main() {
   const modelProvider = process.env.DSH_E2E_MODEL_PROVIDER || ''
   const modelName = process.env.DSH_E2E_MODEL || ''
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-g0-'))
-  const childEnv = {
-    ...process.env,
-    HOME: path.join(root, 'home'),
-    DSH_HOME: path.join(root, 'dsh-home'),
-    ELECTRON_RUN_AS_NODE: '1',
-    NO_AT_BRIDGE: '1',
-  }
-  await mkdir(childEnv.HOME, { recursive: true })
-  await mkdir(childEnv.DSH_HOME, { recursive: true })
+  const { cliEnv: childEnv, browserEnv, directories } = disposableEnvironment(root, process.env)
+  for (const directory of directories) await mkdir(directory, { recursive: true })
   // A registered workspace is a user-level precondition. The headless host
   // cannot open the native folder picker, so the disposable profile is seeded
   // with exactly what the desktop writes when a user adds a folder. Everything
@@ -192,7 +186,7 @@ async function main() {
     const origin = new URL(url).origin
     record('boot real DSH web app', 'PASS', origin)
 
-    const browser = await playwright.module.chromium.launch({ headless: true,
+    const browser = await playwright.module.chromium.launch({ headless: true, env: browserEnv,
       args: ['--disable-dev-shm-usage', '--no-sandbox'] })
     try {
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
