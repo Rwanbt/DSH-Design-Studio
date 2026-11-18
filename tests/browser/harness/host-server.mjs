@@ -161,8 +161,13 @@ export async function startHarness({ workspace, sessionId = 'e2e-session', works
     /** Read a workspace file as UTF-8. */
     read: (relative) => readFile(path.join(root, relative), 'utf8'),
     async close({ keepWorkspace = false } = {}) {
-      await new Promise((resolve) => server.close(resolve))
-      if (!keepWorkspace && !workspace) await rm(root, { recursive: true, force: true })
+      // The Host may finish short-lived lock/temp-file cleanup just after the
+      // last HTTP response. Node's rm retry applies to ENOTEMPTY/EBUSY/EPERM;
+      // do not swallow a persistent failure or leave undeclared test artifacts.
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+      if (!keepWorkspace && !workspace) {
+        await rm(root, { recursive: true, force: true, maxRetries: 12, retryDelay: 100 })
+      }
     },
   }
 }
