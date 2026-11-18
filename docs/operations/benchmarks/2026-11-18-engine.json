@@ -1,0 +1,82 @@
+{
+  "measuredAt": "2026-11-18T13:15:05.750Z",
+  "node": "v24.19.0",
+  "platform": "linux",
+  "arch": "x64",
+  "scope": "engine-level (no pixels, no frame rate)",
+  "results": [
+    {
+      "format": "svg",
+      "elements": 100,
+      "bytes": 6955,
+      "scanMs": 0.57,
+      "editableNodesMs": 0.79,
+      "geometryMs": 1.51,
+      "pathModelsMs": 0.38,
+      "attributePatchMs": 0.78,
+      "orderPatchMs": 0.18,
+      "saveMs": 2.07,
+      "runs": 7
+    },
+    {
+      "format": "svg",
+      "elements": 1500,
+      "bytes": 107000,
+      "scanMs": 3.98,
+      "editableNodesMs": 5.84,
+      "geometryMs": 12.45,
+      "pathModelsMs": 4.86,
+      "attributePatchMs": 8.19,
+      "orderPatchMs": 2.04,
+      "saveMs": 2.22,
+      "runs": 7
+    },
+    {
+      "format": "svg",
+      "elements": 5000,
+      "bytes": 361840,
+      "scanMs": 7.91,
+      "editableNodesMs": 23.07,
+      "geometryMs": 41.21,
+      "pathModelsMs": 18.52,
+      "attributePatchMs": 28.39,
+      "orderPatchMs": 6.92,
+      "saveMs": 4.06,
+      "runs": 3
+    },
+    {
+      "format": "svg",
+      "elements": 10000,
+      "bytes": 725910,
+      "scanMs": 15.83,
+      "editableNodesMs": 39.2,
+      "geometryMs": 89.89,
+      "pathModelsMs": 36.38,
+      "attributePatchMs": 64.46,
+      "orderPatchMs": 15.33,
+      "saveMs": 6.92,
+      "runs": 3
+    },
+    {
+      "format": "css",
+      "rules": 100,
+      "bytes": 3840,
+      "scanRulesMs": 0.29,
+      "runs": 7
+    },
+    {
+      "format": "css",
+      "rules": 1500,
+      "bytes": 59640,
+      "scanRulesMs": 1.37,
+      "runs": 7
+    },
+    {
+      "format": "css",
+      "rules": 5000,
+      "bytes": 201390,
+      "scanRulesMs": 2.85,
+      "runs": 3
+    }
+  ]
+}
