@@ -299,3 +299,35 @@ export const gradientNotReferencedSpec = {
     assert.equal(applies(), 0, 'selection never calls the Host')
   },
 }
+
+
+export const gradientOffsetInspectorSpec = {
+  name: 'gradient: offset edits preserve percentage units and Undo restores exact bytes',
+  async run({ page, harness, assert }) {
+    const applies = countApplies(page)
+    await harness.write('offset.svg', GRADIENT_SVG)
+    await openWorkspaceFile(page, 'offset.svg', { expect: 'svg' })
+    await page.getByRole('button', { name: 'Select layer rect #panel', exact: true }).click()
+    await openGradientSection(page, 'sky')
+
+    const offset = page.getByLabel('Gradient stop 2 offset', { exact: true })
+    assert.equal(await offset.inputValue(), '100%', 'the native percentage is displayed unchanged')
+    assert.equal(await offset.isDisabled(), false, 'existing offset is editable')
+    assert.equal(applies(), 0, 'opening the inspector is read-only')
+    await offset.fill('75%')
+    await offset.press('Enter')
+    const changed = await waitForDisk(harness, 'offset.svg',
+      (text) => text.includes('<stop offset="75%" stop-color="#8090a0"'), { label: 'offset changed' })
+    assert.equal(changed, GRADIENT_SVG.replace('offset="100%"', 'offset="75%"'),
+      'the exact value span alone was replaced')
+    assert.equal(applies(), 1, 'offset commit sends one Host write')
+
+    await page.waitForFunction(() =>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForDisk(harness, 'offset.svg', text => text === GRADIENT_SVG,
+      { label: 'offset Undo' })
+    assert.equal(applies(), 2, 'Undo sends one reverse write')
+    assert.equal(await harness.read('offset.svg'), GRADIENT_SVG, 'Undo restores original bytes')
+  },
+}
