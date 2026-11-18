@@ -36,6 +36,11 @@ export function planSvgGradientCreation(source, { id, type = 'linear' } = {}) {
   }
   const currentFill = layer.attributes.get('fill')
   if (currentFill?.value.includes('&')) fail('encoded-attribute','The fill contains an XML entity')
+  // Preserve the designer's selected solid colour as the first stop. Unknown
+  // or non-solid paints remain untouched until the explicit action; only safe
+  // native hex values become editable gradient stops.
+  const baseColour=/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(currentFill?.value||'')
+    ?currentFill.value:'#000000'
   const definitions = root.children.filter(node => node.tag === 'defs')
   if (definitions.length > 1 || definitions.some(node => node.selfClosing)) {
     fail('unsupported-defs','Expected at most one expanded top-level defs element')
@@ -53,7 +58,7 @@ export function planSvgGradientCreation(source, { id, type = 'linear' } = {}) {
   const geometry = type === 'linear' ? ' x1="0" y1="0" x2="1" y2="0"'
     : ' cx="50%" cy="50%" r="50%"'
   const gradient = (indent) => indent + '<' + tag + ' id="' + gradientId + '"' + geometry + '>' + eol +
-    indent + '  <stop offset="0" stop-color="#000000"/>' + eol +
+    indent + '  <stop offset="0" stop-color="' + baseColour + '"/>' + eol +
     indent + '  <stop offset="1" stop-color="#ffffff"/>' + eol +
     indent + '</' + tag + '>'
   let where
