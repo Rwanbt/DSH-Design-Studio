@@ -62,6 +62,16 @@ glissement a eu lieu, et il est remis à zéro sur `pointerdown` suivant, `blur`
 la fenêtre et `visibilitychange` — un geste interrompu hors fenêtre ne laisse ni
 aperçu collé ni clic avalé.
 
+### 5 bis. Durcissement après revue (18 novembre 2026)
+
+Le geste est désormais porté par des écouteurs `window` plutôt que par la capture
+du pointeur sur la ligne : sélectionner la ligne au premier mouvement la re-rend,
+et une capture perdue faisait échouer le dépôt de façon intermittente. Ces
+écouteurs sont retirés sur `pointerup`, `pointercancel`, `Échap`, perte de focus,
+changement de visibilité et démontage du composant. Un relâchement sans mouvement
+intermédiaire est jugé sur la distance réelle (un geste rapide reste un geste), et
+la sélection suit la ligne déplacée dans ce cas aussi.
+
 ### 6. Le clavier reste le chemin de référence
 
 `Ctrl+]`, `Ctrl+[`, `Ctrl+Maj+]`, `Ctrl+Maj+[` et les entrées du menu restent

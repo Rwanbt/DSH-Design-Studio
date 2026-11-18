@@ -20,7 +20,7 @@ import { htmlSecuritySpec, svgSecuritySpec, svgRemoteAssetSpec, cssInjectionSpec
 import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y.mjs'
 import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
-import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec } from './structure.mjs'
+import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec, alignmentSpec, alignmentRefusalSpec, alignLockedAncestorSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
 import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createFeedbackSpec, createRefusalSpec } from './create.mjs'
@@ -75,6 +75,9 @@ export const specs = [
   transformSpec,
   groupDragSpec,
   nestedPivotSpec,
+  alignmentSpec,
+  alignmentRefusalSpec,
+  alignLockedAncestorSpec,
   htmlTextSpec,
   htmlAttributeSpec,
   htmlTextRefusalSpec,

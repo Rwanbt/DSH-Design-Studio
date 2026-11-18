@@ -267,3 +267,404 @@ export const nestedPivotSpec = {
     assert.equal(restored, nested, 'undo restores the original bytes')
   },
 }
+
+/* ------------------------------------------------------------------------- *
+ * Multi-layer alignment
+ *
+ * The buttons write exactly one coordinate per layer through the single Host
+ * batch `svg-attributes`, using the same transform-aware handles as the drag
+ * gesture: `x`/`y` are artboard edges and `move.inverse` maps an artboard delta
+ * back to local source coordinates. These assertions read the real file bytes
+ * and count real Host calls: one gesture = one POST = one Undo step.
+ * ------------------------------------------------------------------------- */
+
+const ALIGN_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240" viewBox="0 0 400 240">
+  <g id="shift" transform="translate(100,20) scale(2)">
+    <rect id="a" x="40" y="30" width="60" height="40" fill="#bda991"/>
+  </g>
+  <rect id="b" x="30" y="120" width="50" height="30" fill="#8a9a7b"/>
+  <rect id="c" x="150" y="60" width="80" height="50" fill="#5b6b7b"/>
+  <text id="t" x="200" y="200" text-anchor="start" font-size="16" fill="#202124">T</text>
+</svg>
+`
+
+const ALIGN_REFUSAL_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">
+  <rect id="solo" x="10" y="10" width="20" height="20" fill="#bda991"/>
+  <rect id="free" x="80" y="10" width="20" height="20" fill="#8a9a7b"/>
+  <rect id="locked" x="150" y="10" width="20" height="20" fill="#5b6b7b" data-locked="true"/>
+  <circle id="roundA" cx="40" cy="100" r="12" fill="#bda991"/>
+  <circle id="roundB" cx="100" cy="100" r="12" fill="#8a9a7b"/>
+  <rect id="turned" x="60" y="60" width="20" height="20" fill="#bda991" transform="rotate(30)"/>
+  <defs>
+    <rect id="template" x="0" y="0" width="10" height="10"/>
+  </defs>
+</svg>
+`
+
+const ALIGN_DEGENERATE_DOCUMENT = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100">
+  <g id="broken" transform="matrix(0,0,0,0,0,0)">
+    <rect id="ghost" x="10" y="10" width="20" height="20" fill="#bda991"/>
+  </g>
+  <rect id="solid" x="60" y="10" width="20" height="20" fill="#8a9a7b"/>
+</svg>
+`
+
+// Minimal HTML with no linked stylesheet, so the CSP of the inert preview
+// does not add an unrelated console error to this refusal spec.
+const ALIGN_HTML_DOCUMENT = '<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
+  + '<title>Alignement hors SVG</title></head><body><p id="plain">Texte simple</p></body></html>\n'
+
+const ALIGN_MANY_DOCUMENT = '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">\n'
+  + Array.from({ length: 17 }, (_, index) =>
+    `  <rect id="r${index}" x="${10 + index * 10}" y="10" width="8" height="8" fill="#8a9a7b"/>`).join('\n')
+  + '\n</svg>\n'
+
+const ALIGN_LABELS = ['Aligner à gauche', 'Aligner au centre horizontal', 'Aligner à droite',
+  'Aligner en haut', 'Aligner au milieu vertical', 'Aligner en bas']
+
+/** Open tag of one element, read from the real file bytes. */
+function elementTag(source, id) {
+  const marker = 'id="' + id + '"'
+  const at = source.indexOf(marker)
+  if (at < 0) return ''
+  const start = source.lastIndexOf('<', at)
+  const end = source.indexOf('>', at)
+  return start < 0 || end < 0 ? '' : source.slice(start, end + 1)
+}
+
+/** One attribute value from an open tag, or null when absent. */
+function attributeOf(tag, name) {
+  const match = new RegExp('\\s' + name + '="([^"]*)"').exec(tag)
+  return match ? match[1] : null
+}
+
+export const alignmentSpec = {
+  name: 'align: ctrl-clicked layers align through one svg-attributes write and Undo restores the bytes',
+  async run({ page, harness, assert }) {
+    // Count the real Host mutations: the byte diff alone would miss a refused
+    // extra write, and a single Undo only works if the edit was one batch.
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    // Selection state appends "(in selection)" (and locked/hidden) to the row's
+    // accessible name; a layer row locator must accept those real suffixes.
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+    const reason = () => page.locator('[data-align-reason]').innerText()
+
+    await harness.write('align.svg', ALIGN_DOCUMENT)
+    await openWorkspaceFile(page, 'align.svg', { expect: 'svg' })
+
+    // No selection: the controls exist, are disabled and say why.
+    for (const label of ALIGN_LABELS) {
+      assert.equal(await button(label).isDisabled(), true, label + ' is disabled without a multi-selection')
+    }
+    assert.match(await reason(), /au moins deux calques/, 'the visible reason explains the empty selection')
+    assert.equal(await harness.read('align.svg'), ALIGN_DOCUMENT, 'the opening state never writes')
+    assert.equal(applies, 0)
+
+    // A single layer is still not an alignment operation.
+    await layer('rect', 'a').click()
+    assert.equal(await button('Aligner à gauche').isDisabled(), true, 'one layer cannot be aligned')
+    assert.equal(await harness.read('align.svg'), ALIGN_DOCUMENT, 'a single selection writes nothing')
+
+    // Ctrl-click gives two layers; `a` lives in a translated AND scaled
+    // group, so the local x must be computed through the parent inverse:
+    // artboard left 180 -> 30, local x = 40 + (30 - 180) / 2 = -35.
+    await layer('rect', 'b').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Aligner à gauche').isDisabled(), false, 'two layers enable the action')
+    const before = await harness.read('align.svg')
+    await button('Aligner à gauche').click()
+    const aligned = await waitForDisk(harness, 'align.svg', (text) => text !== before, { label: 'align left' })
+    assert.equal(applies, 1, 'the whole alignment is exactly one Host write')
+
+    const tagA = elementTag(aligned, 'a')
+    const tagB = elementTag(aligned, 'b')
+    assert.equal(attributeOf(tagA, 'x'), '-35',
+      'the transformed child moved in local coordinates through the parent inverse')
+    assert.equal(attributeOf(tagB, 'x'), '30', 'the already aligned layer keeps its exact x')
+    assert.equal(Number(attributeOf(tagA, 'x')) * 2 + 100, Number(attributeOf(tagB, 'x')),
+      'both visible left edges coincide at x=30 in artboard space')
+    assert.equal(attributeOf(tagA, 'y'), '30', 'a horizontal alignment never rewrites y')
+    assert.equal(attributeOf(tagA, 'width'), '60', 'a horizontal alignment never rewrites width')
+    assert.equal(attributeOf(tagA, 'height'), '40', 'a horizontal alignment never rewrites height')
+    assert.equal(aligned, before.replace('<rect id="a" x="40"', '<rect id="a" x="-35"'),
+      'only that one x attribute changed: every other byte is preserved')
+    assert.ok(aligned.includes('<g id="shift" transform="translate(100,20) scale(2)">'),
+      'the parent transform is kept byte for byte')
+
+    // Undo is one step: the inverse of the single patch batch.
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    const restored = await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo align' })
+    assert.equal(restored, before, 'Undo restores the original bytes exactly')
+    assert.equal(applies, 2, 'Undo is one more Host call')
+
+    // Vertical alignment is the symmetric proof: only `y` may change.
+    await layer('rect', 'b').click()
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    await button('Aligner en haut').click()
+    const vertical = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 'b'), 'y') === '60', { label: 'align top' })
+    assert.equal(applies, 3, 'the vertical alignment is a second single write')
+    assert.equal(attributeOf(elementTag(vertical, 'b'), 'x'), '30', 'a vertical alignment never rewrites x')
+    assert.equal(attributeOf(elementTag(vertical, 'b'), 'width'), '50',
+      'a vertical alignment never rewrites width')
+    assert.equal(vertical, before.replace('<rect id="b" x="30" y="120"', '<rect id="b" x="30" y="60"'),
+      'only the y attribute of the layer that needed it changed')
+
+    // Already aligned: no cosmetic edit and no request at all.
+    const noopWrites = applies
+    await button('Aligner en haut').click()
+    await page.waitForFunction(() =>
+      document.querySelector('[data-align-reason]')?.textContent.includes('Déjà aligné'))
+    assert.equal(applies, noopWrites, 'an already aligned selection sends no request')
+    assert.equal(await harness.read('align.svg'), vertical, 'an already aligned selection changes no byte')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo vertical align' })
+    assert.equal(await harness.read('align.svg'), before, 'undo restores the original bytes again')
+    assert.equal(applies, 4, 'Undo is the only remaining Host call')
+
+    // Centre horizontal changes TWO layers in the same batch: the union box
+    // centre is 130, so b (30..80) and c (150..230) both move. One POST and one
+    // Undo must still cover the whole pair.
+    await button('Aligner au centre horizontal').click()
+    const centred = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 'b'), 'x') === '105' &&
+        attributeOf(elementTag(text, 'c'), 'x') === '90', { label: 'align centre horizontal' })
+    assert.equal(applies, 5, 'two coordinate edits are still exactly one Host write')
+    assert.equal(Number(attributeOf(elementTag(centred, 'b'), 'x')) + 25, 130,
+      'the first box centre meets the selection centre')
+    assert.equal(Number(attributeOf(elementTag(centred, 'c'), 'x')) + 40, 130,
+      'the second box centre meets the same selection centre')
+    assert.equal(centred, before
+      .replace('<rect id="b" x="30" y="120"', '<rect id="b" x="105" y="120"')
+      .replace('<rect id="c" x="150" y="60"', '<rect id="c" x="90" y="60"'),
+    'exactly the two x attributes changed; y, width and every other byte are preserved')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo centre align' })
+    assert.equal(await harness.read('align.svg'), before, 'one Undo restores both layers exactly')
+    assert.equal(applies, 6, 'the centre Undo is one Host call')
+
+    // A text layer with an explicit anchor has a provable edge and follows the
+    // same single-coordinate rule. (An inherited anchor would be refused.)
+    await layer('rect', 'b').click()
+    await layer('text', 't').click({ modifiers: ['ControlOrMeta'] })
+    await button('Aligner à gauche').click()
+    const textAligned = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 't'), 'x') === '30', { label: 'align text left' })
+    assert.equal(applies, 7, 'text alignment is still one Host write')
+    assert.equal(attributeOf(elementTag(textAligned, 't'), 'y'), '200',
+      'text x alignment never rewrites its baseline y')
+    assert.equal(textAligned, before.replace('<text id="t" x="200"', '<text id="t" x="30"'),
+      'only the text x attribute changed; the anchor and font attributes are untouched')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo text align' })
+    assert.equal(await harness.read('align.svg'), before, 'undo restores the text layer exactly')
+    assert.equal(applies, 8, 'the text Undo is one Host call')
+
+    // End-edge branches: the union's right edge is 230, so b (right 80) moves
+    // while c (right 230) is already aligned and produces no edit.
+    await layer('rect', 'b').click()
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    await button('Aligner à droite').click()
+    const rightAligned = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 'b'), 'x') === '180', { label: 'align right' })
+    assert.equal(applies, 9, 'right alignment is one Host write')
+    assert.equal(attributeOf(elementTag(rightAligned, 'c'), 'x'), '150',
+      'the already right-aligned layer is untouched')
+    assert.equal(rightAligned, before.replace('<rect id="b" x="30" y="120"', '<rect id="b" x="180" y="120"'),
+      'right alignment changes only the x attribute that was out of line')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo right align' })
+    assert.equal(applies, 10, 'the right Undo is one Host call')
+
+    // Bottom edge: the union's bottom is 150, so c (bottom 110) moves to
+    // y=100 and b (bottom 150) stays byte-identical.
+    await layer('rect', 'b').click()
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    await button('Aligner en bas').click()
+    const bottomAligned = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 'c'), 'y') === '100', { label: 'align bottom' })
+    assert.equal(applies, 11, 'bottom alignment is one Host write')
+    assert.equal(attributeOf(elementTag(bottomAligned, 'c'), 'x'), '150',
+      'a vertical alignment never rewrites x')
+    assert.equal(bottomAligned, before.replace('<rect id="c" x="150" y="60"', '<rect id="c" x="150" y="100"'),
+      'bottom alignment changes only the y attribute that was out of line')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo bottom align' })
+    assert.equal(await harness.read('align.svg'), before, 'undo restores the original bytes after bottom align')
+    assert.equal(applies, 12, 'the bottom Undo is one Host call')
+
+    // Middle vertical: the union centre is 105, so both boxes move in one batch.
+    await layer('rect', 'b').click()
+    await layer('rect', 'c').click({ modifiers: ['ControlOrMeta'] })
+    await button('Aligner au milieu vertical').click()
+    const middleAligned = await waitForDisk(harness, 'align.svg',
+      (text) => attributeOf(elementTag(text, 'b'), 'y') === '90' &&
+        attributeOf(elementTag(text, 'c'), 'y') === '80', { label: 'align middle vertical' })
+    assert.equal(applies, 13, 'two y edits are still exactly one Host write')
+    assert.equal(Number(attributeOf(elementTag(middleAligned, 'b'), 'y')) + 15, 105,
+      'the first box centre meets the selection middle')
+    assert.equal(Number(attributeOf(elementTag(middleAligned, 'c'), 'y')) + 25, 105,
+      'the second box centre meets the same selection middle')
+    assert.equal(middleAligned, before
+      .replace('<rect id="b" x="30" y="120"', '<rect id="b" x="30" y="90"')
+      .replace('<rect id="c" x="150" y="60"', '<rect id="c" x="150" y="80"'),
+    'exactly the two y attributes changed; x, width and every other byte are preserved')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await button('Undo saved edit').click()
+    await waitForDisk(harness, 'align.svg', (text) => text === before, { label: 'undo middle vertical align' })
+    assert.equal(await harness.read('align.svg'), before, 'undo restores the original bytes after every mode')
+    assert.equal(applies, 14, 'every gesture remained one Host write plus its Undo')
+  },
+}
+
+export const alignmentRefusalSpec = {
+  name: 'align: single, locked, rotated, read-only, non-invertible, cx/cy and >16 selections are refused without writing',
+  async run({ page, harness, assert }) {
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const button = (name) => page.getByRole('button', { name, exact: true })
+    const layer = (tag, id) => page.getByRole('button', {
+      name: new RegExp('^Select layer ' + tag + ' #' + id + '(?: \\((?:hidden|locked|in selection)\\))*$'),
+    })
+    const reason = () => page.locator('[data-align-reason]').innerText()
+    const allDisabled = async () => {
+      for (const label of ALIGN_LABELS) {
+        assert.equal(await button(label).isDisabled(), true, label + ' must stay disabled')
+      }
+    }
+
+    await harness.write('align-refus.svg', ALIGN_REFUSAL_DOCUMENT)
+    await openWorkspaceFile(page, 'align-refus.svg', { expect: 'svg' })
+    await allDisabled()
+    assert.match(await reason(), /au moins deux calques/)
+
+    await layer('rect', 'solo').click()
+    await allDisabled()
+    assert.match(await reason(), /au moins deux calques/, 'a single selection has a visible reason')
+    assert.equal(await harness.read('align-refus.svg'), ALIGN_REFUSAL_DOCUMENT, 'a refusal writes nothing')
+    assert.equal(applies, 0)
+
+    // Sanity: two unlocked rects really do enable the action.
+    await layer('rect', 'free').click({ modifiers: ['ControlOrMeta'] })
+    assert.equal(await button('Aligner à gauche').isDisabled(), false,
+      'two unlocked rects enable the action before the refusals')
+    assert.equal(applies, 0, 'enabling a control never writes')
+
+    // A locked layer blocks the whole selection.
+    await layer('rect', 'free').click()
+    await layer('rect', 'locked').click({ modifiers: ['ControlOrMeta'] })
+    await allDisabled()
+    assert.match(await reason(), /verrouillé/, 'the locked layer is named in the reason')
+    assert.equal(await harness.read('align-refus.svg'), ALIGN_REFUSAL_DOCUMENT, 'a locked layer writes nothing')
+    assert.equal(applies, 0)
+
+    // An invertible rotation is still not a single-axis move: writing x would
+    // also change the rendered y, so both axes refuse instead of approximating.
+    await layer('rect', 'turned').click()
+    await layer('rect', 'free').click({ modifiers: ['ControlOrMeta'] })
+    await allDisabled()
+    assert.match(await reason(), /rotation\/pivot/, 'a rotated layer names the axis refusal')
+    assert.equal(await harness.read('align-refus.svg'), ALIGN_REFUSAL_DOCUMENT,
+      'a rotated layer writes nothing')
+    assert.equal(applies, 0)
+
+    // Referenced <defs> content is read-only: it is listed as a layer but
+    // refused before any coordinate is considered.
+    await layer('rect', 'template').click()
+    await layer('rect', 'free').click({ modifiers: ['ControlOrMeta'] })
+    await allDisabled()
+    assert.match(await reason(), /Lecture seule/, 'a read-only layer is named in the reason')
+    assert.equal(await harness.read('align-refus.svg'), ALIGN_REFUSAL_DOCUMENT,
+      'a read-only layer writes nothing')
+    assert.equal(applies, 0)
+
+    // cx/cy layers are refused rather than converted into x/y.
+    await layer('circle', 'roundA').click()
+    await layer('circle', 'roundB').click({ modifiers: ['ControlOrMeta'] })
+    await allDisabled()
+    assert.match(await reason(), /cx\/cy/, 'circle geometry is refused without converting the shape')
+    assert.equal(await harness.read('align-refus.svg'), ALIGN_REFUSAL_DOCUMENT, 'a cx/cy refusal writes nothing')
+    assert.equal(applies, 0)
+
+    // A degenerate ancestor matrix has no invertible handle: the whole
+    // operation must refuse instead of guessing a local coordinate.
+    await harness.write('align-degenerate.svg', ALIGN_DEGENERATE_DOCUMENT)
+    await openWorkspaceFile(page, 'align-degenerate.svg', { expect: 'svg' })
+    await layer('rect', 'ghost').click()
+    await layer('rect', 'solid').click({ modifiers: ['ControlOrMeta'] })
+    await allDisabled()
+    assert.match(await reason(), /Géométrie (?:indisponible|non inversible)/,
+      'a non-invertible transform is refused explicitly')
+    assert.equal(await harness.read('align-degenerate.svg'), ALIGN_DEGENERATE_DOCUMENT,
+      'a non-invertible transform writes nothing')
+    assert.equal(applies, 0)
+
+    // The Host batch accepts at most 16 edits, so 17 selected layers are
+    // refused before building any request.
+    await harness.write('align-many.svg', ALIGN_MANY_DOCUMENT)
+    await openWorkspaceFile(page, 'align-many.svg', { expect: 'svg' })
+    await layer('rect', 'r0').click()
+    for (let index = 1; index < 17; index += 1) {
+      await layer('rect', 'r' + index).click({ modifiers: ['ControlOrMeta'] })
+    }
+    await allDisabled()
+    assert.match(await reason(), /16 calques maximum/, 'the Host batch limit is named in the reason')
+    assert.equal(await harness.read('align-many.svg'), ALIGN_MANY_DOCUMENT, '>16 layers write nothing')
+    assert.equal(applies, 0, 'no refusal ever reached the Host')
+
+    // A non-SVG document keeps the section visible but disabled with the reason
+    // that actually applies, rather than hiding the controls silently.
+    await harness.write('align.html', ALIGN_HTML_DOCUMENT)
+    await openWorkspaceFile(page, 'align.html', { expect: 'html' })
+    await allDisabled()
+    assert.match(await reason(), /n’est pas un SVG/, 'a non-SVG document names its own reason')
+    assert.equal(applies, 0, 'a non-SVG document never calls the Host')
+  },
+}
+
+export const alignLockedAncestorSpec = {
+  name: 'align: a layer locked through a named ancestor is refused before any Host call',
+  async run({ page, harness, assert }) {
+    const source = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+  <g id="verrou" data-locked="true">
+    <rect id="dedans" x="10" y="10" width="60" height="40" fill="#ccbbaa"/>
+  </g>
+  <rect id="libre" x="200" y="10" width="60" height="40" fill="#bbaa99"/>
+</svg>
+`
+    await harness.write('ancetre.svg', source)
+    await openWorkspaceFile(page, 'ancetre.svg', { expect: 'svg' })
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    await page.getByRole('button', { name: /^Select layer rect #dedans/ }).click()
+    await page.getByRole('button', { name: 'Select layer rect #libre' }).click({ modifiers: ['Control'] })
+    const button = page.getByRole('button', { name: 'Aligner à gauche', exact: true })
+    assert.equal(await button.isDisabled(), true,
+      'a layer locked through its named ancestor must disable the alignment')
+    assert.match(await page.locator('[data-align-reason]').innerText(), /verrouill/i)
+    assert.equal(applies, 0, 'a refused alignment must not reach the Host')
+    assert.equal(await harness.read('ancetre.svg'), source, 'nothing may be written')
+  },
+}

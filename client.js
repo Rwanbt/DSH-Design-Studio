@@ -101,6 +101,38 @@ window.__ModuleLoader__.load({
       }
       return result
     }
+    /**
+     * Multi-layer alignment. Each entry writes exactly ONE coordinate attribute
+     * per layer (`x` for the horizontal modes, `y` for the vertical ones), so
+     * the common Host batch `svg-attributes` applies the whole gesture as one
+     * atomic patch: one Undo step, no second write path.
+     *
+     * The target is computed from the SAME transform-aware boxes the pointer
+     * drag uses (`geometry.handles`): `x`/`y` are artboard-space edges and
+     * `move.inverse` maps an artboard delta back into the layer's local space.
+     */
+    const ALIGNMENT_MODES = Object.freeze([
+      {key:'left',axis:'x',edge:'start',label:'Aligner à gauche',text:'Gauche'},
+      {key:'centerX',axis:'x',edge:'center',label:'Aligner au centre horizontal',text:'Centre'},
+      {key:'right',axis:'x',edge:'end',label:'Aligner à droite',text:'Droite'},
+      {key:'top',axis:'y',edge:'start',label:'Aligner en haut',text:'Haut'},
+      {key:'middleY',axis:'y',edge:'center',label:'Aligner au milieu vertical',text:'Milieu'},
+      {key:'bottom',axis:'y',edge:'end',label:'Aligner en bas',text:'Bas'},
+    ])
+    /** Edge of one handle along the mode's axis, in artboard coordinates. */
+    function alignmentEdge(handle, mode) {
+      const start = mode.axis === 'x' ? handle.x : handle.y
+      const size = mode.axis === 'x' ? handle.width : handle.height
+      if (!Number.isFinite(start) || !Number.isFinite(size)) return null
+      if (mode.edge === 'start') return start
+      if (mode.edge === 'end') return start + size
+      return start + size / 2
+    }
+    /** Same rounding as the drag gesture, so a saved value is never exotic. */
+    function alignmentCoordinate(value) {
+      const rounded = Math.round(value * 1000) / 1000
+      return String(Object.is(rounded, -0) ? 0 : rounded)
+    }
     // SVG paths and shell stylesheet are translated from the committed Graphite V3 reference.
     const GRAPHITE_CSS = `
 .dsh-studio-workbench{--bg:#15171b;--shell:#1d2026;--panel:#202329;--panel2:#262a31;--line:#333740;--soft:#2a2f39;--text:var(--dsw-alias-label-primary,#e8ebf0);--muted:#949ba9;--sub:var(--dsw-alias-label-tertiary,#6e7786);--blue:#c7ad8e;--blue-bg:#4b4035;--canvas:#111317;--shadow:0 14px 50px #080a0c9c;--radius:8px}
@@ -455,6 +487,7 @@ window.__ModuleLoader__.load({
       const [layerDrag,setLayerDrag] = React.useState(null)
       const layerDragRef = React.useRef(null)
       const layerDragClickRef = React.useRef(false)
+      const layerDragListenersRef = React.useRef(null)
       React.useEffect(()=>{
         if(layerMenu) layerMenuRef.current?.querySelector('button[role="menuitem"]:not(:disabled)')?.focus()
       },[layerMenu])
@@ -466,6 +499,7 @@ window.__ModuleLoader__.load({
         const reset=()=>{
           if(!layerDragRef.current)return
           layerDragRef.current=null
+          stopLayerDragListeners()
           setLayerDrag(null)
         }
         const view=typeof document!=='undefined' && typeof document.addEventListener==='function'?document:null
@@ -474,6 +508,9 @@ window.__ModuleLoader__.load({
         return ()=>{
           window.removeEventListener('blur',reset)
           view?.removeEventListener('visibilitychange',reset)
+          // A gesture in flight must not outlive the component: its closure holds
+          // the whole document and could write through a stale revision.
+          stopLayerDragListeners()
         }
       },[])
       // In-memory clipboard: the copied element's exact source slice, so a paste
@@ -522,6 +559,10 @@ window.__ModuleLoader__.load({
       const [value,setValue] = React.useState('')
       const [error,setError] = React.useState('')
       const [warning,setWarning] = React.useState('')
+      // Outcome of the last alignment attempt. Kept apart from `error`: a
+      // selection that is already aligned is a success with zero requests, not
+      // a failure the user should read in red.
+      const [alignNotice,setAlignNotice] = React.useState('')
       const [busy,setBusy] = React.useState(false)
       const layerMenuActionFocusRef=React.useRef(null)
       React.useEffect(()=>{
@@ -603,6 +644,9 @@ window.__ModuleLoader__.load({
           const data=await request(url)
           if(doc?.file!==targetFile) {
             setCamera({zoom:1,offsetX:0,offsetY:0})
+            // A selection belongs to the document that owns those ids; keeping
+            // it across files would point at layers that no longer exist.
+            setExtraSelection([])
             setCanvasTool('select')
             setPenPathId('');setPenOutgoing(null);setPenPreview(null)
             penGestureRef.current=null;penPendingRef.current=false
@@ -633,6 +677,7 @@ window.__ModuleLoader__.load({
             else setCssMediaStart(null)
           }
           setReloadRequired(false)
+          setAlignNotice('')
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
           setGeometry(data.geometry||{artboard:null,handles:[]})
@@ -695,8 +740,9 @@ window.__ModuleLoader__.load({
         setHtmlPreviewCoverage(null);setCssRules([]);setCssActive('');setCssValue('')
         setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
         setHtmlActive('');setHtmlValue('')
-        setGeometry({artboard:null,handles:[]});setActive('')
+        setGeometry({artboard:null,handles:[]});setActive('');setExtraSelection([])
         setUndoStack([]);setRedoStack([]);setReloadRequired(false)
+        setAlignNotice('')
         setEditingText('');setTextDraft('');setWarning('')
       }
       /**
@@ -933,6 +979,165 @@ window.__ModuleLoader__.load({
         const ancestors=Array.isArray(node?.ancestorIds)?node.ancestorIds:[]
         return ancestors.some(id=>nodes.find(item=>item.id===id)?.locked===true)
       }
+      /**
+       * Resolve the current multi-selection into alignment entries, or into one
+       * explicit refusal reason. Nothing is approximated here: a layer without a
+       * provable x/y coordinate blocks the WHOLE operation (no partial write).
+       *
+       * Refusal order mirrors the user's mental model: document availability,
+       * busy/uncertain state, unsaved drafts, then the selection itself, then
+       * each layer's lock/read-only/geometry. Only `rect` and `text` are
+       * accepted: both carry a real `x`/`y` attribute, and both already have a
+       * transform-aware handle used by the drag gesture. Groups and circle/
+       * ellipse are refused rather than converted to `cx`/`cy`/`translate`.
+       */
+      function alignmentSelectionState() {
+        const wanted=new Set(extraSelection)
+        if(active) wanted.add(active)
+        const ids=nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
+        const missing=[...wanted].filter(id=>!nodes.some(node=>node.id===id))
+        const blocked=reason=>({ok:false,reason,ids,entries:[]})
+        if(!doc) return blocked('Ouvrez un document SVG pour aligner des calques.')
+        if(doc.format!=='svg') return blocked('Alignement indisponible : ce document n’est pas un SVG.')
+        if(busy) return blocked('Enregistrement en cours : réessayez ensuite.')
+        if(reloadRequired) return blocked('Document à recharger avant de modifier.')
+        if(source!==doc.source||hasTextDraft()) {
+          return blocked('Modifications non enregistrées : enregistrez ou abandonnez-les avant d’aligner.')
+        }
+        if(missing.length) return blocked('Un calque sélectionné n’existe plus : resélectionnez les calques.')
+        if(ids.length<2) return blocked('Sélectionnez au moins deux calques (Ctrl+clic) pour aligner.')
+        if(ids.length>16) return blocked('Alignement refusé : 16 calques maximum par écriture (limite du Host).')
+        const entries=[]
+        for(const id of ids) {
+          const node=nodes.find(item=>item.id===id)
+          if(!node) return blocked('Un calque sélectionné n’existe plus : resélectionnez les calques.')
+          if(node.readOnly) return blocked('Lecture seule : le calque #'+id+' ne peut pas être aligné.')
+          if(node.locked||layerLockedByAncestor(node)) {
+            return blocked('Calque verrouillé : déverrouillez #'+id+' avant d’aligner.')
+          }
+          const handle=geometry.handles.find(item=>item.id===id)
+          if(!handle) return blocked('Géométrie indisponible pour #'+id+' : alignement refusé.')
+          const move=handle.move
+          if(!move||move.kind==='translate') {
+            return blocked('#'+id+' est un groupe sans attribut x/y : alignement refusé (aucune conversion).')
+          }
+          if(!Number.isFinite(move.initialX)||!Number.isFinite(move.initialY)||
+              !Array.isArray(move.inverse)||move.inverse.length!==4||!move.inverse.every(Number.isFinite)) {
+            return blocked('Géométrie non inversible pour #'+id+' : alignement refusé.')
+          }
+          if(move.x!=='x'||move.y!=='y') {
+            return blocked('#'+id+' n’a pas d’attribut x/y (cx/cy) : alignement refusé sans conversion de forme.')
+          }
+          if(handle.tag!=='rect'&&handle.tag!=='text') {
+            return blocked('Forme non prise en charge pour #'+id+' : alignement refusé.')
+          }
+          if(![handle.x,handle.y,handle.width,handle.height].every(Number.isFinite)||
+              handle.width<=0||handle.height<=0) {
+            return blocked('Géométrie incomplète pour #'+id+' : alignement refusé.')
+          }
+          entries.push({id,node,handle,move})
+        }
+        return {ok:true,reason:'',ids,entries}
+      }
+      /**
+       * Plan one alignment. The box edges are read in artboard space, exactly
+       * like a drag preview; `move.inverse` maps the resulting delta back into
+       * the layer's local coordinates.
+       *
+       * A pure local-x move only stays horizontal when the accumulated matrix
+       * has b=0 (`inverse[1]=0`); a pure local-y move only stays vertical when
+       * c=0 (`inverse[2]=0`). Under a rotation/pivot the single-axis write
+       * cannot reach the target, so it is refused instead of approximated.
+       * Text is accepted only where its own anchor makes the edge provable
+       * (start/left, middle/centre, end/right); its vertical box is estimated,
+       * so vertical text alignment is refused.
+       */
+      function alignmentModePlan(state,mode) {
+        if(!state.ok) return {ok:false,reason:state.reason}
+        for(const entry of state.entries) {
+          const inverse=entry.move.inverse
+          const scale=mode.axis==='x'?inverse[0]:inverse[3]
+          const cross=mode.axis==='x'?inverse[1]:inverse[2]
+          // A 90°/270° rotation keeps the matrix invertible but makes the axis
+          // scale vanish while the cross term dominates: report the axis problem,
+          // not a false "not invertible".
+          if(!Number.isFinite(scale)||!Number.isFinite(cross)||
+             Math.abs(scale)<1e-12||Math.abs(cross)>1e-9) {
+            return {ok:false,reason:'Transform non alignable sur l’axe '+
+              (mode.axis==='x'?'horizontal':'vertical')+' pour #'+entry.id+
+              ' : rotation/pivot détecté, aucune approximation.'}
+          }
+          if(entry.handle.tag==='text') {
+            if(mode.axis==='y') {
+              return {ok:false,reason:'#'+entry.id+' : alignement vertical du texte non calculable (ligne de base).'}
+            }
+            // An inherited anchor cannot be resolved from this flat layer model
+            // (anonymous groups are not listed), so only an explicit attribute is
+            // accepted; it also overrides inheritance by SVG's own rules.
+            if(!Object.hasOwn(entry.node.attributes,'text-anchor')) {
+              return {ok:false,reason:'#'+entry.id+' : texte sans text-anchor explicite, ancrage hérité non prouvable.'}
+            }
+            const anchor=String(entry.node.attributes['text-anchor'])
+            const expected=mode.edge==='start'?'start':mode.edge==='end'?'end':'middle'
+            if(anchor!==expected) {
+              return {ok:false,reason:'#'+entry.id+' : texte ancré « '+anchor+
+                ' » sans bord '+mode.text.toLowerCase()+' prouvable pour cet alignement.'}
+            }
+          }
+        }
+        let unionStart=Infinity,unionEnd=-Infinity
+        for(const entry of state.entries) {
+          const start=mode.axis==='x'?entry.handle.x:entry.handle.y
+          const size=mode.axis==='x'?entry.handle.width:entry.handle.height
+          if(!Number.isFinite(start)||!Number.isFinite(size)||size<=0) {
+            return {ok:false,reason:'Géométrie incomplète pour #'+entry.id+' : alignement refusé.'}
+          }
+          unionStart=Math.min(unionStart,start)
+          unionEnd=Math.max(unionEnd,start+size)
+        }
+        if(!Number.isFinite(unionStart)||!Number.isFinite(unionEnd)) {
+          return {ok:false,reason:'Géométrie de la sélection indisponible : alignement refusé.'}
+        }
+        const target=mode.edge==='start'?unionStart:mode.edge==='end'?unionEnd:(unionStart+unionEnd)/2
+        const edits=[]
+        for(const entry of state.entries) {
+          const edge=alignmentEdge(entry.handle,mode)
+          if(edge===null) {
+            return {ok:false,reason:'Géométrie incomplète pour #'+entry.id+' : alignement refusé.'}
+          }
+          const delta=target-edge
+          if(Math.abs(delta)<=1e-9) continue
+          const scale=mode.axis==='x'?entry.move.inverse[0]:entry.move.inverse[3]
+          const initial=mode.axis==='x'?entry.move.initialX:entry.move.initialY
+          const attribute=mode.axis==='x'?entry.move.x:entry.move.y
+          const next=alignmentCoordinate(initial+scale*delta)
+          const current=entry.node.attributes[attribute]
+          // A layer already on the target must not produce a cosmetic edit
+          // (for example rewriting "10.0" as "10"): no change, no request.
+          if(typeof current==='string'&&Math.abs(Number(current)-Number(next))<=1e-9) continue
+          edits.push({id:entry.id,attribute,value:next})
+        }
+        return {ok:true,edits}
+      }
+      /** Execute one alignment through the single atomic `svg-attributes` batch. */
+      function alignSelection(modeKey) {
+        const mode=ALIGNMENT_MODES.find(item=>item.key===modeKey)
+        if(!mode) return
+        setAlignNotice('')
+        const plan=alignmentModePlan(alignmentSelectionState(),mode)
+        if(!plan.ok) {setError(plan.reason);return}
+        if(plan.edits.length===0) {
+          setError('')
+          setAlignNotice('Déjà aligné : aucune écriture nécessaire.')
+          return
+        }
+        setError('')
+        const count=plan.edits.length
+        void save({kind:'svg-attributes',edits:plan.edits},'record',()=>{
+          setAlignNotice(count+' '+(count>1?'calques alignés':'calque aligné')+
+            ' · une seule écriture, Undo exact.')
+        })
+      }
       /** Row id under a viewport point, or '' when the pointer is outside rows. */
       function layerRowAtPoint(x,y) {
         if(typeof document==='undefined' || typeof document.elementFromPoint!=='function')return ''
@@ -1003,9 +1208,28 @@ window.__ModuleLoader__.load({
         if(!doc || doc.format!=='svg' || !nodes.some(node=>node.id===id))return
         layerDragRef.current={id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
           started:false,overId:'',plan:null}
-        // Capture only routes pointermove/up back to this row; it does not start
-        // the gesture and it never suppresses the click that follows pointerup.
+        // The row can be re-rendered (or replaced) between pointerdown and the
+        // first move — selecting the layer already re-renders it. The gesture is
+        // therefore driven by window listeners, not by pointer capture on a node
+        // that may no longer exist; capture is only a convenience.
+        if(typeof window!=='undefined' && typeof window.addEventListener==='function' && !layerDragListenersRef.current) {
+          const onMove=move=>moveLayerDrag(move)
+          const onUp=up=>endLayerDrag(up)
+          const onCancel=cancel=>endLayerDrag(cancel,true)
+          window.addEventListener('pointermove',onMove)
+          window.addEventListener('pointerup',onUp)
+          window.addEventListener('pointercancel',onCancel)
+          layerDragListenersRef.current={onMove,onUp,onCancel}
+        }
         try{event.currentTarget?.setPointerCapture?.(event.pointerId)}catch(_){}
+      }
+      function stopLayerDragListeners() {
+        const listeners=layerDragListenersRef.current
+        layerDragListenersRef.current=null
+        if(!listeners || typeof window==='undefined' || typeof window.removeEventListener!=='function')return
+        window.removeEventListener('pointermove',listeners.onMove)
+        window.removeEventListener('pointerup',listeners.onUp)
+        window.removeEventListener('pointercancel',listeners.onCancel)
       }
       function moveLayerDrag(event) {
         const gesture=layerDragRef.current
@@ -1031,8 +1255,18 @@ window.__ModuleLoader__.load({
         const gesture=layerDragRef.current
         if(!gesture || gesture.pointerId!==event.pointerId)return
         layerDragRef.current=null
+        stopLayerDragListeners()
         setLayerDrag(null)
-        if(!gesture.started)return
+        if(!gesture.started) {
+          // A fast flick can deliver the release without any intermediate
+          // pointermove. Judge by the real distance instead of dropping the
+          // gesture: anything past the click threshold is a drag.
+          const moved=Math.abs(event.clientX-gesture.startX)>=4 || Math.abs(event.clientY-gesture.startY)>=4
+          if(!moved)return
+          gesture.started=true
+          // Same invariant as a slow drag: the moved row is the selection.
+          select(gesture.id)
+        }
         // The synthetic click that follows the drop must not re-select (or undo
         // the selection made at drag start).
         layerDragClickRef.current=true
@@ -1194,6 +1428,7 @@ window.__ModuleLoader__.load({
           // ignored and its synthetic click is suppressed.
           event.preventDefault()
           layerDragRef.current=null
+          stopLayerDragListeners()
           setLayerDrag(null)
           layerDragClickRef.current=true
           return
@@ -1266,6 +1501,7 @@ window.__ModuleLoader__.load({
       }
       function select(nodeId, additive=false) {
         if(refuseTextDraft())return
+        setAlignNotice('')
         setActive(nodeId)
         setEditingText('')
         setTextDraft(textNodes.find(item=>item.id===nodeId)?.text||'')
@@ -1289,6 +1525,20 @@ window.__ModuleLoader__.load({
         if(active) wanted.add(active)
         return nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
       }
+      // One validation + six plans per render is bounded (16 layers max) and
+      // keeps the disabled state and its visible reason in sync with the real
+      // document, not with a separate optimistic model.
+      const alignmentState=alignmentSelectionState()
+      const alignmentPlans={}
+      for(const mode of ALIGNMENT_MODES) alignmentPlans[mode.key]=alignmentModePlan(alignmentState,mode)
+      const alignmentBlockedReasons=[...new Set(ALIGNMENT_MODES
+        .filter(mode=>!alignmentPlans[mode.key].ok)
+        .map(mode=>alignmentPlans[mode.key].reason))]
+      // A successful alignment must stay visible: the reasons are then only
+      // shown in each button's title, never in place of the confirmation.
+      const alignmentHint=alignNotice || (alignmentBlockedReasons.length
+        ? alignmentBlockedReasons.join(' ')
+        : 'Six alignements, une seule écriture · Undo exact.')
       const selected=nodes.find(n=>n.id===active)
       const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
       const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
@@ -1875,6 +2125,22 @@ window.__ModuleLoader__.load({
           :{cx:round(next.x+next.width/2),cy:round(next.y+next.height/2),rx:round(next.width/2),ry:round(next.height/2)})
       }
       const displayGeometry=Object.keys(boxValues).length?Object.keys(boxValues):['x','y','width','height']
+      // Alignment controls. They are real buttons in the inspector, not canvas
+      // commands, so every disabled state carries its reason in the visible hint
+      // (a silent no-op button is exactly what this gate forbids).
+      const alignmentInspector=h('section',{className:'dsh-studio-ins-block','data-align-panel':''},
+        h('div',{className:'dsh-studio-ins-head'},'Alignement',h('span',null,'⌗')),
+        ['x','y'].map(axis=>h('div',{key:axis,role:'group',
+          'aria-label':axis==='x'?'Alignement horizontal':'Alignement vertical',
+          style:{display:'flex',gap:6,marginTop:axis==='y'?6:0}},
+          ALIGNMENT_MODES.filter(mode=>mode.axis===axis).map(mode=>{
+            const plan=alignmentPlans[mode.key]
+            return h('button',{key:mode.key,type:'button',className:'dsh-studio-prop',
+              style:{flex:1,justifyContent:'center',padding:'0 6px',fontSize:11},
+              'aria-label':mode.label,title:plan.ok?mode.label+' · une seule écriture':plan.reason,
+              disabled:!plan.ok,onClick:()=>alignSelection(mode.key)},mode.text)
+          }))),
+        h('p',{className:'dsh-studio-hint','data-align-reason':alignmentHint},alignmentHint))
       const geometryInspector=h('section',{className:'dsh-studio-ins-block'},
         h('div',{className:'dsh-studio-ins-head'},'Transformation',h('span',null,'⌘')),
         h('div',{className:'dsh-studio-ins-row',style:{rowGap:10}},displayGeometry.map(key=>
@@ -2189,6 +2455,7 @@ window.__ModuleLoader__.load({
                     const gesture=layerDragRef.current
                     if(!gesture)return
                     layerDragRef.current=null
+                    stopLayerDragListeners()
                     setLayerDrag(null)
                     // A lost capture without a real drag must not swallow the
                     // click that follows a plain selection.
@@ -2546,7 +2813,7 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
               glyph(selected?.tag==='text'?'text':selected?.isGroup?'Calques':selected?.tag==='ellipse'||selected?.tag==='circle'?'ellipse':'rect'),
               h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedMedia?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
                 h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedMedia?'Règle CSS conditionnelle · @media '+selectedMedia.condition:selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
-            (!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
+            alignmentInspector,(!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
             (!doc||doc.format==='svg')&&['Contour','Effets'].map(title=>h('section',{className:'dsh-studio-ins-block',key:title},h('div',{className:'dsh-studio-ins-head'},title,h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Édition visuelle non implémentée ; source préservée'},'＋ Ajouter '+(title==='Contour'?'un contour':'un effet')),h('p',{className:'dsh-studio-hint'},'Non implémenté · source native préservée.'))),
             h(doc&&doc.format!=='svg'?'section':'details',{className:'dsh-studio-technical',
                ...(doc&&doc.format!=='svg'?{}:{open:inspectAdvanced,onToggle:event=>{
