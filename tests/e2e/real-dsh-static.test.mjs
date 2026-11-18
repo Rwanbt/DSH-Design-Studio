@@ -147,6 +147,12 @@ test('static sidebar contract: actual accessible controls, exact disk save/Undo/
   assert.match(source, /const themeOwner = document.body/)
   assert.match(source, /finally \{[\s\S]*themeOwner.style.removeProperty/)
   assert.doesNotMatch(source, /context.request|selectPanel|keyboard.type|credentials.yaml/)
-  assert.equal((source.match(/await writeFile\(/g) || []).length, 1, 'only deliberate external-writer injection writes directly')
-  assert.match(source, /await writeFile\(path.join\(workspaceDir, 'g0-manual.css'\), external, 'utf8'\)/)
+  // Direct writes are only the two deliberate external-writer fixtures, and both
+  // must target the disposable CSS file inside the disposable workspace.
+  const directWrites = source.match(/await writeFile\([^\n]*/g) || []
+  assert.equal(directWrites.length, 2, 'only deliberate external-writer injections write directly')
+  for (const call of directWrites) {
+    assert.match(call, /path\.join\(workspaceDir, 'g0-manual\.css'\), (?:external|mediaCss)/,
+      'a direct write may only touch the disposable fixture file: ' + call)
+  }
 })
