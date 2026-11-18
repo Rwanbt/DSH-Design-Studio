@@ -392,6 +392,19 @@ window.__ModuleLoader__.load({
 
 
 .dsh-studio-workbench .dsh-studio-layer-list>button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Paint-order drag: the row is its own handle, the sibling under the pointer is
+   the socket. Graphite stone/copper only; no blue and no new surface colours. */
+.dsh-studio-workbench .dsh-studio-layer-list>button[data-layer-id]{cursor:pointer;user-select:none;-webkit-user-select:none}
+.dsh-studio-workbench .dsh-studio-layer-list>button.dsh-studio-layer-dragging{opacity:.55!important;cursor:grabbing}
+.dsh-studio-workbench .dsh-studio-layer-list>button.dsh-studio-drop-target{background:#4b4035!important;color:#f1ebe2;box-shadow:inset 0 0 0 1px #c7ad8e;cursor:grabbing}
+.dsh-studio-workbench .dsh-studio-layer-list>button.dsh-studio-drop-refused{background:#3d2f2d!important;color:#f0d6d0;box-shadow:inset 0 0 0 1px #8a4b45;cursor:not-allowed}
+.dsh-studio-workbench .dsh-studio-grip{margin-left:2px;color:#8f9aa9;font-size:12px;line-height:1;letter-spacing:-1px;opacity:0;cursor:grab;transition:opacity .12s ease}
+.dsh-studio-workbench .dsh-studio-layer-list>button:hover .dsh-studio-grip,
+.dsh-studio-workbench .dsh-studio-layer-list>button:focus-visible .dsh-studio-grip{opacity:.7}
+.dsh-studio-workbench .dsh-studio-layer-list>button.dsh-studio-layer-dragging .dsh-studio-grip{opacity:1}
+.dsh-studio-workbench .dsh-studio-drop-status{position:absolute;left:0;right:0;bottom:0;z-index:12;pointer-events:none;background:#262a31;border-top:1px solid #3d434c;padding:7px 12px;font-size:10.5px;line-height:1.45;color:#d8c3a6;box-shadow:0 -6px 18px #0006}
+.dsh-studio-workbench .dsh-studio-drop-status[data-invalid=true]{color:#e7b2a8}
+.dsh-studio-workbench .dsh-studio-sidebar{position:relative}
 .dsh-studio-workbench .dsh-studio-toolbar button[data-tool]{flex-shrink:0}
 .dsh-studio-workbench[data-preview=true] .dsh-studio-layout{grid-template-columns:minmax(0,1fr)}
 .dsh-studio-workbench[data-preview=true] .dsh-studio-layout>.dsh-studio-rail,
@@ -435,9 +448,34 @@ window.__ModuleLoader__.load({
       const [layerMenu,setLayerMenu] = React.useState(null)
       const layerMenuRef = React.useRef(null)
       const layerMenuTriggerRef = React.useRef(null)
+      // Pointer-based paint-order gesture. The row itself is the handle: moving
+      // 4px starts the preview, hovering a sibling highlights the drop socket,
+      // and only the drop sends one `svg-order` patch. Hovering and dragging
+      // never write, because no request is issued before pointerup.
+      const [layerDrag,setLayerDrag] = React.useState(null)
+      const layerDragRef = React.useRef(null)
+      const layerDragClickRef = React.useRef(false)
       React.useEffect(()=>{
         if(layerMenu) layerMenuRef.current?.querySelector('button[role="menuitem"]:not(:disabled)')?.focus()
       },[layerMenu])
+      // A gesture can lose both pointerup and lostpointercapture (release outside
+      // the window). Nothing is written, but the preview must not stay stuck.
+      React.useEffect(()=>{
+        // Guarded: the harness and unit doubles expose a minimal window.
+        if(typeof window==='undefined' || typeof window.addEventListener!=='function')return undefined
+        const reset=()=>{
+          if(!layerDragRef.current)return
+          layerDragRef.current=null
+          setLayerDrag(null)
+        }
+        const view=typeof document!=='undefined' && typeof document.addEventListener==='function'?document:null
+        window.addEventListener('blur',reset)
+        view?.addEventListener('visibilitychange',reset)
+        return ()=>{
+          window.removeEventListener('blur',reset)
+          view?.removeEventListener('visibilitychange',reset)
+        }
+      },[])
       // In-memory clipboard: the copied element's exact source slice, so a paste
       // can land in the same document or in another one. Nothing is written to
       // the system clipboard and nothing leaves the renderer until a paste.
@@ -874,6 +912,156 @@ window.__ModuleLoader__.load({
           else fallback?.focus()
         }
       }
+      /**
+       * Identity of a layer's parent, used only to decide whether two rows are
+       * siblings. `svg-order` moves one exact span among its *real* siblings,
+       * so a drag between different parents must be refused rather than
+       * guessed. Named parents are exact (`parentId`); depth 1 is the `<svg>`
+       * root. An anonymous parent below the root cannot be identified from the
+       * Host metadata (ids only, no parent spans), so it is reported as
+       * unprovable instead of being treated as equal to another anonymous one.
+       */
+      function layerParentKey(node) {
+        if(!node || node.structure===false || !Number.isInteger(node.depth)) return null
+        if(node.depth===0) return 'root'
+        if(node.parentId) return 'id:'+node.parentId
+        if(node.depth===1) return 'root'
+        return null
+      }
+      /** A locked ancestor locks its descendants for every mutation. */
+      function layerLockedByAncestor(node) {
+        const ancestors=Array.isArray(node?.ancestorIds)?node.ancestorIds:[]
+        return ancestors.some(id=>nodes.find(item=>item.id===id)?.locked===true)
+      }
+      /** Row id under a viewport point, or '' when the pointer is outside rows. */
+      function layerRowAtPoint(x,y) {
+        if(typeof document==='undefined' || typeof document.elementFromPoint!=='function')return ''
+        const element=document.elementFromPoint(x,y)
+        const row=element?.closest?.('[data-layer-id]')
+        return row?.getAttribute?.('data-layer-id')||''
+      }
+      /**
+       * Decide how a drop onto `targetId` would reorder `sourceId`.
+       *
+       * The direction is derived from the two rows' position inside the *same*
+       * parent: later sibling means `forward` (towards the front / down the
+       * list), earlier sibling means `backward`. svg-order exposes one step
+       * (and the two extremes); it has no "insert at index" direction, so a
+       * drop always stays one atomic revision-checked patch -- exactly one
+       * Undo step -- and never patches bytes itself. Dropping on a distant row
+       * therefore moves one rank towards it; the menu and Ctrl+Shift+] /
+       * Ctrl+Shift+[ keep the multi-rank moves explicit.
+       */
+      function layerDropPlan(sourceId,targetId) {
+        const from=nodes.find(node=>node.id===sourceId)
+        const to=targetId?nodes.find(node=>node.id===targetId):null
+        if(!from)return {ok:false,reason:'Calque source introuvable.'}
+        if(!to)return {ok:false,reason:'Déposez le calque sur une autre ligne de calque.'}
+        if(from.id===to.id)return {ok:false,same:true}
+        if(from.depth===0) {
+          return {ok:false,reason:'La racine SVG ne peut pas être réordonnée.'}
+        }
+        if(from.structure===false) {
+          return {ok:false,reason:'Structure SVG indisponible pour ce calque : utilisez Ctrl+] ou Ctrl+[.'}
+        }
+        if(from.readOnly) {
+          return {ok:false,reason:'Ce contenu SVG référencé est en lecture seule.'}
+        }
+        if(from.locked || layerLockedByAncestor(from)) {
+          return {ok:false,reason:'Calque verrouillé : déverrouillez-le avant de le réordonner.'}
+        }
+        const fromParent=layerParentKey(from)
+        const toParent=layerParentKey(to)
+        if(fromParent===null || toParent===null) {
+          return {ok:false,
+            reason:'Impossible de vérifier que ces calques sont frères (groupe sans id) : utilisez Ctrl+] ou Ctrl+[.'}
+        }
+        if(fromParent!==toParent) {
+          return {ok:false,
+            reason:'Parents différents : le réordonnancement n’est possible qu’entre calques frères.'}
+        }
+        const fromIndex=from.siblingIndex
+        const toIndex=to.siblingIndex
+        if(!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex===toIndex) {
+          return {ok:false,reason:'Position des calques indisponible : utilisez Ctrl+] ou Ctrl+[.'}
+        }
+        // One drop is exactly one rank (one atomic patch, one Undo). Highlighting
+        // a distant row as the socket would promise a move to that position, so
+        // only the adjacent sibling is a valid socket; further moves stay
+        // explicit through the menu and Ctrl+] / Ctrl+[.
+        if(Math.abs(fromIndex-toIndex)!==1) {
+          return {ok:false,
+            reason:'Déposez sur le calque voisin : un dépôt déplace d’un seul plan (Ctrl+] / Ctrl+[ pour répéter).'}
+        }
+        return {ok:true,direction:fromIndex<toIndex?'forward':'backward',from,to}
+      }
+      function startLayerDrag(event,id) {
+        // A click (and Ctrl/Cmd/Shift selection) must stay a click until the
+        // pointer really moved; nothing is prevented or written here.
+        layerDragClickRef.current=false
+        if(event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || layerMenu)return
+        if(!doc || doc.format!=='svg' || !nodes.some(node=>node.id===id))return
+        layerDragRef.current={id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+          started:false,overId:'',plan:null}
+        // Capture only routes pointermove/up back to this row; it does not start
+        // the gesture and it never suppresses the click that follows pointerup.
+        try{event.currentTarget?.setPointerCapture?.(event.pointerId)}catch(_){}
+      }
+      function moveLayerDrag(event) {
+        const gesture=layerDragRef.current
+        if(!gesture || gesture.pointerId!==event.pointerId)return
+        if(!gesture.started) {
+          if(Math.abs(event.clientX-gesture.startX)<4 && Math.abs(event.clientY-gesture.startY)<4)return
+          gesture.started=true
+          // Selection follows the dragged row, exactly as the context menu
+          // targets the row the user acted on.
+          select(gesture.id)
+        }
+        const overId=layerRowAtPoint(event.clientX,event.clientY)
+        const plan=layerDropPlan(gesture.id,overId)
+        gesture.overId=overId
+        gesture.plan=plan
+        // Preview only: this function never calls save().
+        setLayerDrag(previous=>previous && previous.id===gesture.id && previous.overId===overId &&
+          previous.plan?.ok===plan.ok && previous.plan?.direction===plan.direction &&
+          previous.plan?.same===plan.same && previous.plan?.reason===plan.reason
+          ? previous : {id:gesture.id,overId,plan})
+      }
+      function endLayerDrag(event,cancelled=false) {
+        const gesture=layerDragRef.current
+        if(!gesture || gesture.pointerId!==event.pointerId)return
+        layerDragRef.current=null
+        setLayerDrag(null)
+        if(!gesture.started)return
+        // The synthetic click that follows the drop must not re-select (or undo
+        // the selection made at drag start).
+        layerDragClickRef.current=true
+        if(cancelled)return
+        const overId=layerRowAtPoint(event.clientX,event.clientY)||gesture.overId
+        const plan=layerDropPlan(gesture.id,overId)
+        if(!plan.ok) {
+          // Same row: no write and no error, just a quiet acknowledgement.
+          if(plan.same){setNotice('Calque déposé sur lui-même : aucun changement.');return}
+          setNotice('')
+          setError(plan.reason)
+          return
+        }
+        if(refuseTextDraft())return
+        if(busy){setNotice('Enregistrement en cours : réessayez dans un instant.');return}
+        if(reloadRequired) {
+          setError('Document state uncertain. Reload the file before making further changes.')
+          return
+        }
+        if(!doc || doc.format!=='svg')return
+        if(source!==doc.source) {
+          setError('Unsaved source changes: save or discard them first')
+          return
+        }
+        setError('')
+        setNotice('')
+        // The one and only write: the same Host path as Ctrl+] / the menu.
+        void reorderLayer(plan.direction,gesture.id)
+      }
       function onLayerMenuKeyDown(event) {
         // Leave Enter/Space defaults to native buttons, but never canvas shortcuts.
         event.stopPropagation()
@@ -1001,6 +1189,15 @@ window.__ModuleLoader__.load({
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
         if(event.key==='Escape' && layerMenu) {event.preventDefault();closeLayerMenu();return}
+        if(event.key==='Escape' && layerDragRef.current) {
+          // Cancel the gesture without writing; the pointerup that follows is
+          // ignored and its synthetic click is suppressed.
+          event.preventDefault()
+          layerDragRef.current=null
+          setLayerDrag(null)
+          layerDragClickRef.current=true
+          return
+        }
         if(event.key==='Escape' && (dragRef.current || pathDragRef.current || penGestureRef.current)) {
           event.preventDefault()
           dragRef.current=null;pathDragRef.current=null
@@ -1965,23 +2162,55 @@ window.__ModuleLoader__.load({
                   h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
                 (nodes.length?nodes.filter(n=>!layerSearch||
                     (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>h('button',{key:n.id,
-                  type:'button',className:'dsh-studio-item'+(active===n.id?' dsh-studio-active':''),
+                  type:'button',className:'dsh-studio-item'+(active===n.id?' dsh-studio-active':'')+
+                    (layerDrag?.id===n.id?' dsh-studio-layer-dragging':'')+
+                    (layerDrag?.overId===n.id&&layerDrag?.plan?.ok?' dsh-studio-drop-target':'')+
+                    (layerDrag?.overId===n.id&&layerDrag?.plan&&!layerDrag.plan.ok&&!layerDrag.plan.same
+                      ?' dsh-studio-drop-refused':''),
+                  'data-layer-id':n.id,
+                  title:'Glisser pour réordonner · Ctrl+] avancer · Ctrl+[ reculer',
                   'aria-label':'Select layer '+n.tag+' #'+n.id+
                     (n.hidden?' (hidden)':'')+(n.locked?' (locked)':'')+
                     (extraSelection.includes(n.id)?' (in selection)':''),
                   'aria-pressed':active===n.id,
                   style:{width:'100%',paddingLeft:10+(Math.max(0,Math.min(12,n.depth||0))*11),
                     opacity:n.hidden?0.55:1,...(extraSelection.includes(n.id)&&active!==n.id?{background:'#3a3630'}:{})},
-                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey)),
+                  onClick:event=>{
+                    // A drop ends with a synthetic click; it must not re-select
+                    // (or extend) the row the pointer happened to land on.
+                    if(layerDragClickRef.current){layerDragClickRef.current=false;return}
+                    select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))
+                  },
+                  onPointerDown:event=>startLayerDrag(event,n.id),
+                  onPointerMove:event=>moveLayerDrag(event),
+                  onPointerUp:event=>endLayerDrag(event),
+                  onPointerCancel:event=>endLayerDrag(event,true),
+                  onLostPointerCapture:()=>{
+                    const gesture=layerDragRef.current
+                    if(!gesture)return
+                    layerDragRef.current=null
+                    setLayerDrag(null)
+                    // A lost capture without a real drag must not swallow the
+                    // click that follows a plain selection.
+                    if(gesture.started)layerDragClickRef.current=true
+                  },
                   onContextMenu:event=>openLayerMenu(event,n.id),
                   onKeyDown:event=>{
                     if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10'))openLayerMenu(event,n.id)
                   }},
                    h('span',{className:'dsh-studio-mini'},n.isGroup?'▤':n.tag==='text'?'T':n.tag==='ellipse'||n.tag==='circle'?'◯':n.tag==='path'?'⌁':'▢'),
                    h('span',{className:'dsh-studio-label'},n.tag+' #'+n.id),
-                   h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'))):
+                   h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'),
+                   h('span',{className:'dsh-studio-grip','aria-hidden':'true'},'⠿'))):
                   h('small',null,'Aucun nœud SVG adressable (un id unique est requis).'))),
-            h('div',{className:'dsh-studio-panel-note'},'Cliquez un calque pour le sélectionner ; les propriétés apparaissent à droite. Les fichiers du projet sont dans l’état d’accueil du canevas.')),
+            layerDrag&&h('div',{className:'dsh-studio-drop-status',role:'status','data-layer-drop-status':'',
+              'data-invalid':layerDrag.plan&&!layerDrag.plan.ok&&!layerDrag.plan.same?'true':'false'},
+              layerDrag.plan?.same?'Même ligne : aucun déplacement.'
+                :layerDrag.plan?.ok?(layerDrag.plan.direction==='forward'
+                  ?'Déposer pour avancer d’un plan (Ctrl+])'
+                  :'Déposer pour reculer d’un plan (Ctrl+[)')
+                :layerDrag.plan?.reason||'Déposez sur une ligne sœur pour changer l’ordre de peinture.'),
+            h('div',{className:'dsh-studio-panel-note'},'Cliquez un calque pour le sélectionner ; les propriétés apparaissent à droite. Glissez une ligne sur une autre pour changer l’ordre de peinture (Ctrl+] / Ctrl+[ restent disponibles).')),
           h('main',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{display:'flex',flexDirection:'column',minWidth:0}},
             h('div',{className:'dsh-studio-stage-top'},
               h('b',{title:doc?.file||'Document'},doc?.file||'Document'),

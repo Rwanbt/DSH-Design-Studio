@@ -26,7 +26,7 @@ import { landingSpec, landingEmptySpec } from './landing.mjs'
 import { createSpec, createCssSpec, createFeedbackSpec, createRefusalSpec } from './create.mjs'
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
 import { renameFileSpec, deleteFileSpec, cancelDeleteSpec } from './file-admin.mjs'
-import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderSpec } from './layer-menu.mjs'
+import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderSpec, layerDragSpec } from './layer-menu.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -55,6 +55,7 @@ export const specs = [
   copyPasteSpec,
   pasteMenuSpec,
   reorderSpec,
+  layerDragSpec,
   deleteFileSpec,
   cancelDeleteSpec,
   panelUnavailableSpec,

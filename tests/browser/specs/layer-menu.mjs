@@ -285,3 +285,283 @@ export const reorderSpec = {
     (await harness.read('ordre.svg')))
   },
 }
+
+/**
+ * Real pointer drag between layer rows.
+ *
+ * The row itself is the handle: a >4px pointer move starts the preview, the
+ * sibling under the pointer is highlighted, and only pointerup sends the same
+ * `svg-order` patch the menu and Ctrl+] use. These assertions read the real
+ * bytes on disk and count real Host calls, so "no write before the drop" is not
+ * inferred from the UI.
+ */
+async function dragLayerRow(page, source, target, { steps = 8, beforeRelease = null } = {}) {
+  const from = await source.boundingBox()
+  const to = await target.boundingBox()
+  if (!from || !to) throw new Error('layer row geometry unavailable')
+  const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
+  const end = { x: to.x + to.width / 2, y: to.y + to.height / 2 }
+  // A real pointer gesture: mouse.down → several mouse.move → mouse.up, so the
+  // row's capture/preview logic is exercised exactly as a user would.
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  for (let step = 1; step <= steps; step += 1) {
+    await page.mouse.move(start.x + ((end.x - start.x) * step) / steps,
+      start.y + ((end.y - start.y) * step) / steps)
+  }
+  if (beforeRelease) await beforeRelease()
+  await page.mouse.up()
+}
+
+export const layerDragSpec = {
+  name: 'drag: dropping a layer row sends one svg-order patch, never writes before the drop and refuses another parent',
+  async run({ page, harness, assert }) {
+    // Count the real Host mutations. Reading bytes alone could miss a write
+    // that was refused, so both signals are asserted.
+    let applies = 0
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/design-studio-native/apply')) applies += 1
+    })
+    const order = (text) => [...text.matchAll(/id="(bg|card|dot|title)"/g)].map((match) => match[1])
+    const row = (name) => page.getByRole('button', { name, exact: true })
+
+    // --- 1. hover, then a real drag: no write until the drop ----------------
+    await harness.write('glisser.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'glisser.svg', { expect: 'svg' })
+    const bg = row('Select layer rect #bg')
+    const card = row('Select layer rect #card')
+    const dot = row('Select layer circle #dot')
+    assert.deepEqual(order(await harness.read('glisser.svg')), ['bg', 'card', 'dot', 'title'])
+
+    await card.hover()
+    await page.waitForTimeout(150)
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'a simple hover must not write')
+    assert.equal(applies, 0, 'a simple hover must not call the Host')
+    // A discrete grip marks the row as draggable without adding a tab stop.
+    assert.equal(await bg.locator('.dsh-studio-grip').getAttribute('aria-hidden'), 'true')
+    assert.equal(await bg.locator('.dsh-studio-grip').innerText(), '⠿')
+
+    await dragLayerRow(page, bg, card, {
+      beforeRelease: async () => {
+        // The sibling under the pointer is the highlighted drop socket, and the
+        // status names the one-step direction before anything is written.
+        await page.waitForFunction(() =>
+          document.querySelector('[data-layer-id="card"]')?.classList.contains('dsh-studio-drop-target'))
+        const status = page.locator('[data-layer-drop-status]')
+        await status.waitFor({ state: 'visible', timeout: 10000 })
+        assert.match(await status.innerText(), /avancer d’un plan/)
+        // Graphite stone/copper highlight and a real grabbing cursor, measured
+        // on the live DOM rather than inferred from the class name.
+        const targetPaint = await card.evaluate((node) => {
+          const style = getComputedStyle(node)
+          return { background: style.backgroundColor, cursor: style.cursor }
+        })
+        assert.equal(targetPaint.background, 'rgb(75, 64, 53)',
+          'the drop socket must use the Graphite copper-stone surface, not a blue highlight')
+        assert.equal(targetPaint.cursor, 'grabbing', 'the drop socket must show a grabbing cursor')
+        assert.equal(await bg.evaluate((node) => getComputedStyle(node).opacity), '0.55',
+          'the dragged row dims without touching the document')
+        assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'the drag itself must not write')
+        assert.equal(applies, 0, 'the drag itself must not call the Host')
+      },
+    })
+    const dragged = await waitForDisk(harness, 'glisser.svg',
+      (text) => JSON.stringify(order(text)) === JSON.stringify(['card', 'bg', 'dot', 'title']))
+    assert.equal(applies, 1, 'the drop is exactly one Host write (svg-order)')
+    // Untouched bytes survive and the moved layer keeps its exact slice.
+    assert.ok(dragged.includes('<!-- editable demo; comments and unfamiliar attributes must survive -->'))
+    assert.ok(dragged.includes('<rect id="bg" x="0" y="0" width="600" height="400" fill="#f4f1ea"/>'))
+    assert.ok(dragged.includes('<rect id="card" x="40" y="40" width="240" height="140" fill="#bda991" rx="8" data-note="keep-me"/>'))
+    assert.ok(dragged.includes('<circle id="dot" cx="420" cy="120" r="48" fill="#3a3f45"/>'))
+    assert.ok(dragged.includes('<text id="title" x="60" y="230" font-family="Inter" font-size="28" fill="#202124">Title</text>'))
+
+    // The drop leaves the selection on the row the user dragged, never on the
+    // socket it happened to land on.
+    assert.equal(await bg.getAttribute('aria-pressed'), 'true',
+      'the dragged layer stays selected after the drop')
+    assert.equal(await card.getAttribute('aria-pressed'), 'false',
+      'the drop socket must not steal the selection')
+
+    // --- 1b. a distant sibling is not a socket: one drop is exactly one rank --
+    const beforeDistant = applies
+    const bytesAtDistant = await harness.read('glisser.svg')
+    await dragLayerRow(page, row('Select layer rect #bg'), row('Select layer text #title'), {
+      beforeRelease: async () => {
+        await page.waitForFunction(() =>
+          document.querySelector('[data-layer-id="title"]')?.classList.contains('dsh-studio-drop-refused'))
+        assert.match(await page.locator('[data-layer-drop-status]').innerText(), /voisin/)
+      },
+    })
+    await page.getByRole('alert').filter({ hasText: 'voisin' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    assert.equal(await harness.read('glisser.svg'), bytesAtDistant,
+      'a distant socket must be refused instead of promising an unreachable position')
+    assert.equal(applies, beforeDistant, 'a refused distant drop must not call the Host')
+
+    // --- 1c. Escape cancels the gesture without writing ----------------------
+    const beforeEscape = applies
+    const bytesAtEscape = await harness.read('glisser.svg')
+    await dragLayerRow(page, row('Select layer rect #bg'), row('Select layer rect #card'), {
+      beforeRelease: async () => {
+        await page.waitForFunction(() =>
+          document.querySelector('[data-layer-id="card"]')?.classList.contains('dsh-studio-drop-target'))
+        await page.keyboard.press('Escape')
+        await page.waitForFunction(() => !document.querySelector('[data-layer-drop-status]'),
+          null, { timeout: 10000 })
+      },
+    })
+    assert.equal(await harness.read('glisser.svg'), bytesAtEscape, 'Escape must cancel the drop without writing')
+    assert.equal(applies, beforeEscape, 'Escape must not call the Host')
+
+    // --- 2. Undo restores the exact original bytes --------------------------
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForDisk(harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'Undo restores the original bytes exactly')
+    assert.equal(applies, 2, 'Undo is one more Host call')
+
+    // --- 3. dropping on the same row writes nothing -------------------------
+    const beforeSameLine = applies
+    const dotBox = await dot.boundingBox()
+    const centre = { x: dotBox.x + dotBox.width / 2, y: dotBox.y + dotBox.height / 2 }
+    await page.mouse.move(centre.x, centre.y)
+    await page.mouse.down()
+    await page.mouse.move(centre.x, centre.y + 9)
+    await page.mouse.move(centre.x + 14, centre.y + 3)
+    await page.waitForFunction(() =>
+      document.querySelector('[data-layer-drop-status]')?.textContent.includes('Même ligne'))
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'no write while dragging on the same row')
+    await page.mouse.up()
+    await page.locator('[data-created]').filter({ hasText: 'lui-même' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForTimeout(200)
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT, 'a same-row drop must not write')
+    assert.equal(applies, beforeSameLine, 'a same-row drop must not call the Host')
+
+    // --- 4. different parents: explicit refusal, byte-identical file --------
+    const nested = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <g id="gauche">
+    <rect id="un" x="20" y="20" width="100" height="60" fill="#ccbbaa"/>
+    <rect id="deux" x="20" y="100" width="100" height="60" fill="#bbaa99"/>
+  </g>
+  <g id="droite">
+    <rect id="trois" x="300" y="20" width="100" height="60" fill="#aa9988"/>
+    <rect id="quatre" x="300" y="100" width="100" height="60" fill="#998877"/>
+  </g>
+</svg>
+`
+    await harness.write('parents.svg', nested)
+    await openWorkspaceFile(page, 'parents.svg', { expect: 'svg' })
+    const beforeCross = applies
+    await dragLayerRow(page, row('Select layer rect #un'), row('Select layer rect #trois'), {
+      beforeRelease: async () => {
+        await page.waitForFunction(() =>
+          document.querySelector('[data-layer-id="trois"]')?.classList.contains('dsh-studio-drop-refused'))
+        assert.match(await page.locator('[data-layer-drop-status]').innerText(), /Parents différents/)
+        const refused = await page.locator('[data-layer-id="trois"]').evaluate((node) => {
+          const style = getComputedStyle(node)
+          return { background: style.backgroundColor, cursor: style.cursor }
+        })
+        assert.equal(refused.background, 'rgb(61, 47, 45)',
+          'the refused socket must use the muted error surface, not an applied highlight')
+        assert.equal(refused.cursor, 'not-allowed', 'the refused socket must show a not-allowed cursor')
+        assert.equal(await harness.read('parents.svg'), nested, 'a cross-parent preview must not write')
+      },
+    })
+    await page.getByRole('alert').filter({ hasText: 'Parents différents' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    assert.equal(await harness.read('parents.svg'), nested,
+      'a cross-parent drop must leave the file byte-identical')
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT)
+    assert.equal(applies, beforeCross, 'a cross-parent drop must not call the Host')
+
+    // --- 5. locked source: explicit refusal, no write -----------------------
+    const lockedDocument = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <rect id="fixe" data-locked="true" x="20" y="20" width="120" height="80" fill="#ccbbaa"/>
+  <rect id="mobile" x="200" y="20" width="120" height="80" fill="#bbaa99"/>
+</svg>
+`
+    await harness.write('verrouille.svg', lockedDocument)
+    await openWorkspaceFile(page, 'verrouille.svg', { expect: 'svg' })
+    const beforeLocked = applies
+    await dragLayerRow(page, row('Select layer rect #fixe (locked)'), row('Select layer rect #mobile'), {
+      beforeRelease: async () => {
+        assert.match(await page.locator('[data-layer-drop-status]').innerText(), /verrouillé/)
+      },
+    })
+    await page.getByRole('alert').filter({ hasText: 'verrouillé' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    assert.equal(await harness.read('verrouille.svg'), lockedDocument,
+      'a locked layer must never be reordered')
+    assert.equal(applies, beforeLocked, 'a locked layer drop must not call the Host')
+
+    // --- 6. root layer: explicit refusal, no write --------------------------
+    const rootDocument = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" id="racine" width="300" height="200" viewBox="0 0 300 200">
+  <rect id="enfant" x="20" y="20" width="120" height="80" fill="#ccbbaa"/>
+</svg>
+`
+    await harness.write('racine.svg', rootDocument)
+    await openWorkspaceFile(page, 'racine.svg', { expect: 'svg' })
+    const beforeRoot = applies
+    await dragLayerRow(page, row('Select layer svg #racine'), row('Select layer rect #enfant'))
+    await page.getByRole('alert').filter({ hasText: 'racine SVG' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    assert.equal(await harness.read('racine.svg'), rootDocument, 'the SVG root must never be reordered')
+    assert.equal(applies, beforeRoot, 'a root drop must not call the Host')
+
+    // --- 7. drag is not the only path: the shortcuts still reorder ----------
+    await openWorkspaceFile(page, 'glisser.svg', { expect: 'svg' })
+    const keyboardCard = row('Select layer rect #card')
+    await keyboardCard.click()
+    await keyboardCard.focus()
+    const beforeKeyboard = applies
+    await page.keyboard.press('Control+]')
+    const forwarded = await waitForDisk(harness, 'glisser.svg',
+      (text) => JSON.stringify(order(text)) === JSON.stringify(['bg', 'dot', 'card', 'title']))
+    assert.ok(forwarded.includes('<rect id="card" x="40" y="40" width="240" height="140" fill="#bda991" rx="8" data-note="keep-me"/>'))
+    assert.equal(applies, beforeKeyboard + 1, 'Ctrl+] keeps using the same single Host path')
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.keyboard.press('Control+[')
+    await waitForDisk(harness, 'glisser.svg',
+      (text) => JSON.stringify(order(text)) === JSON.stringify(['bg', 'card', 'dot', 'title']))
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT,
+      'the keyboard round trip is byte-exact too')
+
+    // --- 7b. backward drag moves the other way, still one atomic patch -------
+    const beforeBackward = applies
+    // card (index 1) onto bg (index 0) is an adjacent *backward* move and sits at
+    // the top of the list, so the gesture never depends on scroll position.
+    await dragLayerRow(page, row('Select layer rect #card'), row('Select layer rect #bg'))
+    const backwards = await waitForDisk(harness, 'glisser.svg',
+      (text) => JSON.stringify(order(text)) === JSON.stringify(['card', 'bg', 'dot', 'title']))
+    assert.ok(backwards.includes('<circle id="dot" cx="420" cy="120" r="48" fill="#3a3f45"/>'),
+      'the moved layer keeps its exact bytes')
+    assert.ok(applies > beforeBackward, 'a backward drop reaches the Host')
+    assert.ok(applies - beforeBackward <= 1, 'a backward drop is at most one Host write: ' + (applies - beforeBackward))
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForDisk(harness, 'glisser.svg', (text) => text === SVG_DOCUMENT)
+
+    // --- 8. an unsaved text draft blocks the drop, like every other action ---
+    // The draft lives only in memory; a drag must not bypass it and write.
+    await row('Select layer text #title').click()
+    const textDraft = page.getByLabel('Text content', { exact: true })
+    await textDraft.fill('Brouillon non enregistré')
+    const beforeDraft = applies
+    await dragLayerRow(page, row('Select layer rect #bg'), row('Select layer rect #card'), {
+      beforeRelease: async () => {
+        assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT,
+          'a pending text draft must not be flushed by the drag preview')
+      },
+    })
+    await page.getByRole('alert').filter({ hasText: 'Texte non enregistré' })
+      .waitFor({ state: 'visible', timeout: 10000 })
+    assert.equal(await harness.read('glisser.svg'), SVG_DOCUMENT,
+      'an unsaved text draft must refuse the drop without writing')
+    assert.equal(applies, beforeDraft, 'a draft refusal must not call the Host')
+    assert.equal(await textDraft.inputValue(), 'Brouillon non enregistré', 'the draft is preserved, not discarded')
+  },
+}
