@@ -23,6 +23,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { checkDesktopShell } from './desktop-shell.mjs'
 import { disposableEnvironment } from './environment.mjs'
+import { stopServer } from './real-dsh-lifecycle.mjs'
+import { checkSidebar, sessionWorkspaceFromRegistry } from './real-dsh-web.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../..')
@@ -72,14 +74,14 @@ async function main() {
   // exist on disk and the binary is the interpreter for every CLI call.
   if (!existsSync(binary) || !existsSync(archive)) {
     record('resolve DSH installation', 'NOT_RUN', `no DeepSeek Harness installation at ${installRoot}`)
-    return finish()
+    return
   }
   record('resolve DSH installation', 'PASS', `${binary} (${(await stat(binary)).size} bytes), archive present`)
 
   const playwright = await loadPlaywright()
   if (!playwright) {
     record('resolve Playwright', 'NOT_RUN', 'set DSH_E2E_PLAYWRIGHT or run npm install')
-    return finish()
+    return
   }
 
   // Opt-in: a real turn needs a provider. With DSH_E2E_REUSE_CREDENTIALS=1 the
@@ -91,66 +93,73 @@ async function main() {
   const modelProvider = process.env.DSH_E2E_MODEL_PROVIDER || ''
   const modelName = process.env.DSH_E2E_MODEL || ''
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-g0-'))
-  const { cliEnv: childEnv, browserEnv, directories } = disposableEnvironment(root, process.env)
-  for (const directory of directories) await mkdir(directory, { recursive: true })
-  // A registered workspace is a user-level precondition. The headless host
-  // cannot open the native folder picker, so the disposable profile is seeded
-  // with exactly what the desktop writes when a user adds a folder. Everything
-  // after this point (Host services, sessions, routes, saves) is real.
-  const workspaceDir = path.join(childEnv.HOME, 'Documents/deepseek-harness/default-workspace')
-  await mkdir(workspaceDir, { recursive: true })
-  const workspaceId = randomUUID()
-  await mkdir(path.join(childEnv.DSH_HOME, 'storages'), { recursive: true })
-  let credentialCopy = null
-  if (reuseCredentials) {
-    const sourceCredentials = path.join(path.dirname(process.env.DSH_HOME || path.join(os.homedir(), '.dsh')), '.dsh/.credentials.yaml')
-    for (const candidate of [sourceCredentials, path.join(os.homedir(), '.dsh/.credentials.yaml')]) {
-      if (existsSync(candidate)) {
-        credentialCopy = path.join(childEnv.DSH_HOME, '.credentials.yaml')
-        await copyFile(candidate, credentialCopy)
-        await chmod(credentialCopy, 0o600)
-        break
+  let server = null
+  let serverClosed = true
+  try {
+    const { cliEnv: childEnv, browserEnv, directories } = disposableEnvironment(root, process.env)
+    for (const directory of directories) await mkdir(directory, { recursive: true })
+    // A registered workspace is a user-level precondition. The headless host
+    // cannot open the native folder picker, so the disposable profile is seeded
+    // with the registry format the desktop writes when a user adds folders. Everything
+    // after this point (Host services, sessions, routes, saves) is real.
+    const workspaceDir = path.join(childEnv.HOME, 'Documents/deepseek-harness/default-workspace')
+    await mkdir(workspaceDir, { recursive: true })
+    const workspaceId = randomUUID()
+    const otherWorkspaceId = randomUUID()
+    const otherWorkspaceDir = path.join(root, 'empty-workspace')
+    await mkdir(otherWorkspaceDir, { recursive: true })
+    const document = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">\n  <rect id="box" x="10" y="10" width="40" height="30" fill="#bda991"/>\n</svg>\n'
+    await writeFile(path.join(workspaceDir, 'g0-art.svg'), document, 'utf8')
+    await mkdir(path.join(childEnv.DSH_HOME, 'storages'), { recursive: true })
+    let credentialCopy = null
+    if (reuseCredentials) {
+      const sourceCredentials = path.join(path.dirname(process.env.DSH_HOME || path.join(os.homedir(), '.dsh')), '.dsh/.credentials.yaml')
+      for (const candidate of [sourceCredentials, path.join(os.homedir(), '.dsh/.credentials.yaml')]) {
+        if (existsSync(candidate)) {
+          credentialCopy = path.join(childEnv.DSH_HOME, '.credentials.yaml')
+          await copyFile(candidate, credentialCopy)
+          await chmod(credentialCopy, 0o600)
+          break
+        }
       }
     }
-  }
-  record('reuse caller credentials for a real turn',
-    reuseCredentials ? (credentialCopy ? 'PASS' : 'NOT_RUN') : 'NOT_RUN',
-    reuseCredentials
-      ? (credentialCopy ? 'copied into the disposable DSH_HOME (mode 600, deleted at the end)' : 'no credential file found')
-      : 'disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)')
+    record('reuse caller credentials for a real turn',
+      reuseCredentials ? (credentialCopy ? 'PASS' : 'NOT_RUN') : 'NOT_RUN',
+      reuseCredentials
+        ? (credentialCopy ? 'copied into the disposable DSH_HOME (mode 600, deleted at the end)' : 'no credential file found')
+        : 'disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)')
 
-  await writeFile(path.join(childEnv.DSH_HOME, 'storages/workspace.json'), JSON.stringify({
-    unit: { name: 'workspace', version: 2 },
-    global: { initialized: true, workspaceIds: [workspaceId], archivedSessionIds: [], pinnedSessionIds: [] },
-    tables: { workspaces: { [workspaceId]: { path: workspaceDir, title: 'e2e-workspace',
-      sessionIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } } },
-  }, null, 2) + '\n', 'utf8')
-  const nodeBin = process.env.DSH_E2E_NODE || binary
-  /** Run the real dsh CLI to completion and capture both streams. */
-  const run = (cliArgs, { timeout = 180000 } = {}) => new Promise((resolve) => {
-    const child = spawn(nodeBin, ['--expose-internals', cli, ...cliArgs], { env: childEnv })
-    let out = ''
-    let err = ''
-    const timer = setTimeout(() => child.kill('SIGKILL'), timeout)
-    child.stdout.on('data', (chunk) => { out += chunk })
-    child.stderr.on('data', (chunk) => { err += chunk })
-    child.on('close', (code) => { clearTimeout(timer); resolve({ code, out, err }) })
-    child.on('error', (error) => { clearTimeout(timer); resolve({ code: -1, out, err: String(error) }) })
-  })
+    await writeFile(path.join(childEnv.DSH_HOME, 'storages/workspace.json'), JSON.stringify({
+      unit: { name: 'workspace', version: 2 },
+      global: { initialized: true, workspaceIds: [otherWorkspaceId, workspaceId], archivedSessionIds: [], pinnedSessionIds: [] },
+      tables: { workspaces: { [otherWorkspaceId]: { path: otherWorkspaceDir, title: 'e2e-empty-workspace',
+        sessionIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, [workspaceId]: { path: workspaceDir, title: 'e2e-workspace',
+        sessionIds: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } } },
+    }, null, 2) + '\n', 'utf8')
+    const nodeBin = process.env.DSH_E2E_NODE || binary
+    /** Run the real dsh CLI to completion and capture both streams. */
+    const run = (cliArgs, { timeout = 180000 } = {}) => new Promise((resolve) => {
+      const child = spawn(nodeBin, ['--expose-internals', cli, ...cliArgs], { env: childEnv })
+      let out = ''
+      let err = ''
+      const timer = setTimeout(() => child.kill('SIGKILL'), timeout)
+      child.stdout.on('data', (chunk) => { out += chunk })
+      child.stderr.on('data', (chunk) => { err += chunk })
+      child.on('close', (code) => { clearTimeout(timer); resolve({ code, out, err }) })
+      child.on('error', (error) => { clearTimeout(timer); resolve({ code: -1, out, err: String(error) }) })
+    })
 
-  let server = null
-  try {
     const created = await run(['--profile', 'e2e', '--from-default-profile', 'web', '--dump-config'])
     if (created.code !== 0) {
       record('create disposable profile', 'FAIL', `dsh exited ${created.code}: ${created.err.slice(0, 300)}`)
-      return finish()
+      return
     }
     record('create disposable profile', 'PASS', `${childEnv.DSH_HOME}/profiles/e2e (shipped web template)`)
 
     const installed = await run(['plugin', '--profile', 'e2e', 'add', 'link:' + repoRoot])
     if (installed.code !== 0) {
       record('install plugin into profile', 'FAIL', `dsh plugin exited ${installed.code}: ${installed.err.slice(0, 400)}`)
-      return finish()
+      return
     }
     const profileJson = JSON.parse(await readFile(path.join(childEnv.DSH_HOME, 'profiles/e2e/package.json'), 'utf8'))
     const registered = profileJson?.dsh?.profile?.bundles?.includes('@rwanbt/dsh-design-studio')
@@ -159,17 +168,21 @@ async function main() {
 
     // Boot the real web application on an ephemeral port.
     const bootArgs = ['--expose-internals', cli, '--profile', 'e2e']
-    if (modelProvider && modelName) {
+    if (credentialCopy && modelProvider && modelName) {
       const overlay = path.join(root, 'model.yml')
       await writeFile(overlay, '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n'
         + '  config:\n    provider: ' + JSON.stringify(modelProvider) + '\n    model: ' + JSON.stringify(modelName) + '\n', 'utf8')
       bootArgs.push('--patch', overlay)
       record('model overlay for a real turn', 'PASS', `${modelProvider}/${modelName} (no secret is logged)`)
     } else {
-      record('model overlay for a real turn', 'NOT_RUN', 'set DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL to enable')
+      record('model overlay for a real turn', 'NOT_RUN', 'requires explicit credential reuse plus DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL')
     }
     bootArgs.push('--no-open', '--port', '0', '--host', '127.0.0.1')
     server = spawn(nodeBin, bootArgs, { env: childEnv })
+    serverClosed = false
+    server.once('close', () => { server.dshE2eClosed = true })
+    let serverError = null
+    server.on('error', (error) => { serverError = error })
     let log = ''
     server.stdout.on('data', (chunk) => { log += chunk })
     server.stderr.on('data', (chunk) => { log += chunk })
@@ -177,11 +190,12 @@ async function main() {
     for (let attempt = 0; attempt < 120 && !url; attempt += 1) {
       const match = /(http:\/\/127\.0\.0\.1:\d+\/\?token=[\w-]+)/.exec(log)
       if (match) url = match[1]
+      else if (serverError || server.dshE2eClosed) break
       else await sleep(250)
     }
     if (!url) {
-      record('boot real DSH web app', 'FAIL', 'no URL in: ' + log.slice(-400))
-      return finish()
+      record('boot real DSH web app', 'FAIL', String(serverError || 'no URL in: ' + log.slice(-400)))
+      return
     }
     const origin = new URL(url).origin
     record('boot real DSH web app', 'PASS', origin)
@@ -212,6 +226,24 @@ async function main() {
         }
       }
 
+      const studio = await checkSidebar({ page, workspaceId, otherWorkspaceId, workspaceDir, document, record })
+
+      // Optional evidence capture: the viewport AND the workbench element itself.
+      // An element screenshot is proof that the plugin is really on screen; a bare
+      // viewport shot can be all page chrome if the view sits below the fold.
+      const screenshot = process.env.DSH_E2E_SCREENSHOT
+      if (screenshot) {
+        const target = studio
+        await target.scrollIntoViewIfNeeded().catch(() => {})
+        await page.waitForTimeout(400)
+        await mkdir(path.dirname(path.resolve(screenshot)), { recursive: true })
+        await page.screenshot({ path: path.resolve(screenshot) })
+        const section = studio
+        const elementShot = path.resolve(screenshot).replace(/\.png$/i, '-element.png')
+        const captured = await section.screenshot({ path: elementShot }).then(() => true).catch(() => false)
+        record('screenshot of the real DSH workbench', captured ? 'PASS' : 'FAIL',
+          captured ? `${path.resolve(screenshot)} + ${elementShot}` : 'could not capture the workbench element')
+      }
       const newSession = page.getByRole('button', { name: /^(Nouvelle séance|New session)$/ })
       if (await newSession.count()) {
         await newSession.first().click({ timeout: 15000 }).catch(() => {})
@@ -234,6 +266,19 @@ async function main() {
         sessionId ? sessionId : 'the Web UI did not create a session')
 
       if (sessionId) {
+        // Resolve actual session membership, not the sidebar's independent picker.
+        // Only the two roots created by this runner may receive a fixture.
+        let sessionWorkspace = null
+        for (let attempt = 0; attempt < 40 && !sessionWorkspace; attempt += 1) {
+          const registry = JSON.parse(await readFile(path.join(childEnv.DSH_HOME, 'storages/workspace.json'), 'utf8'))
+          sessionWorkspace = sessionWorkspaceFromRegistry(registry, sessionId, [workspaceDir, otherWorkspaceDir])
+          if (!sessionWorkspace) await sleep(250)
+        }
+        if (!sessionWorkspace) throw new Error('Real session has no persisted workspace membership')
+        const workspace = sessionWorkspace.path
+        await writeFile(path.join(workspace, 'g0-art.svg'), document, 'utf8')
+        record('resolve real session workspace', 'PASS', `registry membership ${sessionWorkspace.id}; fixture written inside its owned root`)
+
         const health = await context.request.get(origin + '/design-studio-native/health')
         const healthBody = await health.json().catch(() => null)
         record('plugin route /health on the real Host',
@@ -245,14 +290,11 @@ async function main() {
         const filesBody = await files.json().catch(() => null)
         const workspaceLabel = filesBody?.files ? `${filesBody.files.length} files` : 'no file payload'
         record('plugin route /files on the real Host',
-          files.status() === 200 && Array.isArray(filesBody?.files) ? 'PASS' : 'FAIL',
+          files.status() === 200 && Array.isArray(filesBody?.files) &&
+            filesBody.files.some(file => file.path === 'g0-art.svg') ? 'PASS' : 'FAIL',
           `HTTP ${files.status()} ${workspaceLabel}`)
 
-        // Write a real document through the real Host write path.
-        const workspace = path.join(childEnv.HOME, 'Documents/deepseek-harness/default-workspace')
-        const document = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">\n  <rect id="box" x="10" y="10" width="40" height="30" fill="#bda991"/>\n</svg>\n'
-        await mkdir(workspace, { recursive: true })
-        await writeFile(path.join(workspace, 'g0-art.svg'), document, 'utf8')
+        // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +
           encodeURIComponent(sessionId) + '&file=g0-art.svg')
         const openedBody = await opened.json().catch(() => null)
@@ -335,24 +377,8 @@ async function main() {
         clientEntry.registersView === true ? 'PASS' : 'FAIL',
         clientEntry.registersView === true ? 'bundle declares conversation.view' : 'the served bundle does not register a conversation view')
 
-      // Opening the workbench inside the real conversation needs a non-blank
-      // session: DSH renders no conversation.view area at all while the session
-      // is blank, and producing a turn requires an LLM provider this disposable,
-      // credential-free profile deliberately does not have.
-      const viewEntry = page.getByRole('tab', { name: /Design Studio/i }).or(
-        page.getByRole('button', { name: /Design Studio/i }))
-      if (await viewEntry.count()) {
-        await viewEntry.first().click({ timeout: 10000 }).catch(() => {})
-        await page.waitForTimeout(2000)
-      }
-      const blank = await page.evaluate(() => document.body.innerText)
-      const workbench = await page.getByText('DSH · Design Studio').count()
-      record('design studio workbench opens inside real DSH',
-        workbench > 0 ? 'PASS' : 'NOT_RUN',
-        workbench > 0
-          ? 'workbench rendered in the real conversation'
-          : 'NOT PROVEN: the conversation.view area is only rendered for a non-blank session; the disposable profile has no LLM provider by design (blank UI: '
-            + JSON.stringify(blank.slice(0, 120)) + ')')
+      record('legacy conversation workbench gate', 'NOT_RUN',
+        'separate optional conversation path; sidebar manual gate needs neither session nor AI')
 
       // Classify page errors honestly instead of hiding them: anything produced by
       // this plugin or an uncaught page error fails the step; DSH subsystems that
@@ -369,66 +395,6 @@ async function main() {
             ? 'none from the plugin; environment-only: ' + environmentNoise.slice(0, 2).join(' | ')
             : 'none'))
 
-      // The view must be painted by the HOST theme, not by the plugin's fallbacks:
-      // compare its computed background with the value DSH gives the same token.
-      if (workbench > 0) {
-        const theme = await page.evaluate(() => {
-          const section = document.querySelector('.dsh-studio-workbench')
-          if (!section) return { found: false }
-          const probe = document.createElement('div')
-          probe.style.background = 'var(--dsw-alias-bg-layer-1)'
-          document.body.appendChild(probe)
-          const tokenValue = getComputedStyle(probe).backgroundColor
-          probe.remove()
-          const style = getComputedStyle(section)
-          return { found: true, background: style.backgroundColor, color: style.color,
-            font: style.fontFamily, tokenValue }
-        })
-        const opaque = (value) => typeof value === 'string' && /^rgba?\(/.test(value) && !/rgba\(0, 0, 0, 0\)/.test(value)
-        record('workbench painted by the host theme in real DSH',
-          theme.found && opaque(theme.background) && theme.tokenValue !== '' &&
-            theme.background === theme.tokenValue ? 'PASS' : 'FAIL',
-          theme.found
-            ? `background=${theme.background}, DSH --dsw-alias-bg-layer-1=${theme.tokenValue}, font=${String(theme.font).slice(0, 40)}`
-            : 'the workbench section was not found')
-      }
-
-      // The workbench is only an editor once a document is open: prove the real
-      // 3-pane interface (layers, canvas, inspector) inside the real product, not
-      // just its landing state.
-      if (workbench > 0) {
-        const row = page.getByRole('button', { name: 'Open file g0-art.svg' })
-        const opened = await row.count()
-          ? await row.first().click({ timeout: 15000 }).then(() => true).catch(() => false)
-          : false
-        if (!opened) {
-          await page.getByLabel('Workspace file').fill('g0-art.svg')
-          await page.getByRole('button', { name: 'Open', exact: true }).click().catch(() => {})
-        }
-        const canvas = await page.waitForSelector('[aria-label="Canvas viewport"]', { timeout: 25000 })
-          .then(() => true).catch(() => false)
-        const layerCount = await page.getByRole('button', { name: /^Select layer / }).count()
-        record('the native editor opens a real document in DSH',
-          canvas && layerCount > 0 ? 'PASS' : 'FAIL',
-          `canvas=${canvas}, layers=${layerCount}, opened from ${opened ? 'the landing file list' : 'the typed path'}`)
-      }
-
-      // Optional evidence capture: the viewport AND the workbench element itself.
-      // An element screenshot is proof that the plugin is really on screen; a bare
-      // viewport shot can be all page chrome if the view sits below the fold.
-      const screenshot = process.env.DSH_E2E_SCREENSHOT
-      if (screenshot) {
-        const target = page.getByText('DSH · Design Studio').first()
-        await target.scrollIntoViewIfNeeded().catch(() => {})
-        await page.waitForTimeout(400)
-        await mkdir(path.dirname(path.resolve(screenshot)), { recursive: true })
-        await page.screenshot({ path: path.resolve(screenshot) })
-        const section = page.locator('.dsh-studio-workbench').first()
-        const elementShot = path.resolve(screenshot).replace(/\.png$/i, '-element.png')
-        const captured = await section.screenshot({ path: elementShot }).then(() => true).catch(() => false)
-        record('screenshot of the real DSH workbench', captured ? 'PASS' : 'FAIL',
-          captured ? `${path.resolve(screenshot)} + ${elementShot}` : 'could not capture the workbench element')
-      }
       await context.close()
     } finally {
       await browser.close()
@@ -448,15 +414,24 @@ async function main() {
   } catch (error) {
     record('real DSH test', 'FAIL', String(error && error.message ? error.message : error).slice(0, 400))
   } finally {
-    if (server) {
-      server.kill('SIGTERM')
-      await sleep(800)
-      if (server.exitCode === null) server.kill('SIGKILL')
+    try {
+      await stopServer(server)
+      serverClosed = true
+      if (server) record('stop disposable DSH server', 'PASS', 'close observed before directory cleanup')
+    } catch (error) {
+      record('stop disposable DSH server', 'FAIL', String(error.message || error))
     }
-    if (!keep) await rm(root, { recursive: true, force: true }).catch(() => {})
-    else console.log(`kept: ${root}`)
+    if (!keep && serverClosed) {
+      try {
+        await rm(root, { recursive: true, force: true })
+        record('cleanup disposable environment', 'PASS', 'removed owned temporary root after server close')
+      } catch (error) {
+        record('cleanup disposable environment', 'FAIL', String(error.message || error))
+      }
+    } else console.log('kept: ' + root)
+
   }
-  return finish()
+  return
 }
 
 async function finish() {
@@ -474,7 +449,7 @@ async function finish() {
   return summary.fail === 0 ? 0 : 1
 }
 
-main().then((code) => { process.exitCode = code }).catch((error) => {
+main().then(finish).then((code) => { process.exitCode = code }).catch((error) => {
   console.error('real DSH test crashed:', error)
   process.exitCode = 2
 })
