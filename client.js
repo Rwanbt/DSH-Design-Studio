@@ -1579,13 +1579,20 @@ window.__ModuleLoader__.load({
         // the selection made at drag start).
         layerDragClickRef.current=true
         if(cancelled)return
-        // The row under the release point can be the source itself (selection
-        // scrolls the list, so rows shift mid-gesture). Fall back to the last
-        // row the pointer really hovered, so a genuine drop is not lost.
+        // Selection can scroll the layer list mid-gesture, so the row under the
+        // release point may not be the row the user aimed at. Try the release
+        // row first, then the last row really hovered, and keep the first plan
+        // that is valid; if none is, report the release row's reason.
         const releaseId=layerRowAtPoint(event.clientX,event.clientY)
-        const overId=(releaseId && releaseId!==gesture.id) ? releaseId
-          : (gesture.overId && gesture.overId!==gesture.id ? gesture.overId : releaseId)
-        const plan=layerDropPlan(gesture.id,overId)
+        const candidates=[]
+        for(const candidate of [releaseId,gesture.overId]) {
+          if(candidate && !candidates.includes(candidate)) candidates.push(candidate)
+        }
+        let plan=layerDropPlan(gesture.id,releaseId)
+        for(const candidate of candidates) {
+          const attempt=layerDropPlan(gesture.id,candidate)
+          if(attempt.ok) {plan=attempt;break}
+        }
         if(!plan.ok) {
           // Same row: no write and no error, just a quiet acknowledgement.
           if(plan.same){setNotice('Calque déposé sur lui-même : aucun changement.');return}

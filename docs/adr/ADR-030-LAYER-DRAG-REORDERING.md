@@ -72,6 +72,18 @@ changement de visibilité et démontage du composant. Un relâchement sans mouve
 intermédiaire est jugé sur la distance réelle (un geste rapide reste un geste), et
 la sélection suit la ligne déplacée dans ce cas aussi.
 
+### 5 ter. Cible de dépôt : dernier frère survolé, pas la ligne sous le relâchement
+
+Sélectionner la ligne déplacée peut faire défiler la liste, donc la ligne sous le
+curseur au moment du relâchement n'est pas forcément celle que l'utilisateur
+visait. Un run complet l'a montré de façon reproductible : le dépôt était refusé
+(« Déposez sur le calque voisin ») alors que le geste était correct.
+
+Le dépôt essaie donc **la ligne sous le relâchement, puis la dernière ligne
+réellement survolée**, et retient le premier plan valide. Si aucun ne l'est, le
+motif affiché reste celui de la ligne sous le relâchement : le refus n'est pas
+atténué, il est seulement cherché au bon endroit.
+
 ### 6. Le clavier reste le chemin de référence
 
 `Ctrl+]`, `Ctrl+[`, `Ctrl+Maj+]`, `Ctrl+Maj+[` et les entrées du menu restent
