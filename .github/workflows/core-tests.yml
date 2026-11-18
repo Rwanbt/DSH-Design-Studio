@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: '22'
       - run: npm run check
+      # Budgets are measured, never assumed: the benchmark must stay inside the
+      # documented caps and stays dependency-free.
+      - run: npm run benchmark
 
   # Real-browser gate: Chromium and Firefox with the real patch engine and real
   # filesystem behind the real Host route handler. Only the DSH client shell is
