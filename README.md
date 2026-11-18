@@ -64,15 +64,15 @@ MIT — see `LICENSE`.
 The [interactive HTML mockup](docs/design/DSH-Design-Studio-V3-Graphite-interactive.html) is committed on `dev` and is the visual reference the native workbench now follows: its shell geometry, surface shades, tool icons and inspector sections are reproduced in `client.js` and compared against the file itself by the browser gate (`tests/browser/specs/graphite-reference.mjs`). The palette is scoped to the editor ([ADR-026](docs/adr/ADR-026-EXACT-GRAPHITE-WORKBENCH.md)). The mockup remains a design reference, not an implementation: functional parity, security boundaries and native write-back are proven separately, and the running DSH window is still `NOT_RUN` for this shell.
 
 
-### Graphite gradient editing — development on \`dev\`
+### Graphite gradient editing — development on `dev`
 
 The native SVG fill inspector now creates linear and radial gradients as a single
 two-span Host transaction, prefills the first stop from an existing solid hex
 colour, displays a safe stop preview and edits stop colours, opacity, offsets and
-native gradient geometry (linear \`x1/y1/x2/y2\`, radial \`cx/cy/r\`).
+native gradient geometry (linear `x1/y1/x2/y2`, radial `cx/cy/r`).
 The source-preserving implementation and typed refusals are described in
 [ADR-036](docs/adr/ADR-036-NATIVE-GRADIENT-CREATION.md).
-Document tab cycling supports \`Ctrl+Tab\` / \`Ctrl+Shift+Tab\` when the DSH
+Document tab cycling supports `Ctrl+Tab` / `Ctrl+Shift+Tab` when the DSH
 renderer receives those shortcuts. Hostile/unsupported SVG constructs remain
 read-only; no Figma/Penpot feature parity is claimed. Recent changes require
 fresh Web/Desktop verification at the release SHA.

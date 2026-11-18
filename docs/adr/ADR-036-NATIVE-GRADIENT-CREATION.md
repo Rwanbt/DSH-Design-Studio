@@ -64,18 +64,18 @@ La référence graphique demeure
 
 ## Géométrie native et aperçu des arrêts — tranche suivante
 
-- La route \`svg-gradient-geometry\` modifie un seul attribut de géométrie
-  \`x1/y1/x2/y2\` (linéaire) ou \`cx/cy/r\` (radial) par patch exact, ou insère
+- La route `svg-gradient-geometry` modifie un seul attribut de géométrie
+  `x1/y1/x2/y2` (linéaire) ou `cx/cy/r` (radial) par patch exact, ou insère
   une déclaration absente sans re-sérialiser le dégradé.
 - Les valeurs acceptées sont des nombres et pourcentages bornés. Les chaînes
-  complexes ou entités XML sont refusées ; l'héritage \`href\` et les feuilles
+  complexes ou entités XML sont refusées ; l'héritage `href` et les feuilles
   de style restent non modifiables dans cette tranche.
 - L'inspecteur affiche une barre de progression des arrêts si couleurs,
   positions et opacités sont toutes interprétables sans approximation.
   Sinon l'absence d'aperçu est annoncée explicitement. L'aperçu ne prétend
   pas représenter la direction ou transformation réelle du dégradé.
-- Tests : \`tests/svg-gradient.test.mjs\` et
-  \`tests/browser/specs/gradient.mjs\` (création, géométrie, preview, Undo).
+- Tests : `tests/svg-gradient.test.mjs` et
+  `tests/browser/specs/gradient.mjs` (création, géométrie, preview, Undo).
   Les niveaux de vérification doivent être relus au SHA final ;
   DSH Desktop actuel reste **NOT_RUN**.
 

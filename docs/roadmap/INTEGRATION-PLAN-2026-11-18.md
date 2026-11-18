@@ -2,7 +2,7 @@
 
 > **Actualisation du 19 novembre 2026 (à revérifier au SHA courant) :**
 > la création de dégradés linéaires/radiaux, les arrêts éditables et la
-> géométrie native depuis l'inspecteur Graphite sont implémentés sur \`dev\`
+> géométrie native depuis l'inspecteur Graphite sont implémentés sur `dev`
 > (ADR-036) avec tests module/navigateur. Cette actualisation ne ferme
 > pas le gate DSH Desktop et ne vaut pas validation Production Ready.
 > Les sections historiques de ce document peuvent indiquer
