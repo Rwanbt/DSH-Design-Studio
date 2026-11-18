@@ -412,6 +412,24 @@ async function main() {
       await browser.close()
     }
 
+    // Uninstall / rollback is a documented user path: remove the bundle from the
+    // disposable profile and prove the profile no longer lists it. Documents are
+    // never touched by design, so no repair step is needed.
+    if (server) {
+      try { await stopServer(server); serverClosed = true } catch { /* reported below */ }
+      server = null
+    }
+    const removed = await run(['plugin', '--profile', 'e2e', 'remove', '@rwanbt/dsh-design-studio'])
+    let removedProfile = null
+    try {
+      removedProfile = JSON.parse(await readFile(path.join(childEnv.DSH_HOME, 'profiles/e2e/package.json'), 'utf8'))
+    } catch { /* reported by the assertion below */ }
+    const stillListed = removedProfile?.dsh?.profile?.bundles?.includes('@rwanbt/dsh-design-studio')
+    record('uninstall the bundle from the disposable profile',
+      removed.code === 0 && stillListed === false ? 'PASS' : 'FAIL',
+      `dsh plugin remove exited ${removed.code}; still listed=${String(stillListed)}` +
+        (removed.code === 0 ? '' : ` ${removed.err.slice(0, 200)}`))
+
     // Same bundle, different delivery path: the real DSH Desktop (Electron)
     // application. Opt out with DSH_E2E_DESKTOP=0 (the Web assertions above
     // remain the gate).

@@ -87,6 +87,19 @@ standalone application, no separate process, no own window/port; installation is
 
 ## 5. Rollback plan
 
+**Vérifié le 18 novembre 2026, sur un profil jetable** (`DSH_HOME`/`HOME`
+temporaires, aucun profil personnel) : `npm run test:dsh` exécute désormais
+`dsh plugin --profile e2e remove @rwanbt/dsh-design-studio` puis relit le
+manifeste du profil. Résultat : **PASS** — `dsh plugin remove` sort en code 0 et
+le bundle n'est plus listé (`still listed=false`). Les documents de l'espace de
+travail ne sont pas touchés : toutes les écritures étaient des patches ciblés, un
+rollback n'exige aucune réparation de fichier.
+
+**Archive vérifiée** (`npm pack --dry-run`) : 28 fichiers, exactement `src/*.mjs`,
+`client.js`, `cordis.patch.yml`, `README.md`, `LICENSE`, `NOTICE` et
+`package.json` — aucune fuite de test, de documentation interne ni de fichier de
+configuration locale.
+
 - Revert the release commit on `dev` (no force-push, no history rewrite).
 - Uninstall from profiles with `dsh plugin --profile <name> remove @rwanbt/dsh-design-studio`.
 - Documents are untouched by design: every edit was a targeted patch and the
