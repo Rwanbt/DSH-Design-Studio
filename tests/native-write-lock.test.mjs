@@ -126,6 +126,71 @@ test('a lock replaced while held is never deleted blindly',()=>fixture(async roo
   await rmdir(lockPath)
 }))
 
+test('an action failure preserves its primary error and exposes a typed cleanup failure',()=>fixture(async root=>{
+  const file=path.join(root,'page.html')
+  const lockPath=path.join(root,'.page.html.dsh-native.lock')
+  await writeFile(file,'<p>old</p>')
+  const actionCause=new Error('revision changed')
+  const actionError=Object.assign(new Error('reopen before saving',{cause:actionCause}),{code:'stale-revision'})
+  const releaseCause=Object.assign(new Error('disk I/O failure'),{code:'EIO'})
+  const io={rmdir:async()=>{throw releaseCause}}
+  await assert.rejects(withNativeWriteLock(file,async()=>{throw actionError},{io}),(err)=>{
+    assert.equal(err,actionError)
+    assert.equal(err.code,'stale-revision')
+    assert.equal(err.cause,actionCause)
+    assert.equal(err.releaseError?.code,'lock-release-failed')
+    assert.equal(err.releaseError.cause,releaseCause)
+    return true
+  })
+  assert.equal((await lstat(lockPath)).isDirectory(),true,'failed cleanup leaves the lock visible')
+  assert.equal(await readFile(file,'utf8'),'<p>old</p>')
+  await rmdir(lockPath)
+}))
+
+test('a frozen action error is wrapped without losing either failure',()=>fixture(async root=>{
+  const file=path.join(root,'page.html')
+  const lockPath=path.join(root,'.page.html.dsh-native.lock')
+  const actionCause=new Error('revision changed')
+  const actionError=Object.freeze(Object.assign(new Error('reopen before saving',{cause:actionCause}),{code:'stale-revision'}))
+  const releaseCause=Object.assign(new Error('disk I/O failure'),{code:'EIO'})
+  await assert.rejects(withNativeWriteLock(file,async()=>{throw actionError},{
+    io:{rmdir:async()=>{throw releaseCause}}
+  }),(err)=>{
+    assert.equal(err.code,'stale-revision')
+    assert.equal(err.message,actionError.message)
+    assert.equal(err.cause,actionError)
+    assert.equal(err.cause.cause,actionCause)
+    assert.equal(err.releaseError?.code,'lock-release-failed')
+    assert.equal(err.releaseError.cause,releaseCause)
+    return true
+  })
+  assert.equal((await lstat(lockPath)).isDirectory(),true)
+}))
+
+for(const thrown of [undefined,null,false,0,'stale revision']) {
+  test('a primitive action failure is preserved with and without cleanup failure: '+String(thrown),()=>fixture(async root=>{
+    const file=path.join(root,'page.html')
+    const lockPath=path.join(root,'.page.html.dsh-native.lock')
+    const action=async()=>{throw thrown}
+    await assert.rejects(withNativeWriteLock(file,action),(err)=>{
+      assert.equal(err,thrown)
+      return true
+    })
+    await assert.rejects(lstat(lockPath),{code:'ENOENT'})
+    const releaseCause=Object.assign(new Error('disk I/O failure'),{code:'EIO'})
+    await assert.rejects(withNativeWriteLock(file,action,{
+      io:{rmdir:async()=>{throw releaseCause}}
+    }),(err)=>{
+      assert.equal(err.code,'action-failed')
+      assert.equal(err.cause,thrown)
+      assert.equal(err.releaseError?.code,'lock-release-failed')
+      assert.equal(err.releaseError.cause,releaseCause)
+      return true
+    })
+    assert.equal((await lstat(lockPath)).isDirectory(),true)
+  }))
+}
+
 test('a release failure after a successful action is reported, not hidden',()=>fixture(async root=>{
   const file=path.join(root,'page.html')
   const lockPath=path.join(root,'.page.html.dsh-native.lock')

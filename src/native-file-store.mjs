@@ -587,13 +587,14 @@ export function createNativeFileStore(workspace, options = {}) {
         try {
           await io.unlink(checked.absolute)
         } catch (err) {
-          // Never leave the same bytes under two names because of a partial
-          // rename: drop the new name and report the failure.
-          await io.unlink(free.absolute).catch(() => {})
-          throw error('commit-failed', 'Could not remove the old name; the rename was rolled back', err)
+          // Node has no conditional unlink: even an identity check before a
+          // compensating unlink could delete an external replacement. Preserve
+          // both names instead; recovery must inspect the partial rename.
+          throw error('commit-failed',
+            'Partial rename: could not remove the old name; the new path may also exist. No rollback was attempted; inspect both paths before continuing', err)
         }
-        await fsyncDirectory(checked.directory, io).catch(() => {})
-        await fsyncDirectory(free.directory, io).catch(() => {})
+        await fsyncDirectory(checked.directory, io)
+        if (free.directory !== checked.directory) await fsyncDirectory(free.directory, io)
         let written
         try {
           written = await readChecked(free.absolute, io)
@@ -631,7 +632,7 @@ export function createNativeFileStore(workspace, options = {}) {
         } catch (err) {
           throw error('commit-failed', 'Could not delete the file; it was left untouched', err)
         }
-        await fsyncDirectory(checked.directory, io).catch(() => {})
+        await fsyncDirectory(checked.directory, io)
         let occupied = false
         try {
           await io.lstat(checked.absolute)

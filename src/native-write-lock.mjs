@@ -40,6 +40,10 @@ function resolveIo(overrides) {
  *     with a `lock-changed` cause (the action result is then discarded);
  *   - a failure inside `action` still releases the lock; a release failure is
  *     reported as `lock-release-failed` after the action result is discarded.
+ *     If both fail, the primary action error is preserved and its `releaseError`
+ *     exposes the typed cleanup failure and underlying cause. Non-enrichable
+ *     errors are wrapped with the primary code/message and original as `cause`;
+ *     thrown primitives use `action-failed` with the thrown value as `cause`.
  *
  * NON-GUARANTEES:
  *   - external applications do NOT honor this lock. The store must still
@@ -87,10 +91,11 @@ export async function withNativeWriteLock(absolute, action, { waitMs = 3500, pol
     }
   }
 
-  let result, actionError
+  let result, actionError, actionFailed = false
   try {
     result = await action()
   } catch (err) {
+    actionFailed = true
     actionError = err
   }
 
@@ -118,10 +123,18 @@ export async function withNativeWriteLock(absolute, action, { waitMs = 3500, pol
     releaseError = err
   }
 
-  if (actionError) throw actionError
   if (releaseError) {
-    const e = error('lock-release-failed', 'Write completed but native lock cleanup failed; reload file before continuing', releaseError)
-    throw e
+    const e = error('lock-release-failed', 'Native lock cleanup failed; reload file before continuing', releaseError)
+    if (!actionFailed) throw e
+    try {
+      Object.defineProperty(actionError, 'releaseError', { value: e, configurable: true })
+    } catch {
+      const wrapped = new Error(actionError?.message ?? 'Native write action failed', { cause: actionError })
+      wrapped.code = actionError?.code ?? 'action-failed'
+      wrapped.releaseError = e
+      throw wrapped
+    }
   }
+  if (actionFailed) throw actionError
   return result
 }

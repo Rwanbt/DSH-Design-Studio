@@ -9,7 +9,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, rm, link } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, rm, link, open, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createNativeFileStore } from '../src/native-file-store.mjs'
@@ -20,7 +20,61 @@ async function workspace(run) {
   finally { await rm(root, { recursive: true, force: true }) }
 }
 
+for (const operation of ['rename', 'delete']) {
+  test(`${operation} reports directory sync failure instead of confirming durable success`,
+    { skip: process.platform === 'win32' ? 'directory fsync is not supported on Windows' : false },
+    () => workspace(async (root, store) => {
+      const opened = await store.create('source.svg', { source: SVG })
+      const syncError = Object.assign(new Error('injected directory I/O failure'), { code: 'EIO' })
+      const faultStore = createNativeFileStore(root, { io: {
+        async open(file, flags, ...rest) {
+          const handle = await open(file, flags, ...rest)
+          if (file !== root || flags !== 'r') return handle
+          return { sync: async () => { throw syncError }, close: () => handle.close() }
+        },
+      } })
+      await assert.rejects(faultStore[operation]('source.svg', {
+        next: 'destination.svg', baseHash: opened.hash, baseIdentity: opened.identity,
+      }), error => error.code === 'commit-failed' && error.cause === syncError)
+      assert.equal(await readFile(path.join(root, 'source.svg'), 'utf8').catch(() => null), null)
+      if (operation === 'rename') assert.equal(await readFile(path.join(root, 'destination.svg'), 'utf8'), SVG)
+      assert.ok(!(await readdir(root)).some(name => name.endsWith('.dsh-native.lock')))
+    }))
+}
+
 const SVG = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"><rect id="a" width="4"/></svg>\n'
+
+for (const replaced of [false, true]) {
+  test(`failed source removal preserves destination (external replacement: ${replaced})`, () => workspace(async (root, store) => {
+    const opened = await store.create('source.svg', { source: SVG })
+    const source = path.join(root, 'source.svg')
+    const destination = path.join(root, 'destination.svg')
+    const failure = Object.assign(new Error('injected source removal denial'), { code: 'EACCES' })
+    const faultStore = createNativeFileStore(root, { io: {
+      async unlink(file) {
+        if (file !== source) return unlink(file)
+        if (replaced) {
+          await unlink(destination)
+          await writeFile(destination, '<svg><!-- external file --></svg>')
+        }
+        throw failure
+      },
+    } })
+    await assert.rejects(faultStore.rename('source.svg', {
+      next: 'destination.svg', baseHash: opened.hash, baseIdentity: opened.identity,
+    }), error => {
+      assert.equal(error.code, 'commit-failed')
+      assert.equal(error.cause, failure)
+      assert.match(error.message, /partial/i)
+      assert.doesNotMatch(error.message, /rolled back/i)
+      return true
+    })
+    assert.equal(await readFile(source, 'utf8'), SVG)
+    assert.equal(await readFile(destination, 'utf8'), replaced ? '<svg><!-- external file --></svg>' : SVG)
+    assert.deepEqual((await readdir(root)).sort(), ['destination.svg', 'source.svg'])
+    if (!replaced) await assert.rejects(store.read('source.svg'), error => error.code === 'invalid-file')
+  }))
+}
 
 test('rename keeps the exact bytes under the new name and leaves no trace of the old one', () => workspace(async (root, store) => {
   await store.create('avant.svg', { source: SVG })

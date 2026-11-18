@@ -29,9 +29,13 @@ clic dans une liste.
 
 Le commit est `link()` puis `unlink()` : `link()` échoue en `EEXIST` au lieu de
 remplacer une cible, contrairement à `rename()`. La destination est vérifiée
-absente **dans** la section critique. Si le `unlink()` de l'ancien nom échoue,
-le nouveau nom est retiré : les mêmes octets ne restent jamais sous deux noms à
-cause d'un renommage partiel. Sur un système de fichiers sans lien matériel, le
+absente **dans** la section critique. **Révision sécurité du 18 novembre 2026 :**
+si le `unlink()` de l'ancien nom échoue, aucun rollback destructif n'est tenté.
+Le Host signale `commit-failed` et un renommage partiel : les deux noms peuvent
+subsister et doivent être inspectés avant toute reprise. Une vérification
+identité suivie d'un `unlink()` ne serait pas atomique et pourrait supprimer un
+fichier externe ayant remplacé le nouveau nom. La conservation des données prime
+sur le nettoyage automatique ; les hardlinks restants sont refusés par le store. Sur un système de fichiers sans lien matériel, le
 renommage est **refusé** (`rename-unsupported`) plutôt que dégradé en
 `rename()` qui pourrait écraser un fichier concurrent.
 
@@ -83,7 +87,9 @@ suppression à un seul clic.
 - une destination occupée est refusée (`already-exists`) et les deux fichiers
   gardent leurs octets ;
 - un renommage réussi laisse un seul nom et des octets identiques ;
-- aucune trace de temporaire ni de verrou après un succès comme après un refus ;
+- aucune trace de temporaire ni de verrou après un succès nominal ; une panne de
+  nettoyage du verrou est signalée aux appelants du store, et une erreur primaire
+  conserve le diagnostic via `releaseError` (non sérialisé au client actuellement) ;
 - après une suppression réussie, le chemin est réellement absent.
 
 ## Non-garanties
@@ -100,7 +106,22 @@ suppression à un seul clic.
 - Pas de déplacement de dossier, pas de création de dossier, pas de corbeille,
   pas de renommage en masse.
 
-## Preuves
+## Récupération d'un renommage partiel
+
+Ne pas relancer aveuglément et ne supprimer aucun fichier automatiquement.
+Inspecter les deux chemins indiqués par l'action. Ils peuvent être deux liens
+vers les mêmes octets, ou la destination peut appartenir à un autre écrivain.
+Conserver une copie de secours avant toute intervention manuelle ; si l'identité
+ou le contenu est ambigu, ne retirer aucun nom. Le plugin ne propose pas encore
+d'assistant de récupération des hardlinks et refuse de les éditer.
+
+Sur POSIX, un échec du fsync de répertoire après rename/delete est désormais
+`commit-failed` : le changement peut déjà être effectif mais sa durabilité n'est
+pas confirmée. Recharger et inspecter avant toute nouvelle action ; aucun rollback
+n'est tenté après commit. Le comportement Windows (pas de fsync répertoire) ne
+constitue pas une preuve de durabilité POSIX.
+
+## Preuves historiques (avant correction P0 du 18 novembre)
 
 | Niveau | Commande | Résultat |
 |---|---|---|
