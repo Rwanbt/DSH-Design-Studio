@@ -60,12 +60,88 @@ export const layerMenuRowSpec = {
     assert.ok((await menu.innerText()).includes('circle #dot'),
       'the menu must describe the row that was right-clicked: ' + JSON.stringify(await menu.innerText()))
 
-    await page.getByRole('menuitem', { name: 'Dupliquer le calque' }).click()
+    const row = page.getByRole('button', { name: 'Select layer circle #dot' })
+    const duplicate = menu.getByRole('menuitem', { name: 'Dupliquer le calque' })
+    const focused = async name => assert.equal(await menu.getByRole('menuitem', { name, exact: true }).evaluate(node => node === document.activeElement), true, name + ' is focused')
+    await focused('Dupliquer le calque')
+    await page.keyboard.press('ArrowDown')
+    await focused('Copier le calque')
+    await page.keyboard.press('ArrowDown')
+    await focused('Avancer d’un plan') // Empty clipboard: disabled paste is skipped.
+    await page.keyboard.press('ArrowUp')
+    await focused('Copier le calque')
+    await page.keyboard.press('End')
+    await focused('Fermer le menu')
+    await page.keyboard.press('ArrowDown')
+    await focused('Dupliquer le calque')
+    await page.keyboard.press('ArrowUp')
+    await focused('Fermer le menu')
+    await page.keyboard.press('Home')
+    await focused('Dupliquer le calque')
+    // These would move/duplicate/delete/paste or switch canvas tools if bubbled.
+    for (const key of ['Control+d', 'Control+v', 'Delete', 'r']) {
+      await page.keyboard.press(key)
+    }
+    assert.equal(await page.getByRole('button', { name: 'Select canvas tool', exact: true }).getAttribute('aria-pressed'), 'true', 'r inside the menu cannot switch the canvas tool')
+    assert.equal(await harness.read('rows.svg'), SVG_DOCUMENT, 'navigation and menu-scoped shortcuts never write')
+    await page.keyboard.press('Escape')
+    assert.equal(await menu.count(), 0)
+    assert.equal(await row.evaluate(node => node === document.activeElement), true, 'Escape restores the row trigger')
+    for (const key of ['ContextMenu', 'Shift+F10']) {
+      await row.focus()
+      await page.keyboard.press(key)
+      await menu.waitFor({ state: 'visible' })
+      await focused('Dupliquer le calque')
+      await page.keyboard.press('Escape')
+      assert.equal(await row.evaluate(node => node === document.activeElement), true)
+    }
+    for (const key of ['Tab', 'Shift+Tab']) {
+      await row.focus()
+      await page.keyboard.press('ContextMenu')
+      await focused('Dupliquer le calque')
+      await page.keyboard.press(key)
+      assert.equal(await menu.count(), 0, key + ' closes the menu')
+      assert.equal(await page.evaluate(() => !!document.activeElement && document.activeElement !== document.body && !document.activeElement.closest('[role="menu"]')), true, key + ' leaves focus on a real control')
+    }
+    await row.focus()
+    assert.equal(await harness.read('rows.svg'), SVG_DOCUMENT, 'keyboard opening and closing preserve exact bytes')
+    await page.keyboard.press('ContextMenu')
+    await duplicate.waitFor()
+    await focused('Dupliquer le calque')
+    await page.keyboard.press('Enter')
     const duplicated = await waitForDisk(harness, 'rows.svg', text => text.includes('id="dot-copy"'))
     assert.ok(duplicated.includes('id="dot"'), 'the original layer is kept')
     assert.ok(duplicated.includes('id="card"'), 'the previously selected layer is untouched')
     // The clone is the selected layer, as with Ctrl+D.
-    await page.getByRole('button', { name: 'Select layer circle #dot-copy' }).waitFor({ state: 'attached' })
+    const clone = page.getByRole('button', { name: 'Select layer circle #dot-copy' })
+    await clone.waitFor({ state: 'attached' })
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await clone.focus()
+    await page.keyboard.press('ContextMenu')
+    await menu.getByRole('menuitem', { name: 'Supprimer le calque', exact: true }).focus()
+    await page.keyboard.press('Enter')
+    await waitForDisk(harness, 'rows.svg', text => !text.includes('id="dot-copy"'))
+    await page.waitForFunction(() => !document.querySelector('[aria-label="Select layer circle #dot-copy"]') && document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    assert.equal(await page.getByRole('button', { name: 'Select canvas tool', exact: true }).evaluate(node => node === document.activeElement), true, 'deleting the trigger restores focus to a surviving canvas control')
+    // Hold the real Host response while the user deliberately moves focus.
+    let releaseResponse
+    const released = new Promise(resolve => { releaseResponse = resolve })
+    await page.route('**/design-studio-native/apply', async route => {
+      const response = await route.fetch()
+      await released
+      await route.fulfill({ response })
+    })
+    await row.focus()
+    await page.keyboard.press('ContextMenu')
+    await menu.getByRole('menuitem', { name: 'Supprimer le calque', exact: true }).focus()
+    await page.keyboard.press('Enter')
+    const filter = page.getByRole('textbox', { name: 'Filter layers', exact: true })
+    await filter.focus()
+    releaseResponse()
+    await waitForDisk(harness, 'rows.svg', text => !text.includes('id="dot"'))
+    await page.waitForFunction(() => !document.querySelector('[aria-label="Select layer circle #dot"]') && document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    assert.equal(await filter.evaluate(node => node === document.activeElement), true, 'async completion does not steal deliberately moved focus')
+    await page.unroute('**/design-studio-native/apply')
   },
 }
 
@@ -167,7 +243,10 @@ export const pasteMenuSpec = {
     await paste.waitFor({ state: 'visible', timeout: 20000 })
     assert.equal(await paste.isDisabled(), true, 'nothing has been copied yet')
 
-    await page.getByRole('menuitem', { name: 'Copier le calque' }).click()
+    await page.keyboard.press('ArrowDown')
+    assert.equal(await page.getByRole('menuitem', { name: 'Copier le calque' }).evaluate(node => node === document.activeElement), true)
+    await page.keyboard.press('Space') // Native button activation, not canvas pan.
+    assert.equal(await harness.read('vierge.svg'), SVG_DOCUMENT, 'Space copy does not write')
     await page.getByRole('button', { name: 'Select layer rect #card' }).click({ button: 'right' })
     const enabled = page.getByRole('menuitem', { name: 'Coller l’élément copié' })
     assert.equal(await enabled.isDisabled(), false, 'a copied layer makes the paste available')

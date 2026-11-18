@@ -433,6 +433,11 @@ window.__ModuleLoader__.load({
       const [newName,setNewName] = React.useState('')
       const [fileAction,setFileAction] = React.useState(null)
       const [layerMenu,setLayerMenu] = React.useState(null)
+      const layerMenuRef = React.useRef(null)
+      const layerMenuTriggerRef = React.useRef(null)
+      React.useEffect(()=>{
+        if(layerMenu) layerMenuRef.current?.querySelector('button[role="menuitem"]:not(:disabled)')?.focus()
+      },[layerMenu])
       // In-memory clipboard: the copied element's exact source slice, so a paste
       // can land in the same document or in another one. Nothing is written to
       // the system clipboard and nothing leaves the renderer until a paste.
@@ -474,6 +479,13 @@ window.__ModuleLoader__.load({
       const [error,setError] = React.useState('')
       const [warning,setWarning] = React.useState('')
       const [busy,setBusy] = React.useState(false)
+      const layerMenuActionFocusRef=React.useRef(null)
+      React.useEffect(()=>{
+        const pending=layerMenuActionFocusRef.current
+        if(busy||!pending)return
+        layerMenuActionFocusRef.current=null
+        if(!pending.trigger?.isConnected && document.activeElement===document.body)pending.fallback?.focus()
+      },[busy,nodes])
       const [reloadRequired,setReloadRequired]=React.useState(false)
       const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
       const [pathNodes,setPathNodes] = React.useState([])
@@ -830,18 +842,49 @@ window.__ModuleLoader__.load({
         event.preventDefault()
         event.stopPropagation()
         if(id && id!==active) select(id)
+        layerMenuTriggerRef.current=event.currentTarget
+        const keyboard=event.type==='keydown'
+        const rect=keyboard?event.currentTarget.getBoundingClientRect():null
         const width=232, height=430
-        const x=Math.max(8,Math.min(event.clientX, (window.innerWidth||1200)-width-8))
-        const y=Math.max(8,Math.min(event.clientY, (window.innerHeight||800)-height-8))
+        const x=Math.max(8,Math.min(keyboard?rect.left:event.clientX, (window.innerWidth||1200)-width-8))
+        const y=Math.max(8,Math.min(keyboard?rect.bottom:event.clientY, (window.innerHeight||800)-height-8))
         setLayerMenu({id:target,x,y})
       }
-      function closeLayerMenu() { setLayerMenu(null) }
+      function closeLayerMenu() {
+        setLayerMenu(null)
+        if(layerMenu) {
+          const trigger=layerMenuTriggerRef.current
+          const fallback=layerMenuRef.current?.closest('.dsh-studio-workbench')?.querySelector('[aria-label="Select canvas tool"]')
+          if(trigger?.isConnected)trigger.focus()
+          else fallback?.focus()
+        }
+      }
+      function onLayerMenuKeyDown(event) {
+        // Leave Enter/Space defaults to native buttons, but never canvas shortcuts.
+        event.stopPropagation()
+        if(event.key==='Tab') {closeLayerMenu();return}
+        if(event.key==='Escape') {event.preventDefault();closeLayerMenu();return}
+        if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return
+        event.preventDefault()
+        const items=Array.from(event.currentTarget.querySelectorAll('button[role="menuitem"]:not(:disabled)'))
+        if(!items.length)return
+        const index=items.indexOf(event.target)
+        const next=event.key==='Home'?0:event.key==='End'?items.length-1:
+          (index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length
+        items[next].focus()
+      }
       /** One menu row: label, optional shortcut hint, disabled state, action. */
       function layerMenuItem(label, hint, run, disabled, style) {
         return h('button',{type:'button',role:'menuitem',disabled,'aria-label':label,
           style:{...button,display:'flex',justifyContent:'space-between',gap:12,textAlign:'left',
             background:'transparent',border:0,...(style||{})},
-          onClick:()=>{closeLayerMenu();run()}},
+          onClick:()=>{
+            const trigger=layerMenuTriggerRef.current
+            const fallback=layerMenuRef.current?.closest('.dsh-studio-workbench')?.querySelector('[aria-label="Select canvas tool"]')
+            closeLayerMenu()
+            const result=run()
+            if(result?.then)layerMenuActionFocusRef.current={trigger,fallback}
+          }},
           h('span',null,label),hint?h('small',{style:{opacity:0.55}},hint):null)
       }
       async function undo() {
@@ -1677,19 +1720,22 @@ window.__ModuleLoader__.load({
             h('span',null,typeLabels[key]),typographyControl(key)))),
         h('div',{className:'dsh-studio-rowspace'}),
         h('label',{className:'dsh-studio-field-label'},typeLabels['text-anchor']),typographyControl('text-anchor'))
-      return h('section',{className:'dsh-studio-workbench','data-preview':previewMode?'true':'false',lang:'fr','aria-label':'DSH Design Studio workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),color:'var(--dsw-alias-label-primary,#e8ebf0)',background:'var(--dsw-alias-bg-base,#202125)',fontSize:12}},
+      return h('section',{className:'dsh-studio-workbench','data-preview':previewMode?'true':'false',lang:'fr','aria-label':'DSH Design Studio workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,onFocusCapture:event=>{
+          const pending=layerMenuActionFocusRef.current
+          if(pending&&event.target!==pending.trigger)layerMenuActionFocusRef.current=null
+        },style:{height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),color:'var(--dsw-alias-label-primary,#e8ebf0)',background:'var(--dsw-alias-bg-base,#202125)',fontSize:12}},
         h('style',null,GRAPHITE_CSS),
         // Right-click menu: the same operations as the inspector, reachable where
         // the user is looking. Nothing here writes on its own.
         layerMenu&&h(React.Fragment,null,
           h('div',{'data-layer-menu-backdrop':'','aria-hidden':true,
             style:{position:'fixed',inset:0,zIndex:70},onPointerDown:closeLayerMenu}),
-          h('div',{role:'menu','aria-label':'Actions du calque','data-layer-menu':'',
+          h('div',{ref:layerMenuRef,role:'menu','aria-label':'Actions du calque','data-layer-menu':'',
             style:{position:'fixed',left:layerMenu.x,top:layerMenu.y,zIndex:71,minWidth:224,
               display:'flex',flexDirection:'column',gap:2,padding:6,background:'#262a30',
               maxHeight:'min(86vh, 460px)',overflowY:'auto',
               border:'1px solid #3d434c',borderRadius:8,boxShadow:'0 14px 34px #0009'},
-            onKeyDown:event=>{if(event.key==='Escape'){event.stopPropagation();closeLayerMenu()}}},
+            onKeyDown:onLayerMenuKeyDown,onKeyUp:event=>event.stopPropagation()},
             h('small',{style:{padding:'2px 6px 4px',opacity:0.62}},menuLayer?menuLayer.tag+' #'+menuLayer.id:'Aucun calque'),
             layerMenuItem('Dupliquer le calque','Ctrl+D',
               ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'duplicate'}),menuBlocked),
@@ -1876,7 +1922,10 @@ window.__ModuleLoader__.load({
                   style:{width:'100%',paddingLeft:10+(Math.max(0,Math.min(12,n.depth||0))*11),
                     opacity:n.hidden?0.55:1,...(extraSelection.includes(n.id)&&active!==n.id?{background:'#3a3630'}:{})},
                   onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey)),
-                  onContextMenu:event=>openLayerMenu(event,n.id)},
+                  onContextMenu:event=>openLayerMenu(event,n.id),
+                  onKeyDown:event=>{
+                    if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10'))openLayerMenu(event,n.id)
+                  }},
                    h('span',{className:'dsh-studio-mini'},n.isGroup?'▤':n.tag==='text'?'T':n.tag==='ellipse'||n.tag==='circle'?'◯':n.tag==='path'?'⌁':'▢'),
                    h('span',{className:'dsh-studio-label'},n.tag+' #'+n.id),
                    h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'))):
