@@ -53,7 +53,11 @@ function run(interpreter, argv, env, timeout = 180000) {
 
 /** Boot the Electron shell and wait for the two ports it publishes. */
 async function bootShell(binary, env) {
-  const child = spawn(binary, ['--remote-debugging-port=0'], { env })
+  // Extra Electron flags are opt-in only. `DSH_E2E_DESKTOP_ARGS` exists so a
+  // headless ozone session can be attempted on a machine without Xvfb, and so a
+  // future flag never becomes an implicit default.
+  const extra = String(process.env.DSH_E2E_DESKTOP_ARGS || '').split(/\s+/).filter(Boolean)
+  const child = spawn(binary, ['--remote-debugging-port=0', ...extra], { env })
   let log = ''
   child.stdout.on('data', (chunk) => { log += chunk })
   child.stderr.on('data', (chunk) => { log += chunk })
@@ -158,7 +162,12 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
     await sleep(6000)
     const profiles = await readdir(path.join(home, 'profiles')).catch(() => [])
     record('the shell initializes its own desktop profile', profiles.includes('desktop') ? 'PASS' : 'FAIL',
-      'profiles: ' + JSON.stringify(profiles))
+      'profiles: ' + JSON.stringify(profiles) +
+        // A headless ozone session boots Electron but its first-run window is
+        // never driven, so the profile is not created. Say so instead of leaving
+        // a bare list of directories.
+        (profiles.includes('desktop') ? ''
+          : '; the first-run window was not driven (headless ozone / no interactive display)'))
     if (!profiles.includes('desktop')) return
   } finally {
     await stopShell(shell?.child)

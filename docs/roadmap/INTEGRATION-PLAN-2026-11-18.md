@@ -67,7 +67,7 @@ dégradé) sans jamais réécrire les octets voisins.
 
 | Tranche | Contenu | Preuve exigée |
 |---|---|---|
-| 2.1 | **Desktop Electron** sur l'UI actuelle : installation, panneau, édition, sauvegarde dans un profil jetable | `npm run test:dsh` avec Desktop activé, capture du workbench, aucune fenêtre sur le profil personnel |
+| 2.1 | **Desktop Electron** sur l'UI actuelle : installation, panneau, édition, sauvegarde dans un profil jetable | **Tentative faite, `NOT_RUN`** : le shell démarre réellement en ozone headless (CDP publié) mais sa fenêtre de premier démarrage n'est pas pilotable sans display interactif ; `Xvfb` absent et son installation exige root. Commande propriétaire et cause exacte dans [DESKTOP-VERIFICATION-2026-11-18.md](../operations/DESKTOP-VERIFICATION-2026-11-18.md) |
 | 2.2 | **Lecteur d'écran réel** sur le parcours de commande (navigation, sélection, édition, sauvegarde) | session enregistrée avec un lecteur disponible, limites documentées |
 | 2.3 | **Tactile réel** ou émulation documentée : glisser, pincer, poignées | mesure sur appareil ou émulation explicite, jamais présentée comme tactile matériel |
 | 2.4 | **Plateformes** : macOS, NFS/SMB — ou retrait explicite du périmètre certifié | `NOT_RUN` assumé si l'environnement manque |
