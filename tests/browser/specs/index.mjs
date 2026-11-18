@@ -18,7 +18,7 @@ import { htmlSelectSpec, htmlClickInvalidationSpec, htmlLayoutSpec, layoutPreset
 import { externalConflictSpec, refusedWriteSpec, unsavedSourceGuardSpec } from './conflict.mjs'
 import { htmlSecuritySpec, svgSecuritySpec, svgRemoteAssetSpec, cssInjectionSpec } from './security.mjs'
 import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y.mjs'
-import { responsiveSpec, performanceSpec } from './responsive-perf.mjs'
+import { responsiveSpec, performanceSpec, largeDocumentSpec } from './responsive-perf.mjs'
 import { handleGeometrySpec, zoomGeometrySpec } from './geometry.mjs'
 import { hierarchySpec, lockSpec, groupSpec, ungroupSpec, transformSpec, groupDragSpec, nestedPivotSpec, alignmentSpec, alignmentRefusalSpec, alignLockedAncestorSpec, distributeSpec, distributeVerticalSpec, distributeRefusalSpec, distributeNoopSpec, distributeTextSpec } from './structure.mjs'
 import { htmlTextSpec, htmlAttributeSpec, htmlTextRefusalSpec } from './edit-html-text.mjs'
@@ -155,4 +155,5 @@ export const specs = [
   reducedMotionSpec,
   responsiveSpec,
   performanceSpec,
+  largeDocumentSpec,
 ]

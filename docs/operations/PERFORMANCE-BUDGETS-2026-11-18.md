@@ -42,6 +42,15 @@ d'ordre un quart : réordonner reste l'opération la moins chère du lot.
   Au-delà de **512 Kio**, l'inspection visuelle CSS/HTML est désactivée avec un
   avertissement explicite ; l'édition de source reste possible.
 
+## Mesure navigateur à 5 000 éléments
+
+Ajoutée le 18 novembre : `performance: a 5000-node SVG still opens, lists and saves
+without a silent failure` (Chromium 145 et Firefox 146). Elle vérifie que les
+**5 000 calques sont réellement listés** (pas de troncature silencieuse), qu'une
+édition passe par le patch exact, et que l'Undo restaure le fichier octet pour
+octet. Les seuils sont volontairement larges (60 s à l'ouverture, 30 s à la
+sauvegarde) : c'est un test d'échelle, pas un budget d'images par seconde.
+
 ## Ce que ces chiffres ne disent pas
 
 - Aucune image par seconde, aucune latence perçue, aucune consommation mémoire.
