@@ -32,7 +32,7 @@ import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { artboardWidthSpec, artboardContentSpec, artboardNoViewBoxSpec, artboardRefusalSpec } from './artboard.mjs'
 import { strokeCreateSpec, strokeRefusalSpec } from './stroke.mjs'
 import { touchSelectSpec, accessibleTreeSpec } from './touch-a11y.mjs'
-import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec } from './gradient.mjs'
+import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec, gradientCreateSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
@@ -108,6 +108,7 @@ export const specs = [
   fillInspectorSpec,
   gradientStopEditSpec,
   gradientOffsetInspectorSpec,
+  gradientCreateSpec,
   gradientAddStopSpec,
   gradientRemoveStopSpec,
   gradientLastStopRefusalSpec,
