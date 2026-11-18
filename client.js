@@ -649,6 +649,12 @@ window.__ModuleLoader__.load({
       },[busy,nodes])
       const [reloadRequired,setReloadRequired]=React.useState(false)
       const [geometry,setGeometry] = React.useState({artboard:null,handles:[]})
+      // Artboard metadata is read from the file by the Host (`/document`). The
+      // inputs below must show the declared size, never a computed guess.
+      const [artboardMeta,setArtboardMeta] = React.useState(null)
+      const [artboardScaleContent,setArtboardScaleContent] = React.useState(false)
+      const artboardWidthRef=React.useRef(null)
+      const artboardHeightRef=React.useRef(null)
       const [pathNodes,setPathNodes] = React.useState([])
       const [pathDrag,setPathDrag] = React.useState(null)
       const pathDragRef=React.useRef(null)
@@ -728,6 +734,7 @@ window.__ModuleLoader__.load({
             setPenPathId('');setPenOutgoing(null);setPenPreview(null)
             penGestureRef.current=null;penPendingRef.current=false
             panRef.current=null
+            setArtboardScaleContent(false)
           }
           disconnectHtmlPreview()
           setFile(targetFile)
@@ -758,6 +765,7 @@ window.__ModuleLoader__.load({
           setTextNodes(data.textNodes||[]);setEditingText('')
           setTextDraft((data.textNodes||[]).find(item=>item.id===retainSelection)?.text||'')
           setGeometry(data.geometry||{artboard:null,handles:[]})
+          setArtboardMeta(data.artboard||null)
           setPathNodes(data.pathNodes||[])
           setPathDrag(null);pathDragRef.current=null
           setDragDelta(null);dragRef.current=null
@@ -818,6 +826,7 @@ window.__ModuleLoader__.load({
         setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
         setHtmlActive('');setHtmlValue('')
         setGeometry({artboard:null,handles:[]});setActive('');setExtraSelection([])
+        setArtboardMeta(null);setArtboardScaleContent(false)
         setRenaming(null)
         setUndoStack([]);setRedoStack([]);setReloadRequired(false)
         setAlignNotice('')
@@ -2149,6 +2158,18 @@ window.__ModuleLoader__.load({
         return ok
       }
       const {artboard,handles=[]}=geometry
+      // `display` is the declared board size (root width/height when absolute).
+      // `artboard` stays the coordinate system: the overlay is laid out inside a
+      // content box with the viewBox aspect ratio, so handles keep matching the
+      // rendered artwork even when the declared board proportions differ.
+      const display=geometry.display||artboard
+      const contentRatio=artboard?artboard.width/artboard.height:1
+      const displayRatio=display?display.width/display.height:1
+      const contentBoxStyle=!display?null:displayRatio>contentRatio
+        ?{position:'absolute',top:0,bottom:0,left:'50%',transform:'translateX(-50%)',
+          height:'100%',aspectRatio:String(contentRatio)}
+        :{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',
+          width:'100%',aspectRatio:String(contentRatio)}
       function previewPoint(point) {
         if(pathDrag?.id===active && pathDrag.index===point.index) {
           return {...point,x:pathDrag.x,y:pathDrag.y}
@@ -2475,6 +2496,106 @@ window.__ModuleLoader__.load({
           :{cx:round(next.x+next.width/2),cy:round(next.y+next.height/2),rx:round(next.width/2),ry:round(next.height/2)})
       }
       const displayGeometry=Object.keys(boxValues).length?Object.keys(boxValues):['x','y','width','height']
+      /**
+       * Planche (artboard) resizing. The displayed size is the one actually read
+       * from the file by the Host. One Apply = one Host write; the explicit
+       * "Redimensionner le contenu" checkbox changes which attributes move
+       * together (viewBox + width/height in a single batch).
+       */
+      const ARTBOARD_REASONS={
+        'invalid-svg':'Document SVG illisible : le redimensionnement est refusé.',
+        'unsupported-svg':'Document SVG non pris en charge : le redimensionnement est refusé.',
+        'invalid-viewbox':'viewBox invalide (4 nombres finis, largeur et hauteur positives) : redimensionnement refusé.',
+        'unsupported-aspect-ratio':'preserveAspectRatio non standard : redimensionnement refusé pour ne pas déformer le dessin.',
+        'unresolvable-artboard':'Planche non résoluble : aucun viewBox et aucune taille absolue width/height.',
+      }
+      const artboardReady=!!doc&&doc.format==='svg'&&artboardMeta?.ok===true&&!busy&&!reloadRequired&&
+        source===doc.source
+      const artboardSizeText=artboardMeta?.ok===true
+        ?`${Number(artboardMeta.width)} × ${Number(artboardMeta.height)} px`
+        :''
+      const artboardSourceText=artboardMeta?.ok!==true?''
+        :artboardMeta.source==='viewBox'
+          ?'viewBox '+artboardMeta.viewBox+
+            (artboardMeta.widthAttribute!==null||artboardMeta.heightAttribute!==null
+              ?' · width '+String(artboardMeta.widthAttribute)+' · height '+String(artboardMeta.heightAttribute)
+              :'')
+          :'width '+String(artboardMeta.widthAttribute)+' · height '+String(artboardMeta.heightAttribute)
+      // A disabled control must explain itself, including while the document is
+      // busy, dirty or waiting to be reloaded.
+      const artboardBlockedReason=artboardMeta?.ok!==true?null
+        :busy?'Enregistrement en cours : la planche sera modifiable ensuite.'
+        :reloadRequired?'Document à recharger avant de modifier la planche.'
+        :source!==doc?.source?'Brouillon source non enregistré : enregistrez-le ou abandonnez-le avant de redimensionner.'
+        :null
+      function commitArtboardSize() {
+        if(!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source)return
+        if(!artboardMeta?.ok){setError(ARTBOARD_REASONS[artboardMeta?.reason]||'Planche indisponible : rechargez le document.');return}
+        const widthText=String(artboardWidthRef.current?.value??'').trim()
+        const heightText=String(artboardHeightRef.current?.value??'').trim()
+        const numeric=text=>/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)&&Number.isFinite(Number(text))
+        if(!numeric(widthText)||!numeric(heightText)) {
+          setError('Taille de planche invalide : indiquez deux nombres finis en px.')
+          return
+        }
+        const width=Number(widthText),height=Number(heightText)
+        if(width<1||height<1||width>20000||height>20000) {
+          setError('Taille de planche hors bornes : 1 à 20000 px.')
+          return
+        }
+        if(!artboardScaleContent&&artboardMeta.displayResize!==true) {
+          setError('viewBox absent : cochez « Redimensionner le contenu » pour écrire width, height et viewBox ensemble.')
+          return
+        }
+        // Identical display resize: no request, no history entry, no write.
+        if(!artboardScaleContent&&width===Number(artboardMeta.width)&&height===Number(artboardMeta.height)) {
+          setNotice('Taille inchangée : aucune écriture.')
+          return
+        }
+        void save({kind:'svg-artboard',width,height,scaleContent:artboardScaleContent})
+      }
+      const artboardInspector=doc?.format==='svg'&&h('section',{className:'dsh-studio-ins-block',
+        'data-artboard-inspector':'','data-artboard-ok':artboardMeta?.ok===true?'true':'false',
+        'data-artboard-reason':artboardMeta?.ok===true?'':(artboardMeta?.reason||'unavailable')},
+        h('div',{className:'dsh-studio-ins-head'},'Planche',h('span',null,'▣')),
+        artboardMeta?.ok===true
+          ?h(React.Fragment,null,
+            h('p',{className:'dsh-studio-hint','data-artboard-size':artboardSizeText},
+              'Taille actuelle lue dans le fichier : ',h('strong',null,artboardSizeText),
+              h('br'),h('small',null,artboardSourceText)),
+            h('div',{className:'dsh-studio-ins-row',style:{rowGap:10}},
+              h('label',{className:'dsh-studio-prop'},h('span',null,'L'),
+                h('input',{ref:artboardWidthRef,key:'aw:'+doc.file+':'+artboardMeta.width+':'+String(artboardMeta.widthAttribute),
+                  type:'number',min:1,max:20000,step:'any',defaultValue:artboardMeta.width,
+                  disabled:!artboardReady,'aria-label':'Artboard width'})),
+              h('label',{className:'dsh-studio-prop'},h('span',null,'H'),
+                h('input',{ref:artboardHeightRef,key:'ah:'+doc.file+':'+artboardMeta.height+':'+String(artboardMeta.heightAttribute),
+                  type:'number',min:1,max:20000,step:'any',defaultValue:artboardMeta.height,
+                  disabled:!artboardReady,'aria-label':'Artboard height'}))),
+            h('label',{style:{display:'flex',alignItems:'center',gap:8,marginTop:10,fontSize:12,
+              color:'var(--dsw-alias-label-secondary, #b7b4af)'}},
+              h('input',{type:'checkbox',checked:artboardScaleContent,disabled:!artboardReady,
+                'aria-label':'Redimensionner le contenu',
+                onChange:event=>setArtboardScaleContent(event.target.checked)}),
+              'Redimensionner le contenu'),
+            artboardBlockedReason&&h('p',{className:'dsh-studio-hint','data-artboard-blocked-reason':''},
+              artboardBlockedReason),
+            h('p',{className:'dsh-studio-hint','data-artboard-mode':artboardScaleContent?'content':'display'},
+              artboardScaleContent
+                ?'Coché : viewBox, largeur et hauteur changent ensemble dans une seule écriture. Les formes gardent leurs coordonnées et leur taille en px ; la planche gagne ou perd de l’espace.'
+                :'Décoché : seuls largeur et hauteur changent, le viewBox est conservé. Le dessin est mis à l’échelle pour remplir la planche.'),
+            h('button',{type:'button',style:{...button,width:'100%',marginTop:8},
+              disabled:!artboardReady||(!artboardScaleContent&&artboardMeta.displayResize!==true),
+              'aria-label':'Apply artboard size',
+              title:!artboardScaleContent&&artboardMeta.displayResize!==true
+                ?'viewBox absent : cochez « Redimensionner le contenu »'
+                :'Une seule écriture transactionnelle',
+              onClick:commitArtboardSize},'Appliquer la taille'),
+            !artboardScaleContent&&artboardMeta.displayResize!==true&&
+              h('p',{className:'dsh-studio-hint','data-artboard-blocked':''},
+                'Sans viewBox, l’écriture cohérente ajoute un viewBox : cochez « Redimensionner le contenu ».'))
+          :h('p',{className:'dsh-studio-hint','data-artboard-reason':artboardMeta?.reason||'unavailable'},
+            ARTBOARD_REASONS[artboardMeta?.reason]||'Métadonnées de planche indisponibles : rechargez le document.'))
       // Alignment and distribution controls. They are real buttons in the
       // inspector, not canvas commands, so every disabled state carries its
       // reason in the visible hint (a silent no-op button is exactly what this
@@ -3121,13 +3242,14 @@ doc?.format==='css'?
                       // Fit BOTH dimensions: a wide viewBox must never be clipped
                       // vertically, otherwise top-left handles become unreachable
                       // and every hit target drifts away from the rendered shape.
-                      width:'min(100cqw, calc(100cqh * '+(artboard.width/artboard.height)+'))',
+                      width:'min(100cqw, calc(100cqh * '+(display.width/display.height)+'))',
                       maxWidth:'100%',maxHeight:'100%',
-                      '--art-ratio':artboard.width/artboard.height,'--art-width':artboard.width+'px',aspectRatio:artboard.width+' / '+artboard.height,background:'#fff',
+                      '--art-ratio':display.width/display.height,'--art-width':display.width+'px',aspectRatio:display.width+' / '+display.height,background:'#fff',
                       transform:'translate(-50%, -50%) translate('+camera.offsetX+'px, '+camera.offsetY+'px) scale('+camera.zoom+')',
                       transformOrigin:'center center',
                       boxShadow:'0 10px 42px #0009'}},
-                  h('div',{className:'dsh-studio-artboard-label'},doc.file,h('span',null,Math.round(artboard.width)+' × '+Math.round(artboard.height))),
+                  h('div',{className:'dsh-studio-artboard-label'},doc.file,h('span',null,Math.round(display.width)+' × '+Math.round(display.height))),
+                  h('div',{className:'dsh-studio-artboard-content',style:contentBoxStyle},
                    h('iframe',{title:'Isolated SVG preview',sandbox:'',referrerPolicy:'no-referrer',srcDoc:safePreview(source,'svg'),style:{width:'100%',height:'100%',position:'absolute',inset:0,border:'none',pointerEvents:'none'}}),
                   gridVisible&&h('div',{className:'dsh-studio-document-grid','aria-hidden':true,style:{
                     position:'absolute',inset:0,pointerEvents:'none',zIndex:1,
@@ -3301,6 +3423,7 @@ doc?.format==='css'?
                     })()
                   )
                   )
+                  )
                 ):
                   ['html','htm'].includes(doc?.format)?
                     h('div',{className:'dsh-studio-responsive-preview',
@@ -3357,7 +3480,7 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
               glyph(selected?.tag==='text'?'text':selected?.isGroup?'Calques':selected?.tag==='ellipse'||selected?.tag==='circle'?'ellipse':'rect'),
               h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedMedia?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
                 h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedMedia?'Règle CSS conditionnelle · @media '+selectedMedia.condition:selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
-            alignmentInspector,(!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
+            artboardInspector,alignmentInspector,(!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
             (!doc||doc.format==='svg')&&strokeInspector,
             (!doc||doc.format==='svg')&&h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Effets',h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Les filtres SVG ne sont pas éditables dans ce périmètre'},'＋ Ajouter un effet'),h('p',{className:'dsh-studio-hint'},'Hors périmètre : filtres SVG éditables. Source native préservée.')),
             h(doc&&doc.format!=='svg'?'section':'details',{className:'dsh-studio-technical',

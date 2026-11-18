@@ -29,6 +29,7 @@ import { renameFileSpec, deleteFileSpec, cancelDeleteSpec } from './file-admin.m
 import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderSpec, layerDragSpec } from './layer-menu.mjs'
 import { renameLayerSpec, renameMenuSpec, renameRefusalSpec, renameHostRefusalSpec, renameUndoSelectionSpec } from './rename.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
+import { artboardWidthSpec, artboardContentSpec, artboardNoViewBoxSpec, artboardRefusalSpec } from './artboard.mjs'
 import { strokeCreateSpec, strokeRefusalSpec } from './stroke.mjs'
 import { touchSelectSpec, accessibleTreeSpec } from './touch-a11y.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec } from './gradient.mjs'
@@ -70,6 +71,10 @@ export const specs = [
   panelUnavailableSpec,
   panelEmptySpec,
   geometryInspectorSpec,
+  artboardWidthSpec,
+  artboardContentSpec,
+  artboardNoViewBoxSpec,
+  artboardRefusalSpec,
   strokeCreateSpec,
   strokeRefusalSpec,
   touchSelectSpec,

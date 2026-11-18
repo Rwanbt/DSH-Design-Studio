@@ -32,10 +32,24 @@ function intrinsicSize(value) {
   return Number.isFinite(number) && number > 0 && Math.abs(number) <= MAX_COORD ? number : null
 }
 
+/**
+ * Declared board size, in px: the root `width`/`height` when both are absolute,
+ * otherwise the coordinate system itself. The editor keeps drawing in
+ * `artboard` user units; `display` is only the size of the visible board, so a
+ * document whose viewBox and declared size differ is letterboxed exactly like a
+ * browser would render it instead of being silently stretched.
+ */
+function displaySize(root, artboard) {
+  const width = intrinsicSize(root.width)
+  const height = intrinsicSize(root.height)
+  if (width !== null && height !== null) return { width, height, source: 'size' }
+  return { width: artboard.width, height: artboard.height, source: 'viewBox' }
+}
+
 function resolveArtboard(source) {
   let root
   try { root = svgRootAttributes(source) }
-  catch (error) { return { root: null, artboard: null, warning: error.code || 'invalid-svg' } }
+  catch (error) { return { root: null, artboard: null, display: null, warning: error.code || 'invalid-svg' } }
   const ratio = root.preserveAspectRatio
   if (typeof root.viewBox !== 'string') {
     // A document without a viewBox still has a coordinate system when the root
@@ -44,19 +58,21 @@ function resolveArtboard(source) {
     const width = intrinsicSize(root.width)
     const height = intrinsicSize(root.height)
     if (width !== null && height !== null) {
-      return { root, artboard: { x: 0, y: 0, width, height }, warning: null }
+      const artboard = { x: 0, y: 0, width, height }
+      return { root, artboard, display: displaySize(root, artboard), warning: null }
     }
-    return { root, artboard: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
+    return { root, artboard: null, display: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
   }
   if (ratio && !/^xMidYMid\s+meet$/.test(ratio.trim())) {
-    return { root, artboard: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
+    return { root, artboard: null, display: null, warning: 'SVG drag requires a viewBox and default preserveAspectRatio' }
   }
   const parts = root.viewBox.trim().split(/[\s,]+/).map(Number)
   if (parts.length !== 4 || parts.some(value => !Number.isFinite(value) || Math.abs(value) > MAX_COORD) ||
       parts[2] <= 0 || parts[3] <= 0) {
-    return { root, artboard: null, warning: 'Invalid or unsupported viewBox' }
+    return { root, artboard: null, display: null, warning: 'Invalid or unsupported viewBox' }
   }
-  return { root, artboard: { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }, warning: null }
+  const artboard = { x: parts[0], y: parts[1], width: parts[2], height: parts[3] }
+  return { root, artboard, display: displaySize(root, artboard), warning: null }
 }
 
 /**
@@ -72,11 +88,11 @@ export function svgGeometry(source, options = {}) {
   if (/<g(?:\s|>)/i.test(source) || /<foreignObject(?:\s|>)/i.test(source) || /\btransform\s*=/i.test(source)) {
     return { artboard: null, handles: [], warning: 'Drag editing requires an untransformed SVG with no groups or foreignObject' }
   }
-  const { artboard, warning } = resolveArtboard(source)
+  const { artboard, display, warning } = resolveArtboard(source)
   if (!artboard) return { artboard: null, handles: [], warning }
   let nodes
   try { nodes = listEditableSvgNodes(source) }
-  catch (error) { return { artboard, handles: [], warning: error.code || 'invalid-svg' } }
+  catch (error) { return { artboard, display, handles: [], warning: error.code || 'invalid-svg' } }
   const handles = []
   for (const node of nodes) {
     if (!MOVABLE.has(node.tag) || node.attributes.transform) continue
@@ -116,7 +132,7 @@ export function svgGeometry(source, options = {}) {
       resizable:false,text:true,
     })
   }
-  return { artboard, handles, warning: null }
+  return { artboard, display, handles, warning: null }
 }
 
 function absoluteMatrix(node) {
@@ -202,17 +218,17 @@ export function svgAbsoluteGeometry(source) {
 }
 
 function absoluteGeometry(source) {
-  const { root, artboard, warning } = resolveArtboard(source)
+  const { root, artboard, display, warning } = resolveArtboard(source)
   if (!artboard) return { artboard: null, handles: [], warning, refusals: [], mode: 'absolute' }
   if (root.transform !== undefined) {
     return {
-      artboard, handles: [], warning: 'unsupported-transform', mode: 'absolute',
+      artboard, display, handles: [], warning: 'unsupported-transform', mode: 'absolute',
       refusals: [{ id: null, tag: 'svg', reason: 'unsupported-transform', message: 'Root transform is not supported' }],
     }
   }
   let scan
   try { scan = scanSvgDocument(source) }
-  catch (error) { return { artboard, handles: [], warning: error.code || 'invalid-svg', refusals: [], mode: 'absolute' } }
+  catch (error) { return { artboard, display, handles: [], warning: error.code || 'invalid-svg', refusals: [], mode: 'absolute' } }
   const handles = []
   const refusals = []
   for (const node of scan.nodes) {
@@ -344,7 +360,7 @@ function absoluteGeometry(source) {
       children,
     })
   }
-  return { artboard, handles, warning: null, refusals, mode: 'absolute' }
+  return { artboard, display, handles, warning: null, refusals, mode: 'absolute' }
 }
 
 function rounded(value) {

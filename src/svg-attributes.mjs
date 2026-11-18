@@ -1,5 +1,5 @@
 /** Conservative SVG source-span inspector; never serializes the XML tree. */
-import { scanSvgDocument, svgLockedAncestor } from './svg-document.mjs'
+import { scanSvgDocument, svgAttributeInsertion, svgLockedAncestor } from './svg-document.mjs'
 
 const TAGS = new Set(['svg','g','rect','circle','ellipse','line','polyline','polygon','path','text','use'])
 const PROPS = new Set(['fill','fill-opacity','stroke','stroke-width','stroke-opacity','stroke-linecap','stroke-linejoin','stroke-dasharray','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
@@ -147,6 +147,18 @@ function validatedValue(attribute,value) {
     if(attribute==='font-size' && (Number(value)<1 || Number(value)>500)) fail('invalid-value','Font size must be 1..500')
     if(attribute==='letter-spacing' && Math.abs(Number(value))>100) fail('invalid-value','Letter spacing out of range')
     if(['opacity','stroke-opacity','fill-opacity'].includes(attribute) && (Number(value)<0 || Number(value)>1)) fail('invalid-value','Opacity must be within 0..1')
+  } else if(attribute==='viewBox') {
+    // Exactly four finite numbers; a non-positive extent cannot define a
+    // coordinate system. Bounded like the geometry scanner so a value the
+    // editor could never draw is refused before any write.
+    const parts=value.trim().split(/[\s,]+/)
+    if(parts.length!==4 || parts.some(part=>!/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(part))) {
+      fail('invalid-value','viewBox must contain exactly 4 finite numbers')
+    }
+    const numbers=parts.map(Number)
+    if(numbers.some(number=>!Number.isFinite(number)||Math.abs(number)>1000000) || numbers[2]<=0 || numbers[3]<=0) {
+      fail('invalid-value','viewBox numbers out of range or non-positive extent')
+    }
   } else if(['fill','stroke'].includes(attribute)) {
     if(!/^(?:none|transparent|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]+|url\(#[A-Za-z_][\w.:-]*\))$/.test(value)) fail('invalid-value','Unsupported or unsafe paint value')
   } else if(attribute==='font-family') {
@@ -211,4 +223,36 @@ export function svgAttributePatch(source,{id,attribute,value}) {
   if(matches.length!==1) fail('unsupported-edit','This attribute must already exist and be unique')
   const a=matches[0]
   return {start:a.start,end:a.end,before:a.value,after:value}
+}
+
+const ROOT_PROPS = new Set(['width','height','viewBox'])
+
+/**
+ * Patch one root attribute (`width`, `height`, `viewBox`) of the SVG.
+ *
+ * The document root has no `id`, so it cannot ride `svgAttributePatch`. This is
+ * the same conservative primitive for that one element: an existing value is
+ * replaced inside its exact quotes, a missing one is inserted once before the
+ * root's closing bracket. The inverse is exact in both cases.
+ */
+export function svgRootAttributePatch(source,{attribute,value}) {
+  if(typeof attribute!=='string' || !ROOT_PROPS.has(attribute)) fail('invalid-target','Root attribute is not editable')
+  if(attribute==='width'||attribute==='height') {
+    // Root lengths may keep an explicit `px` unit (common in exported SVG).
+    // Everything else is the same bounded, finite, strictly positive number.
+    if(typeof value!=='string' || !/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)(?:px)?$/.test(value.trim())) {
+      fail('invalid-value','Expected a finite positive root length')
+    }
+    const number=Number(value.trim().replace(/px$/,''))
+    if(!Number.isFinite(number)||number<=0||Math.abs(number)>1000000) {
+      fail('invalid-value','Root length out of range')
+    }
+  } else validatedValue(attribute,value)
+  const root=scanSvgDocument(source).root
+  const existing=root.attributes.get(attribute)
+  if(existing) {
+    return {start:existing.valueStart,end:existing.valueEnd,before:existing.value,after:value}
+  }
+  const at=svgAttributeInsertion(root)
+  return {start:at,end:at,before:'',after:' '+attribute+'="'+value+'"'}
 }

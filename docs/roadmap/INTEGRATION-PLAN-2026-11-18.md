@@ -84,6 +84,23 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 | 3.3 | Export PNG du document courant, sans réécrire la source |
 | 3.4 | Historique local de session (journal de patches) pour la récupération après crash |
 
+> **3.2 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** La section
+> « Planche » de l'inspecteur affiche la taille réellement déclarée dans le
+> fichier (`/document` renvoie `artboard`), avec un champ largeur, un champ
+> hauteur et une case **« Redimensionner le contenu »** séparée. Décochée, seule
+> `width`/`height` change et le `viewBox` reste intact ; cochée, `viewBox`,
+> `width` et `height` partent dans **un seul patch batch** (une écriture, un
+> Undo). Refus typés sans écriture : document non SVG, planche non résoluble,
+> `viewBox` invalide, `preserveAspectRatio` non standard, valeur non numérique,
+> ≤ 0 ou hors 1..20000, taille identique. Le canevas utilise la taille déclarée
+> et letterboxe le contenu quand ses proportions diffèrent du `viewBox`, de
+> sorte que les poignées restent alignées. Preuves : `npm run check` (584 tests,
+> dont 14 pour la planche) ; navigateur Chromium 145 + Firefox 146,
+> `--grep=artboard:` → 8 specs PASS, 46 vérifications par moteur (92 au total),
+> octets exacts sur disque, 1 POST par action, Undo octet-exact. Limites : pas de
+> ratio verrouillé, pas de redimensionnement par poignées de planche, et essai
+> dans un vrai DSH `NOT_RUN`.
+
 Sortie de vague : usage quotidien sans friction, sans élargir le périmètre
 fonctionnel.
 

@@ -1,5 +1,6 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
+import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
@@ -147,7 +148,7 @@ export function createRouteHandler(ctx) {
           workspaceId:url.searchParams.get('workspaceId'),
         })
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let gradients=[]; let htmlElements=[]; let cssRules=[]; let cssMedia=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let gradients=[]; let htmlElements=[]; let cssRules=[]; let cssMedia=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}; let artboard=null
         if(document.format==='svg') {
           try {
             // One structure scan feeds the whole layer list. Calling the per-node
@@ -155,6 +156,11 @@ export function createRouteHandler(ctx) {
             // 1500-layer open into quadratic work (measured: 12 s instead of 0.7 s).
             let layerScan=null
             try { layerScan=scanSvgDocument(document.source) } catch(_) { layerScan=null }
+            // The inspector must show the size actually declared in the file, and
+            // refuse honestly when it cannot be resolved. This is read-only
+            // metadata; the resize itself is a typed `/apply` operation. Reuse
+            // the structure scan instead of scanning a large document again.
+            artboard=inspectSvgArtboard(document.source,{scan:layerScan})
             // Source-context eligibility only, not a rendering-fidelity promise:
             // the destination may still have its own CSS/inherited presentation.
             const structuralRootAttributes=new Set(['xmlns','xmlns:xlink','width','height','viewBox','preserveAspectRatio','version','id'])
@@ -223,7 +229,7 @@ export function createRouteHandler(ctx) {
               declarations:rule.declarations.map(({property,value})=>({property,value}))}))
           if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,gradients,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,gradients,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,artboard,warning})
       }
       if (req.method === 'POST' && endpoint === '/create') {
         // Creating a document is exclusive: an existing path is refused (409),
@@ -358,6 +364,16 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'svg-attribute') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgAttributePatch(doc.source,{id:params.id,attribute:params.attribute,value:params.value})]
+        } else if (params.kind === 'svg-artboard') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          // ONE plan = one transactional write. The explicit content mode puts
+          // `viewBox`, `width` and `height` in the same patch set so the board
+          // can never be left inconsistent.
+          patches=planSvgArtboard(doc.source,{
+            width:params.width,
+            height:params.height,
+            scaleContent:params.scaleContent===true,
+          }).patches
         } else if (params.kind === 'svg-attributes') {
           if (doc.format !== 'svg' || !Array.isArray(params.edits) || params.edits.length < 1 || params.edits.length > 16) {
             return reply(res,400,{ok:false,error:'bad-svg-edit-batch'})
