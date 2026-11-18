@@ -188,6 +188,11 @@ export const copyPasteSpec = {
     const twice = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy-2"'),
       { label: 'second paste' })
     assert.ok(twice.includes('id="card-copy"'), 'the first paste is kept')
+    // Disk write precedes the editor's post-save reload; opening another file
+    // during that reload is intentionally refused. Wait for readiness rather
+    // than racing the actual UI and attributing it to clipboard failure.
+    await page.waitForFunction(() =>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
 
     // Source context is checked by the real Host, including an anonymous root.
     const group='<g id="parent" transform="translate(30 40)" fill="#aa2211"><rect id="child" x="1" y="2" width="20" height="10"/></g>'
@@ -207,6 +212,8 @@ export const copyPasteSpec = {
     await page.getByRole('button',{name:'Select canvas tool'}).click()
     await page.keyboard.press('Control+v')
     await waitForDisk(harness,'cible.svg',text=>text.includes('id="card-copy-3"'))
+    await page.waitForFunction(() =>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     assert.equal(await harness.read('nested.svg'),nested)
 
     // The complete group keeps the transform and inherited fill inside its slice.
@@ -219,6 +226,8 @@ export const copyPasteSpec = {
     await page.keyboard.press('Control+v')
     const withGroup=await waitForDisk(harness,'cible.svg',text=>text.includes('id="parent"'))
     assert.ok(withGroup.includes(group),'whole group exact bytes preserve transform and fill')
+    await page.waitForFunction(() =>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     assert.equal(await harness.read('nested.svg'),nested)
 
     // Root presentation is outside the slice too, even for a direct child.
