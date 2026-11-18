@@ -2686,6 +2686,22 @@ window.__ModuleLoader__.load({
         panRef.current=null
       }
       function onEditorKeyDown(event) {
+        // Professional document navigation. Handle before the text-input guard:
+        // Ctrl+Tab is a document command even when the source editor has focus.
+        // The active tab is captured by activateTab (including unsaved edits),
+        // and no Host write is made. Never steal Ctrl+Alt+Tab or a modal action.
+        const isTabCycle=(event.ctrlKey||event.metaKey)&&!event.altKey&&event.key==='Tab'
+        if(isTabCycle && tabsRef.current.length>1 && !busy && !creating && !tabCloseConfirm) {
+          event.preventDefault()
+          event.stopPropagation()
+          const list=tabsRef.current
+          const index=list.findIndex(entry=>entry.id===activeTabId)
+          if(index>=0) {
+            const next=(index+(event.shiftKey?-1:1)+list.length)%list.length
+            activateTab(list[next].id)
+          }
+          return
+        }
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
         if(event.key==='Escape' && layerMenu) {event.preventDefault();closeLayerMenu();return}
