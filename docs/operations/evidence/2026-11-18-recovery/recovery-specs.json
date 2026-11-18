@@ -1,0 +1,109 @@
+{
+  "build": "e5d02003d9d5fefc4646bcd3985d209c8f0ddf1d",
+  "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
+  "startedAt": "2026-11-18T20:33:00.851Z",
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "specs": [
+        {
+          "name": "recovery: an unsaved edit is offered after a reload and recovery only loads it, never writes",
+          "checks": 16,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: ignoring deletes the local entry and no banner returns after a reload",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: a successful save clears the entry and a reload offers nothing",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: two workspaces never share a journal entry",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: a storage that refuses writes is reported once and the edit continues",
+          "checks": 7,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: the journal can be disabled in Options and the preference survives a reload",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    "firefox": {
+      "version": "146.0.1",
+      "specs": [
+        {
+          "name": "recovery: an unsaved edit is offered after a reload and recovery only loads it, never writes",
+          "checks": 16,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: ignoring deletes the local entry and no banner returns after a reload",
+          "checks": 4,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: a successful save clears the entry and a reload offers nothing",
+          "checks": 3,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: two workspaces never share a journal entry",
+          "checks": 8,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: a storage that refuses writes is reported once and the edit continues",
+          "checks": 7,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "recovery: the journal can be disabled in Options and the preference survives a reload",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "summary": {
+    "pass": 12,
+    "fail": 0,
+    "notRun": 0
+  },
+  "finishedAt": "2026-11-18T20:33:32.386Z"
+}
