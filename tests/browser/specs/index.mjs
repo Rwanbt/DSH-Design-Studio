@@ -30,6 +30,7 @@ import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderS
 import { renameLayerSpec, renameMenuSpec, renameRefusalSpec, renameHostRefusalSpec, renameUndoSelectionSpec } from './rename.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { strokeCreateSpec, strokeRefusalSpec } from './stroke.mjs'
+import { touchSelectSpec, accessibleTreeSpec } from './touch-a11y.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -71,6 +72,8 @@ export const specs = [
   geometryInspectorSpec,
   strokeCreateSpec,
   strokeRefusalSpec,
+  touchSelectSpec,
+  accessibleTreeSpec,
   fillInspectorSpec,
   gradientStopEditSpec,
   gradientInheritedReadOnlySpec,
