@@ -57,6 +57,10 @@ export const gradientStopEditSpec = {
       'the referenced gradient is writable')
     assert.ok((await section.innerText()).includes('linearGradient · #sky · 3 arrêt(s)'),
       'the section names the gradient and its stop count')
+    const preview=section.locator('[data-gradient-preview="sky"]')
+    assert.equal(await preview.count(),1,'a native gradient exposes a visual stop strip')
+    const originalPreview=await preview.evaluate(node=>node.style.backgroundImage)
+    assert.match(originalPreview,/linear-gradient/i,'the strip is an actual browser gradient')
 
     const color = page.getByLabel('Gradient stop 0 colour', { exact: true })
     const opacity = page.getByLabel('Gradient stop 0 opacity', { exact: true })
@@ -85,6 +89,11 @@ export const gradientStopEditSpec = {
     // client stopped reloading, a stale panel would silently misreport the file.
     await page.waitForFunction(() => document.querySelector('[aria-label="Gradient stop 0 colour"]')?.value === '#205080')
     assert.equal(await color.inputValue(), '#205080', 'the colour field resynchronises from the saved file')
+    await page.waitForFunction(before=>
+      document.querySelector('[data-gradient-preview="sky"]')?.style.backgroundImage!==before,
+      originalPreview)
+    assert.ok((await preview.evaluate(node=>node.style.backgroundImage))!==originalPreview,
+      'editing a stop changes the rendered gradient strip')
 
     // Writing the same value again must not reach the Host at all.
     await color.fill('#205080')
