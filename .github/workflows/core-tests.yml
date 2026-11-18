@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+# Intermediate dev commits must not keep dozens of obsolete browser suites
+# running while the latest revision waits in a queue. Branch/PR refs stay
+# isolated and the newest candidate always executes the complete gate.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # G1 requires the core suite to stay green on Linux AND Windows: the native
   # file store, the advisory write lock and the multi-process tests must not
