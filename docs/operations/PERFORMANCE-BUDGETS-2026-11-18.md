@@ -7,6 +7,7 @@ d'ordre et écriture réelle du store. **Elles ne mesurent ni pixels, ni layout,
 images par seconde** : ces budgets-là appartiennent au gate navigateur.
 
 Rejouable : `npm run benchmark` (Node seul, aucune dépendance, aucun réseau).
+Exécuté aussi en CI sur les deux OS du job `core` ([run 44311953634](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/44311953634), vert).
 Rapport machine conservé : [2026-11-18-engine.json](benchmarks/2026-11-18-engine.json).
 
 ## Environnement
