@@ -71,9 +71,11 @@ const fileExists = (file) => {
  * @returns {Promise<object>} handle with url, workspace, sessionId, helpers and close()
  */
 export async function startHarness({ workspace, sessionId = 'e2e-session', workspaces } = {}) {
+  // Resolve test assets before creating the temporary workspace. Missing
+  // browser-only dependencies must never leak a workspace on setup failure.
+  const umd = await findReactUmd()
   const root = workspace ? path.resolve(workspace) : await mkdtemp(path.join(os.tmpdir(), 'dsh-design-e2e-'))
   await mkdir(root, { recursive: true })
-  const umd = await findReactUmd()
   const shell = await readFile(path.join(here, 'shell.html'), 'utf8')
   const clientSource = await readFile(path.join(repoRoot, 'client.js'), 'utf8')
   const reactSource = await readFile(umd.react)
