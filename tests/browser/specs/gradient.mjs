@@ -400,3 +400,30 @@ export const gradientGeometrySpec = {
     assert.equal(applies(),2,'Undo is one reverse write')
   },
 }
+
+
+export const gradientStopMoveSpec = {
+  name:'gradient: move an adjacent stop without losing its native markup and Undo restores bytes',
+  async run({page,harness,assert}) {
+    const applies=countApplies(page)
+    await harness.write('move-stop.svg',GRADIENT_SVG)
+    await openWorkspaceFile(page,'move-stop.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer rect #panel',exact:true}).click()
+    await openGradientSection(page,'sky')
+    assert.equal(await page.getByRole('button',{name:'Monter arrêt 1'}).isDisabled(),true)
+    await page.getByRole('button',{name:'Descendre arrêt 1'}).click()
+    const changed=await waitForDisk(harness,'move-stop.svg',text=>{
+      const first=text.indexOf('stop-color="#405060"')
+      const second=text.indexOf('stop-color="#102030"')
+      return first>=0&&second>=0&&first<second
+    },{label:'reordered gradient stops'})
+    assert.equal(applies(),1,'one move is one Host transaction')
+    assert.ok(changed.includes('<!-- gradient fixture: only stop attributes may ever be rewritten -->'))
+    await page.waitForFunction(()=>document.querySelector('[aria-label="Undo saved edit"]')?.disabled===false)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await waitForDisk(harness,'move-stop.svg',text=>text===GRADIENT_SVG,
+      {label:'undo reordered stop'})
+    assert.equal(await harness.read('move-stop.svg'),GRADIENT_SVG)
+    assert.equal(applies(),2,'Undo reverts both spans in one transaction')
+  },
+}

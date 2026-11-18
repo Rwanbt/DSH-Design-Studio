@@ -658,3 +658,49 @@ export function svgGradientGeometryPatch(source, { gradientId, attribute, value 
   const at=node.openEnd-(node.selfClosing?2:1)
   return {start:at,end:at,before:'',after:' '+attribute+'="'+next+'"'}
 }
+
+
+/**
+ * Move one SVG gradient stop by exactly one slot. The stop elements are swapped
+ * as two nonoverlapping exact patches; whitespace between them stays untouched.
+ * Comments or other elements between adjacent stops make the operation
+ * ambiguous and are refused, not silently moved or reassigned.
+ */
+export function svgGradientStopMovePatches(source,{gradientId,index,direction}={}) {
+  if(typeof source!=='string')fail('invalid-source','Expected SVG source')
+  if(!Number.isSafeInteger(index)||index<0)fail('invalid-target','Stop index must be nonnegative')
+  if(direction!=='up'&&direction!=='down')fail('invalid-target','Direction must be up or down')
+  const {node,stops}=resolveGradient(source,gradientId)
+  const otherIndex=index+(direction==='up'?-1:1)
+  if(index>=stops.length||otherIndex<0||otherIndex>=stops.length) {
+    fail('index-out-of-range','Cannot move this stop beyond the gradient bounds')
+  }
+  const first=stops[Math.min(index,otherIndex)]
+  const second=stops[Math.max(index,otherIndex)]
+  // Do not reorder a stop over a comment, another XML element or unresolved
+  // text: document-order comments may be semantically attached to that stop.
+  if(!/^[\s]*$/.test(source.slice(first.end,second.start))) {
+    fail('ambiguous-content','Cannot move a stop across non-whitespace markup or text')
+  }
+  const left=source.slice(first.start,first.end)
+  const right=source.slice(second.start,second.end)
+  if(left===right)fail('unchanged','Identical stop elements require no edit')
+  const patches=[
+    {start:first.start,end:first.end,before:left,after:right},
+    {start:second.start,end:second.end,before:right,after:left},
+  ]
+  let next=source
+  for(const patch of [...patches].sort((a,b)=>b.start-a.start)) {
+    next=next.slice(0,patch.start)+patch.after+next.slice(patch.end)
+  }
+  try {
+    const scanned=scanSvgDocument(next)
+    const moved=scanned.byId.get(gradientId)
+    if(!moved||stopNodes(moved).length!==stops.length) {
+      fail('invalid-result','The gradient stop list changed unexpectedly')
+    }
+  }catch(error) {
+    fail('invalid-result','Moving the stop would invalidate the SVG document')
+  }
+  return patches
+}

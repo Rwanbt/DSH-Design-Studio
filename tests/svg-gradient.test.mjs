@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 import {
   listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch,
-  svgGradientStopRemovePatch, svgGradientGeometryPatch, MAX_GRADIENT_STOPS,
+  svgGradientStopRemovePatch, svgGradientGeometryPatch, svgGradientStopMovePatches, MAX_GRADIENT_STOPS,
 } from '../src/svg-gradient.mjs'
 import { scanSvgDocument } from '../src/svg-document.mjs'
 
@@ -527,4 +527,27 @@ test('gradient geometry edits an exact value, inserts missing coordinates and un
   ]) {
     assert.throws(()=>svgGradientGeometryPatch(SVG,request),e=>e?.code===expected)
   }
+})
+
+
+test('moving adjacent stops exchanges only their exact spans and Undo restores bytes',()=>{
+  const patches=svgGradientStopMovePatches(SVG,{gradientId:'sky',index:0,direction:'down'})
+  assert.equal(patches.length,2)
+  const changed=apply(SVG,patches)
+  assert.equal(changed.ok,true)
+  const sky=scanSvgDocument(changed.source).byId.get('sky')
+  const stops=sky.children.filter(child=>child.tag==='stop')
+  assert.deepEqual(stops.map(stop=>stop.attributes.get('stop-color')?.value),
+    ['#405060','#102030','#8090a0'])
+  assert.ok(changed.source.includes('<!-- gradients keep comments and unrelated bytes -->'))
+  const reverted=apply(changed.source,changed.inverse)
+  assert.equal(reverted.ok,true)
+  assert.equal(reverted.source,SVG)
+  assert.throws(()=>svgGradientStopMovePatches(SVG,{gradientId:'sky',index:0,direction:'up'}),
+    e=>e?.code==='index-out-of-range')
+  assert.throws(()=>svgGradientStopMovePatches(SVG,{gradientId:'inherited',index:0,direction:'down'}),
+    e=>e?.code==='inherited-gradient')
+  const ambiguous=SVG.replace('      <stop offset="0.55"', '      <!-- attached to next stop -->\n      <stop offset="0.55"')
+  assert.throws(()=>svgGradientStopMovePatches(ambiguous,{gradientId:'sky',index:0,direction:'down'}),
+    e=>e?.code==='ambiguous-content')
 })

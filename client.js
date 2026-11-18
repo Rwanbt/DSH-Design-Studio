@@ -3680,6 +3680,12 @@ window.__ModuleLoader__.load({
         void save({kind:'svg-gradient-stop-add',gradientId:selectedGradient.id,
           index:selectedGradient.stops.length})
       }
+      function moveGradientStop(index,direction) {
+        if(!selectedGradient||!selectedGradient.usable||!editable)return
+        const target=index+(direction==='up'?-1:1)
+        if(target<0||target>=selectedGradient.stops.length)return
+        void save({kind:'svg-gradient-stop-move',gradientId:selectedGradient.id,index,direction})
+      }
       function removeGradientStop(index) {
         if(!selectedGradient||!selectedGradient.usable||!editable)return
         if(selectedGradient.stops.length<=1) {
@@ -3786,6 +3792,14 @@ window.__ModuleLoader__.load({
                   onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}),
               // N is the 1-based number shown in the panel ("Arrêt N"); the
               // request carries the 0-based `stop.index` the Host expects.
+              h('div',{style:{display:'flex',alignItems:'center',gap:2}},
+                [['up','↑','Monter'],['down','↓','Descendre']].map(([direction,icon,label])=>
+                  h('button',{key:direction,type:'button',
+                    'aria-label':label+' arrêt '+(stop.index+1),
+                    title:label+' cet arrêt d’une position · Undo exact',
+                    disabled:!editable||(direction==='up'?stop.index===0:stop.index===selectedGradient.stops.length-1),
+                    style:{...button,width:22,height:28,padding:0,fontSize:12},
+                    onClick:()=>moveGradientStop(stop.index,direction)},icon)),
               h('button',{type:'button','aria-label':'Supprimer l’arrêt '+(stop.index+1),
                 'data-gradient-remove':stop.index,
                 title:selectedGradient.stops.length<=1
@@ -3793,7 +3807,7 @@ window.__ModuleLoader__.load({
                   :'Supprimer cet arrêt (span exact) · 1 écriture, Undo exact',
                 disabled:!editable||selectedGradient.stops.length<=1,
                 style:{...button,width:26,height:30,padding:0,fontSize:12,flex:'0 0 auto'},
-                onClick:()=>void removeGradientStop(stop.index)},'✕'))),
+                onClick:()=>void removeGradientStop(stop.index)},'✕')))),
             h('div',{style:{display:'flex',alignItems:'center',gap:8,marginTop:8}},
               h('button',{type:'button','aria-label':'Ajouter un arrêt','data-gradient-add':'',
                 disabled:!editable||selectedGradient.stops.length>=GRADIENT_MAX_STOPS,
