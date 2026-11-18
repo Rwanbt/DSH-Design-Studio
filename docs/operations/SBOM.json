@@ -4,8 +4,8 @@
   "metadata": {
     "subject": "@rwanbt/dsh-design-studio",
     "version": "0.1.0-alpha.20",
-    "commit": "722347dd7095cc88f642e07873ff0b82374adb39",
-    "generatedAt": "2026-11-17T03:08:08.829Z",
+    "commit": "f07bdb9fb0911824c9af424fe3c1f5d0d7d962cb",
+    "generatedAt": "2026-11-18T13:21:07.107Z",
     "generator": "scripts/sbom.mjs",
     "runtimeDependencyCount": 0
   },

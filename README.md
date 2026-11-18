@@ -5,8 +5,8 @@ native `conversation.view` to the host, so it inherits DSH's theme, language and
 session workspace, and edits real **SVG, HTML and CSS** files manually (an optional
 AI workflow is planned on the same transactional API).
 
-> Status: **P0/P1 — experimental; `main` and `dev` carry the same commit.** A native DeepSeek Harness Host/Client prototype edits real **SVG, HTML and CSS** files through byte-exact, revision-checked source patches, fully offline and without AI credentials: creation of new documents from the workbench (never replacing an existing file, ADR-025), SVG primitive creation, direct manipulation with grid/snap/smart guides, hierarchical layers with group/ungroup, group dragging, visibility and lock, pivot rotation and scaling through normalised matrices, Bézier point/topology editing and a manual Pen, native SVG text and typography, HTML click-to-select in an inert preview frame with text and allowlisted attribute editing, linked-CSS inspection with selector lists and custom properties, bounded responsive previews, and cross-process write protection with exact Undo/Redo. It is reachable from the DSH sidebar: the panel lists the registered workspaces, edits the selected one and never sends a filesystem path.
-> **Verification:** 485 core tests, a real Chromium + Firefox gate (122 runs, 61 specs × 2 engines), and a real DeepSeek Harness installation test (**32/32 PASS**, run before the latest UI passes and therefore to be re-run before a release candidate) in **both** the Web app and the Desktop (Electron) application: profile creation, bundle registration, a real session, Host routes, a real save, a refused stale revision, and — with an opt-in real assistant turn — the workbench rendered inside the real DSH conversation, painted by the host theme, screenshots in `docs/operations/evidence/`. The Desktop app delivers client bundles over its own `dsh-app://` protocol in batched URLs, so it is verified separately and not assumed. Remaining `NOT_RUN`: a real assistant turn inside the desktop shell, macOS/NFS/touch/screen-reader; see `docs/roadmap/DELIVERY-GATES-2026-11-17.md`. **Not production ready.**
+> Status: **P0/P1 — experimental.** `dev` is the integration branch; `main` is pinned at an older, owner-approved state and is **not** moved by this work. A native DeepSeek Harness Host/Client prototype edits real **SVG, HTML and CSS** files through byte-exact, revision-checked source patches, fully offline and without AI credentials: creation of new documents from the workbench (never replacing an existing file, ADR-025), SVG primitive creation, direct manipulation with grid/snap/smart guides, hierarchical layers with group/ungroup, group dragging, visibility and lock, pivot rotation and scaling through normalised matrices, Bézier point/topology editing and a manual Pen, native SVG text and typography, HTML click-to-select in an inert preview frame with text and allowlisted attribute editing, linked-CSS inspection with selector lists and custom properties, bounded responsive previews, and cross-process write protection with exact Undo/Redo. It is reachable from the DSH sidebar: the panel lists the registered workspaces, edits the selected one and never sends a filesystem path.
+> **Verification (18 November 2026, `dev`):** **531 core tests** (`npm run check`, zero runtime dependencies), a real **Chromium 145 + Firefox 146** gate (**130 runs, 65 specs × 2 engines**), and a real DeepSeek Harness installation in disposable profiles: the **Web** app passes a credential-free sidebar workflow (**31 PASS / 0 FAIL / 6 NOT_RUN**, real save, byte-exact Undo/Redo, reopen, HTML/CSS creation and edits, measured 1280/768/390 previews, refused external conflict, conditional CSS edit). The **Desktop (Electron)** shell was verified in an earlier session; it is **NOT_RUN** for the current UI and is therefore outside the certified scope. Also `NOT_RUN`: a real assistant turn without credentials, CSP/account console diagnostics as a security proof, macOS, NFS/SMB, real touch devices and screen readers. Evidence lives in `docs/operations/` (`REAL-WEB-2026-11-18.md`, `BASELINE-2026-11-18.md`, `PERFORMANCE-BUDGETS-2026-11-18.md`). **Not production ready.**
 
 ## Non-negotiable principles
 
@@ -27,17 +27,18 @@ AI workflow is planned on the same transactional API).
 
 ## Development
 
-- `main`: reached only by fast-forward from `dev` after review. It currently
-  equals `dev` (`6f57a95`), which is still an **experimental** state, not a release.
+- `main`: pinned at `67870f7` and moved only by the owner's explicit approval.
+  `dev` is ahead of it; an aligned branch would not by itself be a release.
 - `dev`: integration branch — the only working branch. No long-lived `feat/*`
   branches: temporary branches are deleted immediately after the squash merge.
 - Never force-push; `main` moves only with the owner's explicit approval, and
   only when `dev` is green (`npm run check`, `npm run test:browser`).
 
 ```bash
-npm run check        # core suite: 485 tests, zero dependencies to install
-npm run test:browser # real Chromium + Firefox gate (needs npm install + browsers)
+npm run check        # core suite: 531 tests, zero dependencies to install
+npm run test:browser # real Chromium + Firefox gate: 130 runs (needs npm install + browsers)
 npm run test:dsh     # real DeepSeek Harness installation, disposable profile
+npm run benchmark    # reproducible engine benchmark, 100 to 10 000 elements
 npm run sbom         # regenerate docs/operations/SBOM.json
 ```
 

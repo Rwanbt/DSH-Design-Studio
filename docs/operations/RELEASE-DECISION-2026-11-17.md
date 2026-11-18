@@ -1,5 +1,14 @@
 # Release candidate checklist and GO/NO-GO — 17 November 2026
 
+> **Actualisation du 18 novembre 2026 — cette décision reste NO-GO.** Les compteurs
+> ci-dessous sont ceux de la session du 17 ; l'état mesuré du 18 est :
+> **531 tests noyau**, **130 runs navigateur** (65 specs × 2 moteurs), **31 PASS /
+> 0 FAIL / 6 NOT_RUN** en DSH Web réel sans IA, benchmark moteur reproductible
+> (`npm run benchmark`) exécuté aussi en CI, et **Desktop `NOT_RUN`** pour l'UI
+> actuelle. Voir `REAL-WEB-2026-11-18.md`, `PERFORMANCE-BUDGETS-2026-11-18.md` et
+> la matrice `DELIVERY-GATES-2026-11-17.md`. `main` reste à `67870f7` : aucun
+> merge, tag ou publication n'a été effectué.
+
 **Candidate:** `@rwanbt/dsh-design-studio` @ `0.1.0-alpha.20`, branch `dev`.
 **Verdict: GO for an owner-approved experimental RC snapshot on `dev`; NO-GO for a
 stable release and NO-GO for a `main` merge.** The real-installation blocker is
@@ -15,9 +24,9 @@ standalone application, no separate process, no own window/port; installation is
 
 | Item | State | Evidence |
 |---|---|---|
-| Core suite | **398 / 398 PASS**, 0 fail, 0 skip, no dependencies installed | `npm run check` |
-| Real browser gate | 31 specs × Chromium 145 + Firefox 146 = **62 PASS / 0 FAIL** | `npm run test:browser`, report JSON |
-| Real DSH gate | **19 PASS / 0 FAIL / 0 NOT_RUN** with a real assistant turn; workbench rendered inside the real conversation (`docs/operations/evidence/dsh-workbench.png`) | `npm run test:dsh`, report JSON |
+| Core suite | **531 / 531 PASS**, 0 fail, 0 skip, no dependencies installed (18 Nov) | `npm run check` |
+| Real browser gate | 65 specs × Chromium 145 + Firefox 146 = **130 PASS / 0 FAIL** (18 Nov, report committed) | `npm run test:browser`, report JSON |
+| Real DSH gate (Web, no AI) | **31 PASS / 0 FAIL / 6 NOT_RUN** in disposable profiles; Desktop NOT_RUN for this UI | `npm run test:dsh`, `REAL-WEB-2026-11-18.md` |
 | CI — Linux | PASS | GitHub Actions `core (ubuntu-latest)` |
 | CI — Windows | every observed failure fixed (rename, lock release, POSIX bits, path separators) | GitHub Actions `core (windows-latest)` history |
 | CI — browser | PASS on pinned `ubuntu-24.04` | GitHub Actions `browser` |
@@ -26,7 +35,7 @@ standalone application, no separate process, no own window/port; installation is
 | Third-party notices | written | `NOTICE` |
 | Licence | MIT | `LICENSE` |
 | Install/rollback guide | written | `docs/operations/INSTALL.md` |
-| Branch hygiene | remote = `main` + `dev` only; `main` fast-forwarded to `dev` at the owner's explicit request (`6f57a95`) | `git ls-remote --heads origin` |
+| Branch hygiene | remote = `main` + `dev` only; `main` pinned at `67870f7`, `dev` ahead | `git ls-remote --heads origin` |
 
 ## 2. Packaging steps (to run after approval only)
 
@@ -53,6 +62,9 @@ standalone application, no separate process, no own window/port; installation is
 3. **G5 (optional AI tooling) is not implemented.** The manual editor is complete
    enough for an experimental RC, but any claim of "hybrid" workflow would be
    false today.
+4. **The Desktop shell is not verified for the current UI.** Earlier Electron
+   evidence predates the menu, conditional-CSS and drag work; the Web path is the
+   only one certified today, so any Desktop claim would be unfounded.
 
 ## 4. Known limitations to publish with the RC
 
