@@ -2,6 +2,7 @@ import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
+import { svgFragmentInsertPatch } from './svg-fragment.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -267,6 +268,12 @@ export function createRouteHandler(ctx) {
           const positioned=Object.hasOwn(params,'x') || Object.hasOwn(params,'y')
           const created=svgShapeInsertPatch(doc.source,params.shape,positioned?{x:params.x,y:params.y}:null)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-paste') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          // The clipboard payload is re-validated here: the renderer is not a
+          // trusted source of markup, even for bytes it copied itself.
+          const inserted=svgFragmentInsertPatch(doc.source,{fragment:params.fragment})
+          patches=[inserted.patch];createdId=inserted.id
         } else if (params.kind === 'svg-pen') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           if(params.operation==='start') {

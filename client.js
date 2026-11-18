@@ -432,6 +432,11 @@ window.__ModuleLoader__.load({
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
       const [fileAction,setFileAction] = React.useState(null)
+      const [layerMenu,setLayerMenu] = React.useState(null)
+      // In-memory clipboard: the copied element's exact source slice, so a paste
+      // can land in the same document or in another one. Nothing is written to
+      // the system clipboard and nothing leaves the renderer until a paste.
+      const [clipboard,setClipboard] = React.useState(null)
       const [layerSearch,setLayerSearch] = React.useState('')
       const [previewMode,setPreviewMode] = React.useState(false)
       const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
@@ -775,6 +780,59 @@ window.__ModuleLoader__.load({
         if(!active || busy || reloadRequired || !doc || doc.format!=='svg' || source!==doc.source)return false
         return save({kind:'svg-layer',id:active,operation})
       }
+      /** Copy the selected SVG layer's exact bytes into the in-memory clipboard. */
+      function copyLayer(id) {
+        const target=id||active
+        const node=nodes.find(entry=>entry.id===target)
+        if(!doc || doc.format!=='svg' || !node) {setError('Sélectionnez un calque SVG à copier.');return}
+        if(!Number.isInteger(node.start) || !Number.isInteger(node.end) || node.end<=node.start) {
+          setError('Ce document ne peut pas être copié couche par couche : ouvrez-le comme SVG structuré.')
+          return
+        }
+        const fragment=doc.source.slice(node.start,node.end)
+        setClipboard({fragment,label:node.tag+' #'+node.id,file:doc.file})
+        setNotice('Calque copié : '+node.tag+' #'+node.id)
+      }
+      /**
+       * Paste the copied element into the current SVG document. The Host
+       * re-parses the fragment and allocates fresh ids; a fragment that no longer
+       * parses is refused instead of being written blindly.
+       */
+      async function pasteLayer() {
+        if(!clipboard) {setError('Le presse-papiers est vide : copiez un calque d’abord.');return}
+        if(!doc || doc.format!=='svg') {setError('Le collage n’est disponible que dans un document SVG.');return}
+        if(busy||reloadRequired||source!==doc.source) return
+        closeLayerMenu()
+        await save({kind:'svg-paste',fragment:clipboard.fragment})
+      }
+      /**
+       * Right-click menu over a canvas shape or a layer row.
+       *
+       * It exposes the exact same Host operations as the visible controls: it is
+       * a second entry point, never a second implementation. The menu is clamped
+       * to the viewport and closed by Escape, by the backdrop or by any action.
+       */
+      function openLayerMenu(event, id) {
+        if(!doc || doc.format!=='svg') return
+        const target = id || active
+        if(!target) return
+        event.preventDefault()
+        event.stopPropagation()
+        if(id && id!==active) select(id)
+        const width=224, height=268
+        const x=Math.max(8,Math.min(event.clientX, (window.innerWidth||1200)-width-8))
+        const y=Math.max(8,Math.min(event.clientY, (window.innerHeight||800)-height-8))
+        setLayerMenu({id:target,x,y})
+      }
+      function closeLayerMenu() { setLayerMenu(null) }
+      /** One menu row: label, optional shortcut hint, disabled state, action. */
+      function layerMenuItem(label, hint, run, disabled, style) {
+        return h('button',{type:'button',role:'menuitem',disabled,'aria-label':label,
+          style:{...button,display:'flex',justifyContent:'space-between',gap:12,textAlign:'left',
+            background:'transparent',border:0,...(style||{})},
+          onClick:()=>{closeLayerMenu();run()}},
+          h('span',null,label),hint?h('small',{style:{opacity:0.55}},hint):null)
+      }
       async function undo() {
         if(busy || reloadRequired || source!==doc?.source || !undoStack.length)return
         const entry=undoStack[undoStack.length-1]
@@ -873,6 +931,7 @@ window.__ModuleLoader__.load({
       function onEditorKeyDown(event) {
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
+        if(event.key==='Escape' && layerMenu) {event.preventDefault();closeLayerMenu();return}
         if(event.key==='Escape' && (dragRef.current || pathDragRef.current || penGestureRef.current)) {
           event.preventDefault()
           dragRef.current=null;pathDragRef.current=null
@@ -908,6 +967,10 @@ window.__ModuleLoader__.load({
             event.preventDefault();void redo()
           }else if(event.key?.toLowerCase()==='d' && active && doc?.format==='svg' && !busy){
             event.preventDefault();void layerAction('duplicate')
+          }else if(event.key?.toLowerCase()==='c' && active && doc?.format==='svg'){
+            event.preventDefault();copyLayer(active)
+          }else if(event.key?.toLowerCase()==='v' && doc?.format==='svg'){
+            event.preventDefault();void pasteLayer()
           }
           return
         }
@@ -957,6 +1020,8 @@ window.__ModuleLoader__.load({
         return nodes.filter(node=>wanted.has(node.id)).map(node=>node.id)
       }
       const selected=nodes.find(n=>n.id===active)
+      const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
+      const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
       const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
@@ -1599,6 +1664,39 @@ window.__ModuleLoader__.load({
         h('label',{className:'dsh-studio-field-label'},typeLabels['text-anchor']),typographyControl('text-anchor'))
       return h('section',{className:'dsh-studio-workbench','data-preview':previewMode?'true':'false',lang:'fr','aria-label':'DSH Design Studio workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,style:{height:panelMode?'100%':'min(87vh,920px)',minHeight:0,...(panelMode?{flex:1,minWidth:0}:{}),color:'var(--dsw-alias-label-primary,#e8ebf0)',background:'var(--dsw-alias-bg-base,#202125)',fontSize:12}},
         h('style',null,GRAPHITE_CSS),
+        // Right-click menu: the same operations as the inspector, reachable where
+        // the user is looking. Nothing here writes on its own.
+        layerMenu&&h(React.Fragment,null,
+          h('div',{'data-layer-menu-backdrop':'','aria-hidden':true,
+            style:{position:'fixed',inset:0,zIndex:70},onPointerDown:closeLayerMenu}),
+          h('div',{role:'menu','aria-label':'Actions du calque','data-layer-menu':'',
+            style:{position:'fixed',left:layerMenu.x,top:layerMenu.y,zIndex:71,minWidth:224,
+              display:'flex',flexDirection:'column',gap:2,padding:6,background:'#262a30',
+              border:'1px solid #3d434c',borderRadius:8,boxShadow:'0 14px 34px #0009'},
+            onKeyDown:event=>{if(event.key==='Escape'){event.stopPropagation();closeLayerMenu()}}},
+            h('small',{style:{padding:'2px 6px 4px',opacity:0.62}},menuLayer?menuLayer.tag+' #'+menuLayer.id:'Aucun calque'),
+            layerMenuItem('Dupliquer le calque','Ctrl+D',
+              ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'duplicate'}),menuBlocked),
+            layerMenuItem('Copier le calque','Ctrl+C',()=>copyLayer(layerMenu.id),menuBlocked),
+            layerMenuItem('Coller l’élément copié','Ctrl+V',()=>pasteLayer(),menuBlocked||!clipboard),
+            layerMenuItem('Supprimer le calque','Suppr',
+              ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'delete'}),menuBlocked,
+              {color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}),
+            h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
+            layerMenuItem('Grouper la sélection','',
+              ()=>save({kind:'svg-grouping',operation:'group',ids:selectionIds()}),
+              menuBlocked||selectionIds().length<2),
+            layerMenuItem('Dégrouper le groupe','',
+              ()=>save({kind:'svg-grouping',operation:'ungroup',id:layerMenu.id}),
+              menuBlocked||!menuLayer?.isGroup),
+            h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
+            layerMenuItem(menuLayer?.hidden?'Afficher le calque':'Masquer le calque','',
+              ()=>save({kind:'svg-visibility',id:layerMenu.id,property:'display',
+                value:menuLayer?.hidden?null:'none'}),menuBlocked||menuLayer?.locked),
+            layerMenuItem(menuLayer?.locked?'Déverrouiller le calque':'Verrouiller le calque','',
+              ()=>save({kind:'svg-lock',id:layerMenu.id,locked:!menuLayer?.locked}),menuBlocked),
+            h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
+            layerMenuItem('Fermer le menu','Échap',()=>{},false))),
         h('header',{className:'dsh-studio-top'},
           h('span',{className:'dsh-studio-brandmark'},glyph('brand')),
           h('strong',{className:'dsh-studio-brand'},'DSH ',h('span',{style:{fontWeight:450,color:'var(--muted)'}},'Design Studio')),
@@ -1756,7 +1854,8 @@ window.__ModuleLoader__.load({
                   'aria-pressed':active===n.id,
                   style:{width:'100%',paddingLeft:10+(Math.max(0,Math.min(12,n.depth||0))*11),
                     opacity:n.hidden?0.55:1,...(extraSelection.includes(n.id)&&active!==n.id?{background:'#3a3630'}:{})},
-                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))},
+                  onClick:event=>select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey)),
+                  onContextMenu:event=>openLayerMenu(event,n.id)},
                    h('span',{className:'dsh-studio-mini'},n.isGroup?'▤':n.tag==='text'?'T':n.tag==='ellipse'||n.tag==='circle'?'◯':n.tag==='path'?'⌁':'▢'),
                    h('span',{className:'dsh-studio-label'},n.tag+' #'+n.id),
                    h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'))):
@@ -1903,6 +2002,7 @@ doc?.format==='css'?
                           borderRadius:active!==handle.id&&(handle.tag==='circle'||handle.tag==='ellipse')?'50%':0,
                           background:'transparent',boxSizing:'border-box',cursor:busy?'wait':canvasTool==='hand'||spaceHeld?'grab':'move',touchAction:'none',padding:0},
                         onPointerDown:event=>startDrag(event,handle),
+                        onContextMenu:event=>openLayerMenu(event,handle.id),
                         onDoubleClick:handle.text&&canvasTool==='select'?()=>startTextEditing(handle.id):undefined,
                         onPointerMove:moveDrag,
                         onPointerUp:event=>finishDrag(event),
