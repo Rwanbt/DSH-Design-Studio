@@ -95,16 +95,22 @@ export const copyPasteSpec = {
     await openWorkspaceFile(page, 'cible.svg', { expect: 'svg' })
     await page.getByRole('button', { name: 'Select canvas tool' }).click()
     await page.keyboard.press('Control+v')
-    const pasted = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy"'))
+    const pasted = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy"'),
+      { label: 'first paste' })
     assert.ok(pasted.includes('id="card"'), 'the original layer stays in the target document')
     assert.ok(pasted.includes('x="40" y="40" width="240" height="140"'),
       'the copied geometry is the real one, not a placeholder')
     // The copied bytes never leak into the source document.
     assert.equal(await harness.read('source.svg'), SVG_DOCUMENT)
 
+    // Disk writes precede the client reload. Wait until the first saved edit is
+    // ready to undo before sending another shortcut, which is ignored while busy.
+    await page.waitForFunction(() =>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
     // Pasting the same element again must allocate a second distinct id.
     await page.keyboard.press('Control+v')
-    const twice = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy-2"'))
+    const twice = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy-2"'),
+      { label: 'second paste' })
     assert.ok(twice.includes('id="card-copy"'), 'the first paste is kept')
   },
 }
