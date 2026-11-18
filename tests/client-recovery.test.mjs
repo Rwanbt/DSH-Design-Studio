@@ -23,6 +23,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 
@@ -95,7 +96,7 @@ function sources() {
  * Boot one client instance. Calling it again with the same storage/sources is
  * the test's "page reload": a fresh renderer state over the same local storage.
  */
-export function boot({ storage, sources: documents, requests = [], sessionId = 'known' }) {
+export function boot({ storage, sources: documents, requests = [], sessionId = 'known', applyGate = null }) {
   let index = 0
   let definition
   let component
@@ -158,12 +159,22 @@ export function boot({ storage, sources: documents, requests = [], sessionId = '
     if (target.pathname === '/design-studio-native/apply') {
       const document = documents[body?.file]
       if (!document) return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not-found', message: 'not found' }) }
+      // An optional gate lets a test hold the response while it types a second
+      // edit, exactly like a slow Host during an in-flight save.
+      if (applyGate) await applyGate.promise
+      const before = document.source
       if (body.kind === 'replace-source') document.source = body.source
+      // The real Host commits a new revision: the client must adopt the hash
+      // and identity from the response, never guess them.
+      document.hash = createHash('sha256').update(document.source).digest('hex')
+      document.identity = 'id-' + document.hash.slice(0, 12)
       return {
         ok: true,
         json: async () => ({
           ok: true,
-          result: { changed: true, inverse: [], patches: [] },
+          result: { changed: true, inverse: [], patches: body.kind === 'replace-source'
+            ? [{ start: 0, end: before.length, before, after: document.source }] : [],
+            hash: document.hash, identity: document.identity },
           createdId: null,
         }),
       }
@@ -215,6 +226,17 @@ function clickButton(app, label) {
   const button = find(app.render(), (node) => node.props?.['aria-label'] === label)
   assert.ok(button, 'expected a button named ' + label)
   return button
+}
+
+const documentReads = (app) => app.requests.filter((request) => request.pathname.endsWith('/document'))
+const tabFor = (app, file) => findAll(app.render(), (node) => node.props?.role === 'tab' &&
+  String(node.props?.id || '').startsWith('doc-tab-')).find((tab) => {
+  const label = String(tab.props['aria-label'])
+  return label === file || label.startsWith(file + ' ·')
+})
+const journalEntry = (storage, file, scope = 's:known') => {
+  const raw = storage.getItem(RECOVERY_PREFIX + encodeURIComponent(scope) + ':' + encodeURIComponent(file))
+  return raw === null ? null : JSON.parse(raw)
 }
 
 test('an unsaved edit is journaled, then offered after a reload without any write', async () => {
@@ -393,4 +415,143 @@ test('a full journal refuses a ninth entry instead of replacing one', async () =
     'the message states the full journal and the absence of replacement: ' + JSON.stringify(message))
   assert.equal(sourceArea(app).props.value, SVG.replace('fill="red"', 'fill="silver"'),
     'the edit stays in the editor')
+})
+
+test('typing during a save keeps the live source, the saved bytes and the journal entry', async () => {
+  const storage = memoryStorage()
+  const documents = sources()
+  const requests = []
+  let releaseApply
+  const applyGate = { promise: new Promise((resolve) => { releaseApply = resolve }) }
+  const app = boot({ storage, sources: documents, requests, applyGate })
+  await openFile(app, 'a.svg')
+  const sent = SVG.replace('fill="red"', 'fill="teal"')
+  await editSource(app, sent)
+  assert.equal(recoveryKeys(storage).length, 1, 'the first edit is journaled')
+
+  const save = find(app.render(), (node) => node.type === 'button' && node.children?.includes('Save source'))
+  const pending = save.props.onClick()
+  await settle()
+  assert.equal(applies(app).length, 1, 'the save is in flight')
+  assert.equal(applies(app)[0].body.source, sent, 'the request carries the source at click time')
+
+  // Type again before the Host answers: the response must not overwrite this.
+  const typedMeanwhile = sent.replace('fill="teal"', 'fill="navy"')
+  sourceArea(app).props.onChange({ target: { value: typedMeanwhile } })
+  app.render()
+  releaseApply()
+  await pending
+  await settle()
+
+  assert.equal(sourceArea(app).props.value, typedMeanwhile,
+    'the typing that happened during the save is still in the editor')
+  assert.equal(documents['a.svg'].source, sent, 'the file on disk holds exactly the source that was sent')
+  assert.equal(tabFor(app, 'a.svg').props['aria-label'], 'a.svg · modifications non enregistrées',
+    'the buffer is still marked as unsaved')
+
+  await sleep(420)
+  app.render()
+  const entry = journalEntry(storage, 'a.svg')
+  assert.ok(entry, 'the journal entry must survive a save whose typing raced the response')
+  assert.equal(entry.source, typedMeanwhile, 'journaling resumed with the live source')
+  assert.equal(entry.baseHash, documents['a.svg'].hash,
+    'a save that really committed rebases the entry on the committed revision')
+  assert.equal(applies(app).length, 1, 'the late typing is never written implicitly')
+})
+
+test('a journaled base revision survives recoveries until a save succeeds', async () => {
+  const storage = memoryStorage()
+  const documents = sources()
+  const requests = []
+  const edited = SVG.replace('fill="red"', 'fill="olive"')
+  const prefix = RECOVERY_PREFIX + encodeURIComponent('s:known') + ':'
+  storage.setItem(prefix + encodeURIComponent('a.svg'), JSON.stringify({
+    v: 1, file: 'a.svg', format: 'svg', source: edited,
+    baseHash: 'sha-a', baseIdentity: 'id-a', savedAt: Date.now() - 60000 }))
+  // The disk moved on after the edit was journaled.
+  documents['a.svg'].hash = 'sha-b'
+  documents['a.svg'].identity = 'id-b'
+
+  const app = boot({ storage, sources: documents, requests })
+  app.render()
+  await clickButton(app, 'Récupérer les modifications de a.svg').props.onClick()
+  await settle(); await settle()
+
+  await sleep(420)
+  app.render()
+  assert.equal(journalEntry(storage, 'a.svg').baseHash, 'sha-a',
+    'journaling must not rebase the entry on the current disk revision')
+  const text = textOf(note(app))
+  assert.match(text, /changé sur le disque/, 'the divergence is reported')
+  assert.ok(!text.includes('le fichier sur le disque est inchangé'),
+    'the note must not claim the disk is unchanged while reporting divergence: ' + JSON.stringify(text))
+  assert.equal(documents['a.svg'].source, SVG, 'recovery never writes the file')
+
+  // A second crash/reload must still announce the divergence: the base revision
+  // was not silently replaced by the current one.
+  const second = boot({ storage, sources: documents, requests })
+  second.render()
+  await clickButton(second, 'Récupérer les modifications de a.svg').props.onClick()
+  await settle(); await settle()
+  assert.match(textOf(note(second)), /changé sur le disque/,
+    'the divergence must survive a second recovery')
+})
+
+test('recovery on an already-open clean tab re-reads the disk before comparing', async () => {
+  const storage = memoryStorage()
+  const documents = sources()
+  const requests = []
+  const edited = SVG.replace('fill="red"', 'fill="maroon"')
+  const prefix = RECOVERY_PREFIX + encodeURIComponent('s:known') + ':'
+  storage.setItem(prefix + encodeURIComponent('a.svg'), JSON.stringify({
+    v: 1, file: 'a.svg', format: 'svg', source: edited,
+    baseHash: 'sha-a', baseIdentity: 'id-a', savedAt: Date.now() - 60000 }))
+
+  const app = boot({ storage, sources: documents, requests })
+  app.render()
+  // The user opens the file themselves: one /document read, clean tab.
+  await openFile(app, 'a.svg')
+  const readsAfterOpen = documentReads(app).length
+
+  // Someone else replaces the file AFTER the tab was opened.
+  const elsewhere = SVG.replace('Title', 'Edited elsewhere')
+  documents['a.svg'].source = elsewhere
+  documents['a.svg'].hash = 'sha-c'
+  documents['a.svg'].identity = 'id-c'
+
+  await clickButton(app, 'Récupérer les modifications de a.svg').props.onClick()
+  await settle(); await settle()
+  assert.equal(documentReads(app).length, readsAfterOpen + 1,
+    'recovery must re-read the current revision even when the tab is already open')
+  assert.match(textOf(note(app)), /changé sur le disque/,
+    'a divergence that happened after the tab was opened is still reported')
+  assert.equal(sourceArea(app).props.value, edited, 'the journaled source is loaded into the editor')
+  assert.equal(documents['a.svg'].source, elsewhere, 'recovery never writes the file')
+})
+
+test('closing a modified tab without saving deletes the journal entry for that file', async () => {
+  const storage = memoryStorage()
+  const documents = sources()
+  const requests = []
+  const app = boot({ storage, sources: documents, requests })
+  await openFile(app, 'a.svg')
+  await editSource(app, SVG.replace('fill="red"', 'fill="crimson"'))
+  assert.equal(recoveryKeys(storage).length, 1, 'the edit is journaled before the close')
+
+  findAll(app.render(), (node) => node.props?.['aria-label'] === 'Fermer a.svg')[0].props.onClick()
+  app.render()
+  assert.ok(find(app.render(), (node) => node.props?.role === 'alertdialog'),
+    'closing a modified tab asks first')
+  find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Fermer sans enregistrer')).props.onClick()
+  app.render()
+  await sleep(420)
+  app.render()
+
+  assert.deepEqual(recoveryKeys(storage), [],
+    'discarding is the explicit no: the local copy must be deleted')
+  assert.equal(documents['a.svg'].source, SVG, 'discarding a tab never writes the file')
+  const second = boot({ storage, sources: documents, requests })
+  second.render()
+  assert.equal(banner(second), null, 'a reload must not offer the discarded entry again')
 })

@@ -84,7 +84,7 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 | 3.1 | **Onglets de documents** — livré : plusieurs fichiers ouverts, un état complet par onglet (source, sélection, Undo/Redo, brouillon), changement/fermeture sans écriture, limite de 8 onglets ([ADR-034](../adr/ADR-034-DOCUMENT-TABS.md)) |
 | 3.2 | Planche redimensionnable depuis l'UI (`viewBox`/`width`/`height` explicites) |
 | 3.3 | Export PNG du document courant, sans réécrire la source |
-| 3.4 | **Journal local de récupération des modifications non enregistrées** — livré : la source des documents modifiés est copiée dans `localStorage` (bornée, une clé par espace de travail), un bandeau explicite la propose après un crash, la récupération ne charge que l'éditeur et n'écrit jamais le fichier ([ADR-035](../adr/ADR-035-UNSAVED-RECOVERY-JOURNAL.md)) |
+| 3.4 | **Journal local de récupération des modifications non enregistrées** — livré : la source des documents modifiés est copiée dans `localStorage` (bornée, une clé par espace de travail), un bandeau explicite la propose après un crash, la récupération ne charge que l'éditeur et n'écrit jamais le fichier ; corrections de la revue indépendante D1–D6 livrées (frappe pendant un save préservée, base de révision conservée, `/document` relu pour un onglet déjà ouvert, message non contradictoire, fermeture sans enregistrer qui efface l'entrée, fermeture bloquée pendant un save) ([ADR-035](../adr/ADR-035-UNSAVED-RECOVERY-JOURNAL.md)) |
 
 > **3.1 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Le workbench
 > garde jusqu'à **8 onglets de documents** ouverts, chacun avec son état complet :
@@ -179,15 +179,32 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 > éviction ni troncature ; un dépassement n'est pas journalisé et le dit. Au
 > montage, un bandeau `role="alert"` nomme le fichier et l'âge de la dernière
 > copie, avec « Récupérer les modifications » et « Ignorer » : **aucune action
-> automatique**. « Récupérer » ouvre le fichier en lecture seule, compare la
-> révision, signale une divergence et installe la source comme brouillon non
-> enregistré — **0 `/apply`**, fichier byte-identique ; l'enregistrement reste
-> explicite et passe par les préconditions existantes. L'entrée est effacée par
-> une sauvegarde réussie, par « Ignorer », ou quand la source redevient
-> identique au disque. Un `localStorage` absent/plein/refusant l'écriture ne
+> automatique**. « Récupérer » ouvre le fichier en lecture seule, relit la
+> révision courante même pour un onglet déjà ouvert, signale une divergence et
+> installe la source comme brouillon non enregistré — **0 `/apply`**, fichier
+> byte-identique ; l'enregistrement reste explicite et passe par les
+> préconditions existantes. L'entrée est effacée par une sauvegarde réussie
+> dont la source n'a pas changé pendant l'envoi, par « Ignorer », par « Fermer
+> sans enregistrer », ou quand la source redevient identique au disque. Un
+> `localStorage` absent/plein/refusant l'écriture ne
 > casse ni l'édition ni la sauvegarde : échec silencieux dans la fonction,
 > avertissement affiché **une fois**. Case « Journal de récupération » dans
 > *Options*, préférence conservée, désactivée = plus de nouvelles copies.
+> **Corrections de la revue indépendante (D1–D6, 18/11/2026)** : une frappe
+> pendant un `/apply` en vol n'est plus écrasée par le rechargement (le document
+> n'est pas rechargé, seules `hash`/`identity` sont adoptées, le tampon reste
+> modifié et l'entrée de journal est conservée) ; une entrée garde sa
+> `baseHash` d'origine tant qu'aucune sauvegarde n'a réussi ; la récupération
+> relit `/document` même pour un onglet déjà ouvert ; le message de divergence
+> ne dit plus à la fois « inchangé » et « a changé » ; « Fermer sans
+> enregistrer » supprime l'entrée du scope ; fermer un onglet pendant un save
+> est refusé avec un message et le bouton de confirmation est désactivé.
+> Preuves ciblées de ces corrections : niveau 1 → **19/19 PASS** (11 tests
+> journal + 8 tests onglets) et **36/36 PASS** sur la non-régression save/load ;
+> niveau 2 → **22 PASS / 0 FAIL / 0 NOT_RUN** (11 specs `recovery:` ×
+> Chromium 145.0.7632.6 + Firefox 146.0.1, **67 vérifications par moteur**,
+> 134 au total). La suite complète (`npm run check`) n'a pas été relancée dans
+> cette passe et le niveau 3 (`test:dsh`/Desktop) reste **NOT_RUN**.
 > Preuves : `npm run check` → **598/598 PASS / 0 FAIL** (dont 7 tests
 > `tests/client-recovery.test.mjs`) ; navigateur Chromium 145 + Firefox 146,
 > `--grep=recovery:` → **14 PASS / 0 FAIL** (7 specs, **47 vérifications par

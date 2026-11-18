@@ -311,10 +311,192 @@ export const recoveryChangedOnDiskSpec = {
       document.querySelector('.dsh-studio-source textarea')?.value === value, edited, { timeout: 20000 })
     const note = page.locator('[data-recovery-note]')
     await note.waitFor({ state: 'visible', timeout: 10000 })
-    assert.match(await note.innerText(), /changé sur le disque/,
+    const message = await note.innerText()
+    assert.match(message, /changé sur le disque/,
       'the divergence from the recorded revision is stated')
+    assert.ok(!message.includes('le fichier sur le disque est inchangé'),
+      'the note must not contradict itself by calling the disk unchanged: ' + JSON.stringify(message))
     assert.equal(await harness.read('conflit.svg'), other,
       'recovery must not overwrite the bytes that arrived meanwhile')
     assert.equal(applies(harness).length, 0, 'a recovered stale source is never written automatically')
+  },
+}
+
+const journalEntryOf = (page, file) => page.evaluate(({ prefix, file }) => {
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index)
+    if (typeof key !== 'string' || !key.startsWith(prefix)) continue
+    const raw = localStorage.getItem(key)
+    if (typeof raw !== 'string') continue
+    try {
+      const entry = JSON.parse(raw)
+      if (entry && entry.file === file) return entry
+    } catch (_) { /* a corrupt entry is not this spec's concern */ }
+  }
+  return null
+}, { prefix: RECOVERY_PREFIX, file })
+
+export const recoveryTypingDuringSaveSpec = {
+  name: 'recovery: typing during a save keeps the live buffer, the saved bytes and the entry',
+  async run({ page, harness, assert }) {
+    await harness.write('frappe.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'frappe.svg', { expect: 'svg' })
+    await revealSource(page)
+    const sent = SVG_DOCUMENT.replace('fill="#bda991"', 'fill="#116644"')
+    await page.locator('.dsh-studio-source textarea').fill(sent)
+    await waitForJournalEntry(page)
+    const writesBefore = applies(harness).length
+
+    // Hold the POST until the test has typed a second edit, which is exactly
+    // the window a slow Host leaves open.
+    let releaseApply
+    const gate = new Promise((resolve) => { releaseApply = resolve })
+    let markIntercepted
+    const intercepted = new Promise((resolve) => { markIntercepted = resolve })
+    await page.route('**/design-studio-native/apply', async (route) => {
+      markIntercepted()
+      await gate
+      await route.continue()
+    })
+
+    await page.getByRole('button', { name: 'Save source' }).click()
+    await intercepted
+    const typedMeanwhile = sent.replace('fill="#116644"', 'fill="#661144"')
+    await page.locator('.dsh-studio-source textarea').fill(typedMeanwhile)
+    releaseApply()
+
+    assert.equal(await waitForDisk(harness, 'frappe.svg', (content) => content === sent,
+      { label: 'save of the source sent before the typing' }), sent,
+      'the file on disk holds exactly the source that was sent')
+    assert.equal(applies(harness).length, writesBefore + 1,
+      'exactly one write: the late typing is never written implicitly')
+
+    await page.waitForFunction((value) =>
+      document.querySelector('.dsh-studio-source textarea')?.value === value, typedMeanwhile, { timeout: 15000 })
+    assert.equal(await page.locator('.dsh-studio-source textarea').inputValue(), typedMeanwhile,
+      'the typing that happened during the save is still in the editor')
+    const tab = page.getByRole('tab', { name: /^frappe\.svg/ })
+    assert.match(await tab.getAttribute('aria-label'), /modifications non enregistrées/,
+      'the buffer is still marked as unsaved')
+
+    // The entry was NOT cleared: it must carry the live source for the next reload.
+    await page.waitForFunction(({ prefix, file, source }) => {
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index)
+        if (typeof key !== 'string' || !key.startsWith(prefix)) continue
+        try {
+          const entry = JSON.parse(localStorage.getItem(key))
+          if (entry && entry.file === file && entry.source === source) return true
+        } catch (_) { /* ignore malformed entries */ }
+      }
+      return false
+    }, { prefix: RECOVERY_PREFIX, file: 'frappe.svg', source: typedMeanwhile }, { timeout: 15000 })
+    const entry = await journalEntryOf(page, 'frappe.svg')
+    assert.ok(entry, 'the journal entry still exists after the save')
+    assert.equal(entry.source, typedMeanwhile, 'journaling resumed with the live source')
+  },
+}
+
+export const recoveryBaseRevisionSpec = {
+  name: 'recovery: a journaled base revision survives recoveries until a save succeeds',
+  async run({ page, harness, assert }) {
+    await harness.write('base.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'base.svg', { expect: 'svg' })
+    await revealSource(page)
+    const edited = SVG_DOCUMENT.replace('fill="#bda991"', 'fill="#225577"')
+    await page.locator('.dsh-studio-source textarea').fill(edited)
+    await waitForJournalEntry(page)
+    const recorded = await journalEntryOf(page, 'base.svg')
+    assert.ok(recorded && recorded.baseHash, 'the entry records the revision it was based on')
+
+    // Someone else replaces the file while the entry still holds the edit.
+    const elsewhere = SVG_DOCUMENT.replace('Title', 'Edited elsewhere')
+    await harness.write('base.svg', elsewhere)
+
+    const recoverAndReadNote = async () => {
+      await reloadPage(page)
+      await banner(page).waitFor({ state: 'visible', timeout: 15000 })
+      await page.getByRole('button', { name: 'Récupérer les modifications' }).click()
+      const note = page.locator('[data-recovery-note]')
+      await note.waitFor({ state: 'visible', timeout: 15000 })
+      await page.waitForFunction((value) =>
+        document.querySelector('.dsh-studio-source textarea')?.value === value, edited, { timeout: 20000 })
+      return note.innerText()
+    }
+
+    const first = await recoverAndReadNote()
+
+    // Debounced journaling must not rebase the entry on the CURRENT disk hash.
+    await page.waitForTimeout(700)
+    const afterRecovery = await journalEntryOf(page, 'base.svg')
+    assert.equal(afterRecovery.baseHash, recorded.baseHash,
+      'the journaled base revision is preserved after a recovery')
+    assert.match(first, /changé sur le disque/, 'the divergence is reported')
+    assert.ok(!first.includes('le fichier sur le disque est inchangé'),
+      'the note must not claim the disk is unchanged while reporting divergence: ' + JSON.stringify(first))
+
+    // A second crash/reload must still announce the divergence.
+    const second = await recoverAndReadNote()
+    assert.match(second, /changé sur le disque/, 'the divergence survives a second recovery')
+    assert.equal(await harness.read('base.svg'), elsewhere, 'no recovery ever writes the file')
+  },
+}
+
+export const recoveryOpenTabDivergenceSpec = {
+  name: 'recovery: recovery on an already-open clean tab re-reads the disk and reports divergence',
+  async run({ page, harness, assert }) {
+    await harness.write('ouvert.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'ouvert.svg', { expect: 'svg' })
+    await revealSource(page)
+    const edited = SVG_DOCUMENT.replace('Title', 'Journaled title')
+    await page.locator('.dsh-studio-source textarea').fill(edited)
+    await waitForJournalEntry(page)
+
+    await reloadPage(page)
+    await banner(page).waitFor({ state: 'visible', timeout: 15000 })
+    // The user reopens the same file themselves (clean tab), then someone else
+    // replaces the file on disk AFTER that read.
+    await openWorkspaceFile(page, 'ouvert.svg', { expect: 'svg' })
+    const elsewhere = SVG_DOCUMENT.replace('fill="#bda991"', 'fill="#884422"')
+    await harness.write('ouvert.svg', elsewhere)
+    const readsBefore = documents(harness).length
+
+    await page.getByRole('button', { name: 'Récupérer les modifications' }).click()
+    const note = page.locator('[data-recovery-note]')
+    await note.waitFor({ state: 'visible', timeout: 15000 })
+    await page.waitForFunction((value) =>
+      document.querySelector('.dsh-studio-source textarea')?.value === value, edited, { timeout: 20000 })
+    assert.equal(documents(harness).length, readsBefore + 1,
+      'recovery re-reads the current revision even for an already-open tab')
+    assert.match(await note.innerText(), /changé sur le disque/,
+      'the divergence is reported, not hidden behind a stale revision')
+    assert.equal(await harness.read('ouvert.svg'), elsewhere, 'recovery never writes the file')
+  },
+}
+
+export const recoveryDiscardClearsSpec = {
+  name: 'recovery: closing without saving deletes the entry and it is not offered again',
+  async run({ page, harness, assert }) {
+    await harness.write('abandon.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'abandon.svg', { expect: 'svg' })
+    await revealSource(page)
+    await page.locator('.dsh-studio-source textarea').fill(SVG_DOCUMENT.replace('Title', 'Abandoned'))
+    await waitForJournalEntry(page)
+
+    await page.getByRole('button', { name: 'Fermer abandon.svg' }).click()
+    const dialog = page.getByRole('alertdialog')
+    await dialog.waitFor({ state: 'visible', timeout: 10000 })
+    await page.getByRole('button', { name: 'Fermer sans enregistrer' }).click()
+    await page.waitForFunction(() =>
+      document.querySelectorAll('.dsh-studio-doc-tabs [role="tab"]').length === 0, null, { timeout: 10000 })
+    // Let the debounced journal write (if any) settle before judging the entry.
+    await page.waitForTimeout(700)
+    assert.deepEqual(await journalKeys(page), [], 'discarding is the explicit no: the local copy is deleted')
+    assert.equal(await harness.read('abandon.svg'), SVG_DOCUMENT, 'discarding never writes the file')
+    assert.equal(applies(harness).length, 0, 'closing a tab never writes')
+
+    await reloadPage(page)
+    await page.waitForTimeout(400)
+    assert.equal(await banner(page).count(), 0, 'a discarded entry is not offered again')
   },
 }

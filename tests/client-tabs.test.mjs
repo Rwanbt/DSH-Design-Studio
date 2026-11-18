@@ -66,7 +66,7 @@ function sourcesFor(names) {
   return sources
 }
 
-async function harness(names = ['a.svg', 'b.svg']) {
+async function harness(names = ['a.svg', 'b.svg'], { deferApply = false } = {}) {
   let index = 0
   let definition
   let component
@@ -74,6 +74,8 @@ async function harness(names = ['a.svg', 'b.svg']) {
   const effects = {}
   const requests = []
   const sources = sourcesFor(names)
+  let releaseApply = null
+  const applyGate = deferApply ? new Promise((resolve) => { releaseApply = resolve }) : null
   const React = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     useState(initial) {
@@ -138,6 +140,9 @@ async function harness(names = ['a.svg', 'b.svg']) {
       return { ok: true, json: async () => ({ ok: true, document: { file: body.file } }) }
     }
     if (target.pathname === '/design-studio-native/apply') {
+      // An optional gate holds the response so a test can observe (and act
+      // during) the real in-flight window of a save.
+      if (applyGate) await applyGate
       const document = sources[body?.file]
       if (!document) return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not-found', message: 'not found' }) }
       if (body.kind === 'replace-source') document.source = body.source
@@ -159,7 +164,7 @@ async function harness(names = ['a.svg', 'b.svg']) {
     if (meta.name === 'conversation.view') component = view
   } } })
   const render = () => { index = 0; return component({ sessionId: 'known' }) }
-  return { render, requests, sources }
+  return { render, requests, sources, releaseApply: () => releaseApply?.() }
 }
 
 const sourceArea = (app) => find(app.render(), (node) => node.type === 'textarea' && node.props.spellCheck === false)
@@ -362,4 +367,53 @@ test('a pending text draft belongs to its tab and is restored with it', async ()
   assert.equal(find(app.render(), (node) => node.props?.['aria-label'] === 'Text content').props.value,
     'Draft in A', 'the draft is restored together with its selection')
   assert.equal(applies(app).length, 0, 'switching tabs never writes a draft')
+})
+
+test('a save in flight refuses to close its tab and disables the discard button', async () => {
+  const app = await harness(['a.svg'], { deferApply: true })
+  await openFile(app, 'a.svg')
+  const edited = 'A-IN-FLIGHT'
+  sourceArea(app).props.onChange({ target: { value: edited } })
+  app.render()
+
+  // Ask the discard question BEFORE the save starts.
+  findAll(app.render(), (node) => node.props?.['aria-label'] === 'Fermer a.svg')[0].props.onClick()
+  app.render()
+  assert.ok(find(app.render(), (node) => node.props?.role === 'alertdialog'),
+    'closing a modified tab asks first')
+  assert.equal(find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Fermer sans enregistrer')).props.disabled, false,
+    'the discard button is usable when no save is in flight')
+
+  // Start the save and hold its response.
+  const pending = find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Save source')).props.onClick()
+  await settle()
+  assert.equal(applies(app).length, 1, 'the save is really in flight')
+
+  const close = findAll(app.render(), (node) => node.props?.['aria-label'] === 'Fermer a.svg')[0]
+  assert.equal(close.props.disabled, true, 'the tab close control is disabled during a save')
+  const discard = find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Fermer sans enregistrer'))
+  assert.equal(discard.props.disabled, true, 'the discard button is disabled during a save')
+
+  // The handler itself refuses too: the guard must not depend on the attribute.
+  discard.props.onClick()
+  await settle()
+  assert.equal(docTabs(app).length, 1, 'the tab must stay open while the save is in flight')
+  const alert = find(app.render(), (node) => node.props?.role === 'alert')
+  assert.ok(alert && /Enregistrement en cours/.test(textOf(alert)), 'a clear refusal is shown')
+
+  // Once the save settles, the same confirmation works again.
+  app.releaseApply()
+  await pending
+  await settle()
+  assert.equal(find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Fermer sans enregistrer')).props.disabled, false,
+    'the discard button is usable again after the save')
+  find(app.render(), (node) => node.type === 'button' &&
+    node.children?.includes('Fermer sans enregistrer')).props.onClick()
+  await settle()
+  assert.equal(docTabs(app).length, 0, 'after the save the tab can be closed')
+  assert.equal(applies(app).length, 1, 'closing never sends another write')
 })

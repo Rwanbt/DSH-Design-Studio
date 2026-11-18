@@ -145,6 +145,33 @@ window.__ModuleLoader__.load({
       if(!storage) return false
       try { storage.setItem(RECOVERY_PREF_KEY, enabled ? '1' : '0'); return true } catch(_) { return false }
     }
+    /**
+     * Rebuild the exact bytes the Host just committed from the response
+     * `patches` (UTF-16 offsets, `before` preconditions, relative to the source
+     * the request was computed on). This is used only when the user typed
+     * while the POST was in flight: reloading would discard that typing, so the
+     * editor keeps the live buffer and still needs the true on-disk source for
+     * its dirty/discard semantics. Returns null on anything unexpected, so the
+     * caller can fall back instead of inventing bytes.
+     */
+    function sourceAfterPatches(base, patches) {
+      if(typeof base !== 'string' || !Array.isArray(patches) || patches.length === 0) return null
+      const ordered = patches.slice().sort((a, b) => a.start - b.start || a.end - b.end)
+      let result = ''
+      let position = 0
+      let lastStart = -1
+      for(const patch of ordered) {
+        if(!patch || !Number.isSafeInteger(patch.start) || !Number.isSafeInteger(patch.end) ||
+          patch.start < position || patch.start === lastStart ||
+          patch.end < patch.start || patch.end > base.length ||
+          typeof patch.before !== 'string' || typeof patch.after !== 'string' ||
+          base.slice(patch.start, patch.end) !== patch.before) return null
+        result += base.slice(position, patch.start) + patch.after
+        position = patch.end
+        lastStart = patch.start
+      }
+      return result + base.slice(position)
+    }
     /** Human age of a journal entry, in French, without a new dependency. */
     function recoveryAge(savedAt, now = Date.now()) {
       const stamp = Number(savedAt)
@@ -792,6 +819,12 @@ window.__ModuleLoader__.load({
       // Latest render state, readable from a timer or a page-hide listener whose
       // closure is older than the source being typed.
       const recoveryRuntimeRef = React.useRef({})
+      // Per-file revision a successful save just committed. A journal entry is
+      // normally based on the revision its edit started from and must keep that
+      // base across recoveries; a successful save is the one event that
+      // legitimately rebases it, so this marker is consumed by the next journal
+      // write for that file.
+      const recoverySavedRef = React.useRef({})
       // The revision currently loaded on disk (`/document`), updated
       // synchronously by `load()` so a recovery can compare it after an await.
       const currentDocRef = React.useRef(null)
@@ -1127,8 +1160,21 @@ window.__ModuleLoader__.load({
         }
         if(!candidates.length) return
         const savedAt = Date.now()
+        // ADR-035 · D3: an entry keeps the revision its edit started from until a
+        // save actually succeeds for that file. The live document hash is the
+        // CURRENT disk revision; after a recovery it is no longer the base of
+        // the journaled edit, and rewriting it there would make the next reload
+        // believe the file never diverged. A just-committed save (tracked in
+        // `recoverySavedRef`) is the only rebase that is allowed.
+        const existing = new Map(recoveryEntries(runtime.scope).map(entry => [entry.file, entry]))
         for(const candidate of candidates) {
-          const result = recoveryWrite(runtime.scope, {...candidate, savedAt})
+          const previous = existing.get(candidate.file)
+          const committed = recoverySavedRef.current && recoverySavedRef.current[candidate.file]
+          const base = committed || (previous && previous.baseHash
+            ? {baseHash:previous.baseHash, baseIdentity:previous.baseIdentity}
+            : {baseHash:candidate.baseHash, baseIdentity:candidate.baseIdentity})
+          const result = recoveryWrite(runtime.scope, {...candidate, ...base, savedAt})
+          if(result.ok && committed) delete recoverySavedRef.current[candidate.file]
           if(!result.ok) reportRecoveryFailure(result.reason)
         }
       }
@@ -1197,8 +1243,14 @@ window.__ModuleLoader__.load({
           }
         }
         setError(''); setRecoveryNote(null)
-        if(openTab) activateTab(openTab.id)
-        else if(!await openInTab(entry.file)) return
+        if(openTab) {
+          if(!activateTab(openTab.id)) return
+          // D4: re-read the current revision even when the tab is already open.
+          // A tab opened before an external change holds the revision it was
+          // loaded with; comparing that stale value would hide the divergence
+          // and the later save would fail with a misleading 409.
+          if(!await load(true, entry.file)) return
+        } else if(!await openInTab(entry.file)) return
         const current = currentDocRef.current
         if(!current || current.file!==entry.file) {
           setError('Récupération impossible : '+entry.file+' n’a pas pu être ouvert. Aucune écriture n’a été faite.')
@@ -1208,10 +1260,13 @@ window.__ModuleLoader__.load({
         setSource(entry.source)
         recoveryHandledRef.current[entry.file] = true
         setRecoveryPending(visibleRecoveryEntries())
+        // D5: the two clauses must never contradict each other. Recovery itself
+        // wrote nothing; the disk may still have changed because someone else
+        // wrote it, and that is stated as a separate fact.
         setRecoveryNote({kind:'recovered', file:entry.file, changed,
           text:'Source journalisée chargée dans l’éditeur pour '+entry.file+
-            '. Aucune écriture : le fichier sur le disque est inchangé.'+
-            (changed?' Attention : le fichier a changé sur le disque depuis la journalisation (révision différente). Comparez avant d’enregistrer ; un enregistrement explicite remplacerait la version actuelle.':'')})
+            '. Aucune écriture : rien n’a été enregistré sur le disque.'+
+            (changed?' Attention : ce fichier a changé sur le disque depuis la journalisation (révision différente) ; la version du disque n’a pas été remplacée. Comparez avant d’enregistrer ; un enregistrement explicite remplacerait la version actuelle.':'')})
       }
       // At mount (and on a scope change) offer what can be recovered for THIS
       // workspace. It is only read: no file is opened and nothing is written.
@@ -1230,6 +1285,7 @@ window.__ModuleLoader__.load({
           if(stale) {
             recoveryClear(scopeKey, current.file)
             delete recoveryHandledRef.current[current.file]
+            delete recoverySavedRef.current[current.file]
             setRecoveryPending(visibleRecoveryEntries())
           }
         }
@@ -1406,13 +1462,34 @@ window.__ModuleLoader__.load({
        * explicit `discard` this only asks the question, leaving the tab and the
        * bytes untouched. Closing never writes.
        */
-      function closeTab(id=activeTabId, {discard=false}={}) {
+      function closeTab(id=activeTabId, {discard=false,force=false}={}) {
+        // D2: a save reads its base revision from the tab that is open when the
+        // POST starts. Closing (or discarding) that tab mid-save would let the
+        // in-flight write land for a document the user just dismissed. Refuse
+        // until the save settles; internal callers that already own `busy`
+        // (file deletion) pass `force`.
+        if(busy && !force) {
+          setError('Enregistrement en cours : attendez la fin de la sauvegarde avant de fermer cet onglet.')
+          return false
+        }
         const list = tabsRef.current
         const index = list.findIndex(entry=>entry.id===id)
         if(index<0) return false
         const entry = list[index]
         const dirty = entry.id===activeTabId ? isDirty() : !!entry.dirty
         if(dirty && !discard) { setTabCloseConfirm({id, file:entry.file}); return false }
+        // D6: “close without saving” is the explicit no for this file's unsaved
+        // work, so its journaled copy must go too; otherwise a reload would
+        // offer back exactly what the user abandoned.
+        if(discard && scopeReady && entry.file) {
+          const hadEntry = recoveryEntries(scopeKey).some(item=>item.file===entry.file)
+          delete recoveryHandledRef.current[entry.file]
+          delete recoverySavedRef.current[entry.file]
+          if(hadEntry) {
+            if(!recoveryClear(scopeKey, entry.file)) reportRecoveryFailure('storage-refused')
+            setRecoveryPending(visibleRecoveryEntries())
+          }
+        }
         setTabCloseConfirm(null)
         const remaining = list.filter(item=>item.id!==id)
         commitTabs(remaining)
@@ -1630,7 +1707,7 @@ window.__ModuleLoader__.load({
               body:JSON.stringify({...scopeBody,file:target,baseHash,baseIdentity})})
             setFileAction(null)
             await loadWorkspaceFiles()
-            if(openTarget && openTab.id===activeTabId) closeTab(activeTabId,{discard:true})
+            if(openTarget && openTab.id===activeTabId) closeTab(activeTabId,{discard:true,force:true})
             else if(openTarget) commitTabs(tabsRef.current.filter(entry=>entry.id!==openTab.id))
             setNotice('Fichier supprimé : '+target)
           }
@@ -1687,15 +1764,57 @@ window.__ModuleLoader__.load({
         if(payload.kind!=='svg-text' && refuseTextDraft())return false
         if(reloadRequired){setError('Document state uncertain. Reload the file before making further changes.');return false}
         if(payload.kind!=='replace-source' && source!==doc.source) {setError('Unsaved source changes: save or discard them first');return false}
+        // The exact source this save commits. For a source save it is the text
+        // in the request; for every patch kind it is the loaded source the
+        // patch is computed from (the guard above proves they are equal).
+        const sentSource = payload.kind==='replace-source' && typeof payload.source==='string'
+          ? payload.source : doc.source
+        const recordHistory = (response) => {
+          if(!response.result?.changed || historyMode!=='record') return
+          // A rename changes the address of the layer: the entry remembers
+          // both names so Undo/Redo can restore the selection coherently.
+          const entry={undo:response.result.inverse,redo:response.patches,
+            rename:payload.kind==='svg-rename'?{from:payload.id,to:payload.next}:null}
+          // Avoid storing dozens of full-document copies in memory.
+          const bytes=JSON.stringify(entry).length
+          if(bytes<=2*1024*1024) setUndoStack(previous=>[...previous,entry].slice(-30))
+          else setUndoStack([])
+          setRedoStack([])
+        }
         setBusy(true);setError('')
         try {
           const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...scopeBody,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
+          // D1: typing is not blocked while the POST is in flight. If the live
+          // source no longer matches what was saved, reloading the document
+          // would silently discard that typing — and the journal entry that
+          // could have saved it. Keep the live buffer, adopt only the revision
+          // the Host committed, mark it dirty, and let journaling resume on the
+          // new source. This branch never clears the entry.
+          const liveSource = recoveryRuntimeRef.current && typeof recoveryRuntimeRef.current.source==='string'
+            ? recoveryRuntimeRef.current.source : source
+          if(liveSource !== sentSource) {
+            const result = response && response.result && typeof response.result==='object' ? response.result : {}
+            const hash = typeof result.hash==='string' && result.hash ? result.hash : doc.hash
+            const identity = typeof result.identity==='string' && result.identity ? result.identity : doc.identity
+            const savedSource = payload.kind==='replace-source'
+              ? sentSource : (sourceAfterPatches(doc.source, response && response.patches) || doc.source)
+            const nextDoc = {...doc, source:savedSource, hash, identity}
+            setDoc(nextDoc)
+            currentDocRef.current = nextDoc
+            if(recoverySavedRef.current) recoverySavedRef.current[doc.file] = {baseHash:hash, baseIdentity:identity}
+            setRecoveryNote(previous=>previous && previous.file===doc.file ? null : previous)
+            scheduleRecoveryJournal()
+            recordHistory(response)
+            if(typeof onSaved==='function')onSaved(response)
+            return true
+          }
           // A successful save makes the journal entry for that file obsolete:
           // the disk now holds those bytes, so nothing is left to recover. The
           // removal is best-effort and never affects the save outcome.
           if(scopeReady && doc?.file) {
             recoveryClear(scopeKey, doc.file)
             delete recoveryHandledRef.current[doc.file]
+            delete recoverySavedRef.current[doc.file]
             setRecoveryPending(visibleRecoveryEntries().filter(entry=>entry.file!==doc.file))
             setRecoveryNote(previous=>previous && previous.file===doc.file ? null : previous)
           }
@@ -1706,19 +1825,7 @@ window.__ModuleLoader__.load({
             setError('The file may have been saved, but could not be reloaded. Reload before editing; history has been cleared.')
             return false
           }
-          if(response.result?.changed) {
-            if(historyMode==='record') {
-              // A rename changes the address of the layer: the entry remembers
-              // both names so Undo/Redo can restore the selection coherently.
-              const entry={undo:response.result.inverse,redo:response.patches,
-                rename:payload.kind==='svg-rename'?{from:payload.id,to:payload.next}:null}
-              // Avoid storing dozens of full-document copies in memory.
-              const bytes=JSON.stringify(entry).length
-              if(bytes<=2*1024*1024) setUndoStack(previous=>[...previous,entry].slice(-30))
-              else setUndoStack([])
-              setRedoStack([])
-            }
-          }
+          recordHistory(response)
           if(typeof onSaved==='function')onSaved(response)
           return true
         }catch(e){
@@ -4033,7 +4140,7 @@ window.__ModuleLoader__.load({
               'aria-label':'Fermer l’onglet '+tabCloseConfirm.file,'data-tab-close-confirm':tabCloseConfirm.file},
               h('span',null,'Fermer ',h('code',null,tabCloseConfirm.file),
                 ' ? Des modifications ne sont pas enregistrées : elles seront perdues.'),
-              h('button',{type:'button',style:button,
+              h('button',{type:'button',style:button,disabled:busy,
                 onClick:()=>closeTab(tabCloseConfirm.id,{discard:true})},'Fermer sans enregistrer'),
               h('button',{type:'button',style:button,
                 onClick:()=>setTabCloseConfirm(null)},'Annuler')),

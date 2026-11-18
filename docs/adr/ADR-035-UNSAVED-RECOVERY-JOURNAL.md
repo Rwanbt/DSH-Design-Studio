@@ -71,14 +71,33 @@ dépend pas d'un minuteur qui aurait eu le temps de tirer.
 
 Une entrée disparaît quand :
 
-1. une **sauvegarde réussit** pour ce fichier (`/apply` accepté) — le disque
-   contient désormais ces octets ;
+1. une **sauvegarde réussit** pour ce fichier (`/apply` accepté) **et que la
+   source vivante est identique à la source envoyée** — le disque contient
+   désormais ces octets ;
 2. l'utilisateur clique **« Ignorer »** — c'est le seul jet explicite ;
-3. la source redevient **identique aux octets sur disque** (annulation de
+3. l'utilisateur **ferme l'onglet modifié en confirmant « Fermer sans
+   enregistrer »** — il vient de renoncer explicitement à cette source ;
+4. la source redevient **identique aux octets sur disque** (annulation de
    l'édition) : l'entrée est prouvablement inutile.
 
 Aucun autre chemin n'efface une entrée, et surtout pas l'ouverture du fichier :
-ouvrir un document ne doit pas détruire l'offre de récupération.
+ouvrir un document ne doit pas détruire l'offre de récupération. En particulier,
+si l'utilisateur tape dans la source pendant qu'un `save()` est en vol, la
+réponse **ne recharge pas** le document et **n'efface pas** l'entrée : la source
+vivante est conservée, seules les métadonnées de révision (`hash`, `identity`)
+sont adoptées, le tampon reste marqué comme modifié non enregistré, et la
+journalisation reprend la nouvelle source.
+
+### 5 bis. La base d'une entrée ne se réécrit qu'après une sauvegarde réussie
+
+Une entrée journalisée conserve sa `baseHash` d'origine tant qu'aucune
+sauvegarde n'a réussi pour ce fichier. La révision chargée (`doc.hash`) est la
+révision **courante du disque**, pas la base de l'édition journalisée : après
+une récupération, réécrire `baseHash` avec `doc.hash` ferait disparaître
+l'avertissement de divergence au rechargement suivant, et un enregistrement
+explicite pourrait alors remplacer une version disque plus récente sans
+avertissement. Une sauvegarde réellement acceptée est le seul événement qui
+rebase légitimement l'entrée (la source vivante devient alors la nouvelle base).
 
 ### 6. Récupérer = charger dans l'éditeur, jamais écrire
 
@@ -86,15 +105,22 @@ ouvrir un document ne doit pas détruire l'offre de récupération.
 
 1. ouvre le fichier en **lecture seule** (`/document`) s'il n'est pas déjà
    ouvert — aucune écriture ;
-2. compare `doc.hash` à la révision de base journalisée ;
-3. installe la source journalisée comme **modification non enregistrée**
+2. **relit la révision courante (`GET /document`) même quand l'onglet est déjà
+   ouvert et propre** : la révision chargée à l'ouverture de l'onglet peut être
+   périmée, et comparer cette valeur masquerait une divergence que le save
+   suivant révélerait par un 409 trompeur ;
+3. compare la révision ainsi relue à la révision de base journalisée ;
+4. installe la source journalisée comme **modification non enregistrée**
    ordinaire (`source` ≠ `doc.source`).
 
 Aucun `/apply` n'est envoyé, aucun octet du fichier ne change. Si le fichier a
-changé entre-temps, le bandeau de résultat le dit explicitement : la source
-journalisée est proposée **pour comparaison**, et un enregistrement explicite
-resterait un enregistrement normal (préconditions de révision existantes,
-avertissement visible). La récupération ne fusionne rien et ne décide rien.
+changé entre-temps, le bandeau de résultat le dit explicitement, **sans jamais
+prétendre dans la même phrase que le disque est inchangé** : la récupération
+n'a rien écrit, et le fichier a changé parce qu'un autre écrivain l'a modifié.
+La source journalisée est proposée **pour comparaison**, et un enregistrement
+explicite resterait un enregistrement normal (préconditions de révision
+existantes, avertissement visible). La récupération ne fusionne rien et ne
+décide rien.
 
 ### 7. Le bandeau propose, il n'agit pas
 
@@ -123,6 +149,21 @@ nouvelles copies, préférence enregistrée. Désactiver n'efface pas les entré
 existantes : elles restent proposées jusqu'à « Récupérer » ou « Ignorer », ce qui
 est dit dans le panneau. La valeur par défaut est activée.
 
+### 10. Corrections issues de la revue indépendante (18 novembre 2026)
+
+La revue `docs/operations/REVIEW-2026-11-18-CLIENT-TRANCHES.md` a relevé six
+défauts dans les tranches onglets + journal. Ils sont corrigés sans changer le
+contrat HTTP, sans écriture automatique et sans nouvelle dépendance :
+
+| Défaut | Correction |
+|---|---|
+| **D1** — une frappe pendant un `/apply` en vol était remplacée par la source disque, après effacement de l'entrée de journal | au retour du save, si la source vivante diffère de la source **envoyée**, aucun rechargement : seules `hash`/`identity` de la réponse sont adoptées, le tampon reste modifié non enregistré et l'entrée de journal est conservée puis réécrite avec la source vivante |
+| **D2** — fermer un onglet pendant un save n'était pas bloqué | `closeTab()` refuse pendant `busy` avec un message explicite (les appels internes qui possèdent déjà `busy`, comme la suppression de fichier, passent `force`) et « Fermer sans enregistrer » est désactivé pendant le save |
+| **D3** — `baseHash` était réécrit avec la révision disque courante après une récupération | une entrée conserve sa base d'origine tant qu'aucune sauvegarde n'a réussi pour ce fichier ; un save accepté est le seul rebasage légitime |
+| **D4** — récupération sur un onglet déjà ouvert et propre sans relecture du disque | `GET /document` est relu avant la comparaison, même pour un onglet déjà ouvert |
+| **D5** — message de divergence contradictoire (« fichier inchangé » puis « a changé ») | le texte sépare les deux faits : la récupération n'a rien écrit, et le fichier a changé parce qu'un autre écrivain l'a modifié |
+| **D6** — « Fermer sans enregistrer » laissait l'entrée, reproposée après rechargement | fermer en abandonnant supprime l'entrée de ce fichier pour ce scope |
+
 ## Preuves exécutées
 
 | Niveau | Preuve | Résultat |
@@ -130,6 +171,9 @@ est dit dans le panneau. La valeur par défaut est activée.
 | 1 — `npm run check` | suite complète, dont `tests/client-recovery.test.mjs` (7 tests) | **598/598 PASS / 0 FAIL** (591 avant cette tranche) |
 | 2 — navigateur réel | `--grep=recovery:` : 7 specs × Chromium 145.0.7632.6 + Firefox 146.0.1 | **14 PASS / 0 FAIL**, **47 vérifications par moteur** (94 au total) |
 | 2 — non-régression ciblée | `--grep=tab:` (8 PASS), `conflict:` (4), `panel:` (6), `a11y:` (8), `png:` (12) × 2 moteurs | **38 PASS / 0 FAIL** |
+| 1 — corrections D1–D6 | `node --test tests/client-recovery.test.mjs tests/client-tabs.test.mjs` | **19/19 PASS / 0 FAIL** (11 tests journal, 8 tests onglets, dont 5 nouveaux) |
+| 1 — non-régression save/load | `client-save-recovery`, `client-css-integration`, `client-html-integration`, `client-pen-integration`, `client-file-picker` | **36/36 PASS / 0 FAIL** |
+| 2 — corrections D1/D3/D4/D6 | `--grep=recovery:` : 11 specs × Chromium 145.0.7632.6 + Firefox 146.0.1 | **22 PASS / 0 FAIL / 0 NOT_RUN**, **67 vérifications par moteur** (134 au total) |
 | 3 — DSH réel / Desktop | non exécuté pour cette tranche (consigne : pas de vrai DSH, pas d'Electron) | **NOT_RUN** |
 
 Le niveau 2 simule le crash par un **rechargement de page** (`page.reload()`),
@@ -162,7 +206,30 @@ Détail des vérifications navigateur (par moteur) :
 - un fichier remplacé sur le disque entre la journalisation et la récupération
   est **signalé** (« le fichier a changé sur le disque »), la source journalisée
   est chargée pour comparaison, et les octets arrivés entre-temps restent
-  intacts (0 `/apply`).
+  intacts (0 `/apply`) ;
+- frappe pendant un save en vol (POST retenu par `page.route`) : la source
+  conservée dans l'éditeur est la **seconde frappe**, le disque contient
+  exactement la **source envoyée**, un seul `/apply` a été émis, l'onglet reste
+  marqué « modifications non enregistrées » et l'entrée de journal existe
+  toujours avec la source vivante ;
+- base conservée : entrée journalisée sur une révision H1, fichier remplacé par
+  H2, récupération → divergence signalée **sans phrase contradictoire**,
+  `baseHash` toujours H1 après la réécriture différée, et une **seconde**
+  récupération signale encore la divergence ;
+- onglet déjà ouvert : l'utilisateur rouvre le fichier proprement, un tiers le
+  remplace ensuite, puis « Récupérer » → exactement **un `/document` de plus**
+  est relu, la divergence est signalée, le fichier du tiers reste intact ;
+- « Fermer sans enregistrer » : l'entrée du fichier est supprimée, aucun
+  `/apply` n'est émis, et un rechargement n'offre plus rien ;
+- niveau 1 (D2) : pendant un `/apply` retenu, le bouton × de l'onglet et
+  « Fermer sans enregistrer » sont désactivés, l'appel direct du handler est
+  refusé avec « Enregistrement en cours », puis la fermeture fonctionne après
+  la réponse.
+
+Les corrections ont été vérifiées par ces exécutions ciblées ; la **suite
+complète** n'a pas été relancée dans cette passe (le lead la relance), et le
+niveau 3 reste `NOT_RUN`. Non-régression des onglets en navigateur :
+`--grep=tab:` → **8 PASS / 0 FAIL** (4 specs × Chromium + Firefox).
 
 Le niveau 1 couvre en plus le plafond d'entrées : avec 8 entrées préexistantes,
 la 9e modification n'est pas journalisée, **aucune entrée existante n'est
@@ -174,7 +241,16 @@ remplacée**, le message le dit, et le texte édité reste dans l'éditeur.
   bandeau ou la récupération : seuls les chemins de sauvegarde existants
   écrivent ;
 - la récupération est une action explicite, et une entrée n'est effacée que par
-  une sauvegarde réussie, « Ignorer », ou un retour prouvé aux octets du disque ;
+  une sauvegarde réussie (source inchangée), « Ignorer », la fermeture explicite
+  d'un onglet modifié sans enregistrer, ou un retour prouvé aux octets du
+  disque ;
+- une frappe effectuée pendant un `/apply` en vol n'est **jamais** remplacée par
+  la source disque : le document n'est pas rechargé, seules les métadonnées de
+  révision de la réponse sont adoptées, le tampon reste modifié non enregistré
+  et l'entrée de journal est conservée puis réécrite avec la source vivante ;
+- une entrée conserve sa révision de base d'origine tant qu'aucune sauvegarde
+  n'a réussi pour ce fichier ; une sauvegarde acceptée est le seul rebasage
+  autorisé ;
 - la clé inclut le scope : aucun partage d'entrée entre deux espaces de
   travail (ni entre deux conversations) ;
 - bornes annoncées : 256 Kio par entrée, 8 entrées par scope, refus explicite
@@ -183,8 +259,13 @@ remplacée**, le message le dit, et le texte édité reste dans l'éditeur.
   l'enregistrement, et l'échec est signalé ;
 - un document dont la source redevient identique au disque est effacé du
   journal au lieu de réapparaître après un crash ;
-- la récupération compare la révision et **signale** une divergence au lieu de
-  l'ignorer.
+- la récupération **relit la révision courante (`GET /document`) même pour un
+  onglet déjà ouvert**, puis compare et **signale** une divergence au lieu de
+  l'ignorer ;
+- le message de divergence ne se contredit pas : il distingue « la récupération
+  n'a rien écrit » de « un autre écrivain a modifié le fichier » ;
+- fermer un onglet pendant un save est refusé avec un message clair, et le
+  bouton de confirmation est désactivé pendant l'écriture.
 
 ## Non-garanties (documentées, pas dissimulées)
 
