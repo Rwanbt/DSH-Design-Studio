@@ -9,7 +9,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, rm, link, open, unlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, rm, link, open, unlink, realpath } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createNativeFileStore } from '../src/native-file-store.mjs'
@@ -47,8 +47,10 @@ const SVG = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"><rec
 for (const replaced of [false, true]) {
   test(`failed source removal preserves destination (external replacement: ${replaced})`, () => workspace(async (root, store) => {
     const opened = await store.create('source.svg', { source: SVG })
-    const source = path.join(root, 'source.svg')
-    const destination = path.join(root, 'destination.svg')
+    // The store canonicalizes the workspace. Windows TEMP can use an 8.3 alias,
+    // so match the canonical I/O path rather than the caller's spelling.
+    const source = await realpath(path.join(root, 'source.svg'))
+    const destination = path.join(path.dirname(source), 'destination.svg')
     const failure = Object.assign(new Error('injected source removal denial'), { code: 'EACCES' })
     const faultStore = createNativeFileStore(root, { io: {
       async unlink(file) {
