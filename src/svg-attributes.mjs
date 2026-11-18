@@ -2,8 +2,8 @@
 import { scanSvgDocument, svgLockedAncestor } from './svg-document.mjs'
 
 const TAGS = new Set(['svg','g','rect','circle','ellipse','line','polyline','polygon','path','text','use'])
-const PROPS = new Set(['fill','stroke','stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
-const NUMERIC = new Set(['stroke-width','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','font-size','letter-spacing'])
+const PROPS = new Set(['fill','fill-opacity','stroke','stroke-width','stroke-opacity','stroke-linecap','stroke-linejoin','stroke-dasharray','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','d','transform','font-size','font-family','font-weight','font-style','letter-spacing','text-anchor'])
+const NUMERIC = new Set(['stroke-width','stroke-opacity','fill-opacity','opacity','x','y','width','height','r','rx','ry','cx','cy','x1','x2','y1','y2','font-size','letter-spacing'])
 function fail(code, message) { const error = new Error(message); error.code = code; throw error }
 function nameChar(c) { return /[\w.:\-]/.test(c ?? '') }
 
@@ -146,7 +146,7 @@ function validatedValue(attribute,value) {
     if(['width','height','r','rx','ry','stroke-width'].includes(attribute) && Number(value)<0) fail('invalid-value','Nonnegative value required')
     if(attribute==='font-size' && (Number(value)<1 || Number(value)>500)) fail('invalid-value','Font size must be 1..500')
     if(attribute==='letter-spacing' && Math.abs(Number(value))>100) fail('invalid-value','Letter spacing out of range')
-    if(attribute==='opacity' && (Number(value)<0 || Number(value)>1)) fail('invalid-value','Opacity must be within 0..1')
+    if(['opacity','stroke-opacity','fill-opacity'].includes(attribute) && (Number(value)<0 || Number(value)>1)) fail('invalid-value','Opacity must be within 0..1')
   } else if(['fill','stroke'].includes(attribute)) {
     if(!/^(?:none|transparent|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]+|url\(#[A-Za-z_][\w.:-]*\))$/.test(value)) fail('invalid-value','Unsupported or unsafe paint value')
   } else if(attribute==='font-family') {
@@ -157,6 +157,20 @@ function validatedValue(attribute,value) {
     if(!/^(?:normal|italic|oblique)$/.test(value)) fail('invalid-value','Unsupported font style')
   } else if(attribute==='text-anchor') {
     if(!/^(?:start|middle|end)$/.test(value)) fail('invalid-value','Unsupported text alignment')
+  } else if(attribute==='stroke-linecap') {
+    if(!/^(?:butt|round|square)$/.test(value)) fail('invalid-value','Unsupported stroke line cap')
+  } else if(attribute==='stroke-linejoin') {
+    if(!/^(?:miter|round|bevel)$/.test(value)) fail('invalid-value','Unsupported stroke line join')
+  } else if(attribute==='stroke-dasharray') {
+    // Bounded list of nonnegative lengths, or `none`. No units, no percentages,
+    // no functions: a dashed pattern is a plain list in SVG user units.
+    if(value.trim()==='none') return 'none'
+    const parts=value.trim().split(/[\s,]+/)
+    if(parts.length<1 || parts.length>32) fail('invalid-value','Dash array must have 1..32 entries')
+    for(const part of parts) {
+      if(!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(part)) fail('invalid-value','Dash array entries must be nonnegative numbers')
+      if(Number(part)>100000) fail('invalid-value','Dash array entry out of range')
+    }
   } else if(attribute==='d') {
     if(!/^[MmZzLlHhVvCcSsQqTtAaEe0-9+\-.,\s]*$/.test(value)) fail('invalid-value','Invalid path data characters')
   } else if(attribute==='transform') {
@@ -180,7 +194,12 @@ export function svgAttributePatch(source,{id,attribute,value}) {
   }
   const selected=tags(source).find(item=>item.attrs.some(a=>a.name==='id'&&a.value===id))
   const matches=selected.attrs.filter(a=>a.name===attribute)
-  if(matches.length===0 && (attribute==='opacity' || (selected.tag==='text' &&
+  // Editable attributes that a document may simply not have written yet. Adding
+  // one is a single validated insertion before the element's closing bracket, so
+  // every other byte is preserved and the inverse removes exactly that text.
+  const INSERTABLE = new Set(['opacity','fill-opacity','stroke','stroke-width','stroke-opacity',
+    'stroke-linecap','stroke-linejoin','stroke-dasharray'])
+  if(matches.length===0 && (INSERTABLE.has(attribute) || (selected.tag==='text' &&
       ['font-family','font-size','font-weight','font-style','letter-spacing','text-anchor'].includes(attribute)))) {
     // Graphite exposes these real SVG defaults. Make an explicit, validated
     // declaration with one insertion; never serialize/rewrite the element.
