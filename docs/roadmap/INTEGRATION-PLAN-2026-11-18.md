@@ -1,5 +1,14 @@
 # Plan d'intégration — de l'alpha expérimentale à un outil utilisable
 
+> **Actualisation du 19 novembre 2026 (à revérifier au SHA courant) :**
+> la création de dégradés linéaires/radiaux, les arrêts éditables et la
+> géométrie native depuis l'inspecteur Graphite sont implémentés sur \`dev\`
+> (ADR-036) avec tests module/navigateur. Cette actualisation ne ferme
+> pas le gate DSH Desktop et ne vaut pas validation Production Ready.
+> Les sections historiques de ce document peuvent indiquer
+> « création hors périmètre » : elles décrivent le périmètre plus ancien.
+
+
 **Date :** 18 novembre 2026 · **Branche :** `dev` · **Base :** `e369a2d`
 **Auteur :** orchestrateur · **Statut :** plan d'exécution, pas une décision de release.
 
