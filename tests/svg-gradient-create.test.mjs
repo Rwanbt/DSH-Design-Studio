@@ -31,7 +31,7 @@ test('creates an editable linear gradient and assigns it in one reversible trans
   assert.ok(result.source.includes('<!-- preserve me -->'),'existing comments survive')
   assert.ok(result.source.includes('<linearGradient id="dsh_gradient_1"'))
   assert.ok(result.source.includes('fill="url(#dsh_gradient_1)"'))
-  assert.ok(result.source.includes('<stop offset="0" stop-color="#000000"/>'))
+  assert.ok(result.source.includes('<stop offset="0" stop-color="#123456"/>'), 'the original solid fill seeds the first stop')
   assert.ok(result.source.includes('<stop offset="1" stop-color="#ffffff"/>'))
   const scan=scanSvgDocument(result.source)
   assert.equal(scan.byId.get('panel').attributes.get('fill').value,'url(#dsh_gradient_1)')
