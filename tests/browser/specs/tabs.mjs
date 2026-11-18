@@ -307,3 +307,31 @@ export const tabsCycleShortcutSpec = {
     assert.equal(applies(harness).length, writesBefore, 'neither shortcut writes')
   },
 }
+
+
+export const tabsSaveShortcutSpec = {
+  name: 'tab: Ctrl+S saves only the active document while source textarea holds focus',
+  async run({page,harness,assert}) {
+    await harness.write('save-a.svg',SVG_DOCUMENT)
+    await harness.write('save-b.svg',SECOND)
+    await openWorkspaceFile(page,'save-a.svg',{expect:'svg'})
+    await openWorkspaceFile(page,'save-b.svg',{expect:'svg'})
+    await waitForActiveFile(page,'save-b.svg')
+    await revealSource(page)
+    const edited=SECOND.replace('fill="#2277cc"','fill="#885522"')
+    assert.ok(edited!==SECOND)
+    const area=page.locator('.dsh-studio-source textarea')
+    await area.fill(edited)
+    const before=applies(harness).length
+    await area.dispatchEvent('keydown',
+      {key:'s',code:'KeyS',ctrlKey:true,bubbles:true,cancelable:true})
+    await waitForDisk(harness,'save-b.svg',text=>text===edited,{label:'shortcut save'})
+    assert.equal(applies(harness).length,before+1,'one shortcut sends exactly one Host write')
+    assert.equal(await harness.read('save-a.svg'),SVG_DOCUMENT,'inactive document stays byte-identical')
+    await page.waitForFunction(()=>
+      [...document.querySelectorAll('.dsh-studio-doc-tabs [role="tab"]')].some(tab=>
+        tab.getAttribute('aria-label')==='save-b.svg'),null,{timeout:15000})
+    assert.equal(await tabNamed(page,'save-b.svg').getAttribute('aria-label'),'save-b.svg',
+      'the active dirty indicator clears after saved revision reloads')
+  },
+}
