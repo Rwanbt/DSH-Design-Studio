@@ -331,3 +331,35 @@ export const gradientOffsetInspectorSpec = {
     assert.equal(await harness.read('offset.svg'), GRADIENT_SVG, 'Undo restores original bytes')
   },
 }
+
+
+export const gradientCreateSpec = {
+  name: 'gradient: create linear fill from the inspector, native stop editing and Undo are one transaction',
+  async run({ page, harness, assert }) {
+    const applies=countApplies(page)
+    await harness.write('create-gradient.svg',GRADIENT_SVG)
+    await openWorkspaceFile(page,'create-gradient.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer circle #chip',exact:true}).click()
+    const create=page.getByRole('button',{name:'Créer un dégradé linéaire',exact:true})
+    assert.equal(await create.isDisabled(),false,'the selected circle can create a gradient')
+    assert.equal(applies(),0,'opening the fill inspector is read-only')
+    await create.click()
+    const changed=await waitForDisk(harness,'create-gradient.svg',
+      text=>text.includes('fill="url(#dsh_gradient_1)"'),{label:'gradient created'})
+    assert.ok(changed.includes('<linearGradient id="dsh_gradient_1"'))
+    assert.ok(changed.includes('stop-color="#000000"'))
+    assert.ok(changed.includes('stop-color="#ffffff"'))
+    assert.equal(changed.includes('<!-- gradient fixture: only stop attributes may ever be rewritten -->'),true)
+    assert.equal(applies(),1,'creating gradient and attaching it uses a single Host /apply')
+    const section=await openGradientSection(page,'dsh_gradient_1')
+    assert.ok((await section.innerText()).includes('2 arrêt(s)'),'new gradient is editable immediately')
+    await page.waitForFunction(()=>
+      document.querySelector('[aria-label="Undo saved edit"]')?.disabled===false)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await waitForDisk(harness,'create-gradient.svg',text=>text===GRADIENT_SVG,
+      {label:'gradient creation undone'})
+    assert.equal(await harness.read('create-gradient.svg'),GRADIENT_SVG,
+      'Undo returns both definition and fill to their exact original bytes')
+    assert.equal(applies(),2,'Undo is one reverse Host write')
+  },
+}
