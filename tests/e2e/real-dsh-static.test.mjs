@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { stopServer } from './real-dsh-lifecycle.mjs'
-import { sessionWorkspaceFromRegistry } from './real-dsh-web.mjs'
+import { sessionWorkspaceFromRegistry, isExpectedConflictConsole } from './real-dsh-web.mjs'
 
 class FakeChild extends EventEmitter {
   exitCode = null
@@ -73,6 +73,48 @@ test('unit session workspace: ambiguous or unowned registry membership refuses f
     'session', ['/owned']), /multiple workspace/)
 })
 
+test('unit conflict diagnostic classifier: exact action window, unique request, URL and network409 only', () => {
+  const diagnostic = { text: 'Failed to load resource: the server responded with a status of 409 (Conflict)',
+    url: 'http://127.0.0.1:1234/design-studio-native/apply' }
+  const evidence = { active: true, requestCount: 1, url: diagnostic.url }
+  assert.equal(isExpectedConflictConsole(diagnostic, evidence), true)
+  assert.equal(isExpectedConflictConsole(diagnostic, { ...evidence, active: false }), false)
+  assert.equal(isExpectedConflictConsole(diagnostic, { ...evidence, requestCount: 2 }), false)
+  assert.equal(isExpectedConflictConsole(diagnostic, { ...evidence, requestCount: 0 }), false)
+  assert.equal(isExpectedConflictConsole({ ...diagnostic, url: diagnostic.url + '/other' }, evidence), false)
+  assert.equal(isExpectedConflictConsole({ ...diagnostic, text: 'Uncaught Error: 409 stale-revision' }, evidence), false)
+  assert.equal(isExpectedConflictConsole({ ...diagnostic, text: diagnostic.text.replace('409', '500') }, evidence), false)
+})
+
+test('static HTML/CSS workflow contract only: creation, byte checks, Undo, measured widths and external refusal', async () => {
+  const source = await readFile(new URL('./real-dsh-web.mjs', import.meta.url), 'utf8')
+  const client = await readFile(new URL('../../client.js', import.meta.url), 'utf8')
+  for (const name of ['New design file name', 'HTML element text', 'Apply HTML element text',
+    'HTML viewport ', 'CSS rule property', 'CSS rule value', 'Apply CSS rule style', 'Select CSS rule ']) {
+    assert.ok(source.includes(name), `workflow references ${name}`)
+    assert.ok(client.includes(name), `client declares ${name}`)
+  }
+  assert.match(source, /createNativeFile\('html', createdHtml\)/)
+  assert.match(source, /createNativeFile\('css', css\)/)
+  assert.match(source, /expectDisk\(editedHtml, 'g0-manual.html'\)/)
+  assert.match(source, /expectDisk\(createdHtml, 'g0-manual.html'\)/)
+  assert.match(source, /expectDisk\(editedCss, 'g0-manual.css'\)/)
+  assert.match(source, /expectDisk\(css, 'g0-manual.css'\)/)
+  assert.match(source, /frame.getBoundingClientRect\(\).width - expected/)
+  assert.match(source, /frame.contentWindow.innerWidth - expected/)
+  assert.match(source, /response.status\(\) !== 409/)
+  assert.match(source, /body\?\.error !== 'stale-revision'/)
+  assert.match(source, /readFile\(path.join\(workspaceDir, 'g0-manual.css'\), 'utf8'\) !== external/)
+  const runner = await readFile(new URL('./real-dsh.mjs', import.meta.url), 'utf8')
+  assert.match(runner, /refusalEvidence.confirmed && refusalEvidence.requestCount === 1/)
+  assert.match(runner, /refusalEvidence.consoleIndices.length === 1/)
+  assert.match(runner, /!expectedIndices.includes\(index\)/)
+  assert.match(runner, /record\('CSP\/account diagnostics not assessed by this gate', 'NOT_RUN'/)
+  assert.match(runner, /CSP excluded=\$\{cspDiagnostics.length\}; account excluded=\$\{environmentNoise.length\}/)
+  assert.match(runner, /no non-excluded errors observed during this run/)
+  assert.doesNotMatch(runner, /all other errors remain subject|none from the plugin; environment-only/)
+})
+
 test('static runner contract: initialization protected, close before rm, summary after finally', async () => {
   const source = await readFile(new URL('./real-dsh.mjs', import.meta.url), 'utf8')
   assert.match(source, /try \{\s+const \{ cliEnv/)
@@ -104,5 +146,7 @@ test('static sidebar contract: actual accessible controls, exact disk save/Undo/
   assert.match(source, /theme.light.host.probe.background === 'rgb\(250, 250, 248\)'/)
   assert.match(source, /const themeOwner = document.body/)
   assert.match(source, /finally \{[\s\S]*themeOwner.style.removeProperty/)
-  assert.doesNotMatch(source, /context.request|writeFile|selectPanel|keyboard.type|credentials.yaml/)
+  assert.doesNotMatch(source, /context.request|selectPanel|keyboard.type|credentials.yaml/)
+  assert.equal((source.match(/await writeFile\(/g) || []).length, 1, 'only deliberate external-writer injection writes directly')
+  assert.match(source, /await writeFile\(path.join\(workspaceDir, 'g0-manual.css'\), external, 'utf8'\)/)
 })

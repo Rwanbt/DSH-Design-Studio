@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { checkDesktopShell } from './desktop-shell.mjs'
 import { disposableEnvironment } from './environment.mjs'
 import { stopServer } from './real-dsh-lifecycle.mjs'
-import { checkSidebar, sessionWorkspaceFromRegistry } from './real-dsh-web.mjs'
+import { checkSidebar, sessionWorkspaceFromRegistry, isExpectedConflictConsole } from './real-dsh-web.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../..')
@@ -206,9 +206,13 @@ async function main() {
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
       const page = await context.newPage()
       const consoleErrors = []
+      const refusalEvidence = { active: false, confirmed: false, requestCount: 0, url: '', consoleIndices: [] }
       page.on('pageerror', (error) => consoleErrors.push(String(error).slice(0, 200)))
       page.on('console', (message) => {
-        if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200))
+        if (message.type() !== 'error') return
+        const diagnostic = { text: message.text(), url: message.location().url }
+        const index = consoleErrors.push(diagnostic.text.slice(0, 200)) - 1
+        if (isExpectedConflictConsole(diagnostic, refusalEvidence)) refusalEvidence.consoleIndices.push(index)
       })
       await page.goto(url, { waitUntil: 'load', timeout: 60000 })
       await page.waitForTimeout(4000)
@@ -226,7 +230,7 @@ async function main() {
         }
       }
 
-      const studio = await checkSidebar({ page, workspaceId, otherWorkspaceId, workspaceDir, document, record })
+      const studio = await checkSidebar({ page, workspaceId, otherWorkspaceId, workspaceDir, document, record, refusalEvidence })
 
       // Optional evidence capture: the viewport AND the workbench element itself.
       // An element screenshot is proof that the plugin is really on screen; a bare
@@ -380,20 +384,28 @@ async function main() {
       record('legacy conversation workbench gate', 'NOT_RUN',
         'separate optional conversation path; sidebar manual gate needs neither session nor AI')
 
-      // Classify page errors honestly instead of hiding them: anything produced by
-      // this plugin or an uncaught page error fails the step; DSH subsystems that
-      // complain because the disposable home lacks the caller's account records are
-      // reported as environment noise, never as a plugin failure.
+      // This is a bounded observation gate, not an absence-of-errors or security
+      // proof: inherited text filters exclude CSP/account diagnostics globally.
+      // Report those exclusions separately rather than attributing their origin.
       const environmentNoise = consoleErrors.filter((entry) => /\[deepseek-account\]|account read failed/.test(entry))
-      const pluginErrors = consoleErrors.filter((entry) =>
+      const cspDiagnostics = consoleErrors.filter((entry) => /Content Security Policy/i.test(entry))
+      record('CSP/account diagnostics not assessed by this gate', 'NOT_RUN',
+        `CSP excluded=${cspDiagnostics.length}; account excluded=${environmentNoise.length} (text filters, counts may overlap); no security/account guarantee. Samples: ` +
+        [...cspDiagnostics.slice(0, 1), ...environmentNoise.slice(0, 1)].join(' | '))
+      // Exempt at most the single network diagnostic from the unique, verified
+      // HTTP409 stale-revision action; never other 409s, JS errors, or late errors.
+      const expectedIndices = refusalEvidence.confirmed && refusalEvidence.requestCount === 1 &&
+        refusalEvidence.consoleIndices.length === 1 ? refusalEvidence.consoleIndices : []
+      record('classify deliberate conflict resource diagnostic', 'PASS',
+        `${expectedIndices.length} network diagnostic correlated to the unique verified /apply HTTP409; remaining diagnostics are checked after the declared CSP/account text exclusions`)
+      const pluginErrors = consoleErrors.filter((entry, index) =>
+        !expectedIndices.includes(index) &&
         !/Content Security Policy/i.test(entry) &&
         !/\[deepseek-account\]|account read failed/.test(entry))
-      record('no plugin JavaScript errors in the real DSH page',
+      record('no non-excluded errors observed during this run',
         pluginErrors.length === 0 ? 'PASS' : 'FAIL',
-        pluginErrors.slice(0, 3).join(' | ') ||
-          (environmentNoise.length
-            ? 'none from the plugin; environment-only: ' + environmentNoise.slice(0, 2).join(' | ')
-            : 'none'))
+        `remaining=${pluginErrors.length}; CSP/account text matches and verified expected409 are excluded, not proven harmless. ` +
+        (pluginErrors.slice(0, 3).join(' | ') || 'No remaining diagnostic observed.'))
 
       await context.close()
     } finally {

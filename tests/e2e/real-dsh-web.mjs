@@ -1,5 +1,7 @@
-/** Real-page actions only: no shell simulation, credentials, or assistant turn. */
-import { readFile } from 'node:fs/promises'
+/** Real-page UI actions plus one deliberate external-writer fixture.
+ * No shell simulation, credentials, or assistant turn.
+ */
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /** Resolve only registry-proven membership inside the runner's two owned roots.
@@ -18,7 +20,15 @@ export function sessionWorkspaceFromRegistry(registry, sessionId, allowedPaths) 
   return { id, path: workspace.path }
 }
 
-export async function checkSidebar({ page, workspaceId, otherWorkspaceId, workspaceDir, document, record }) {
+/** Only the browser's one network-error diagnostic during the deliberate CAS refusal.
+ * Confirmation of the matching response body and unique request happens separately.
+ */
+export function isExpectedConflictConsole({ text, url }, evidence) {
+  return evidence.active && evidence.requestCount === 1 && url === evidence.url &&
+    /^Failed to load resource: the server responded with a status of 409 \(Conflict\)$/.test(text)
+}
+
+export async function checkSidebar({ page, workspaceId, otherWorkspaceId, workspaceDir, document, record, refusalEvidence }) {
   const hostBefore = await page.evaluate(() => {
     const probe = document.createElement('div')
     probe.dataset.dshE2eThemeProbe = ''
@@ -78,13 +88,37 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
       JSON.stringify(hostBefore) === JSON.stringify(theme.restored) ? 'PASS' : 'FAIL',
       JSON.stringify({ before: hostBefore, ...theme }))
 
-    const expectDisk = async expected => {
+    const expectDisk = async (expected, file = 'g0-art.svg') => {
       const deadline = Date.now() + 15000
       while (Date.now() < deadline) {
-        if (await readFile(path.join(workspaceDir, 'g0-art.svg'), 'utf8') === expected) return
+        try {
+          if (await readFile(path.join(workspaceDir, file), 'utf8') === expected) return
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error
+        }
         await new Promise(resolve => setTimeout(resolve, 100))
       }
-      throw new Error('Sidebar edit did not produce the exact expected bytes on disk')
+      throw new Error(`Sidebar ${file} did not produce the exact expected bytes on disk`)
+    }
+    const waitReady = async (file, expected) => {
+      await page.waitForFunction(({ file, expected }) => {
+        const editor = document.querySelector('[aria-label="Design Studio panel"] .dsh-studio-workbench')
+        return editor?.querySelector('[aria-label="Workspace file"]')?.value === file &&
+          editor.querySelector('.dsh-studio-source textarea')?.value === expected &&
+          editor.querySelector('.dsh-studio-status')?.textContent === '✓ Enregistré localement'
+      }, { file, expected }, { timeout: 15000 })
+    }
+    const fileMenu = studio.locator('.dsh-studio-top details.dsh-studio-menu')
+    const setFileMenu = async open => {
+      if (await fileMenu.evaluate(node => node.open) !== open) await fileMenu.locator('summary').click()
+    }
+    const createNativeFile = async (format, expected) => {
+      await setFileMenu(true)
+      await studio.getByLabel('New design file name', { exact: true }).fill('g0-manual')
+      await studio.getByRole('button', { name: `Create ${format.toUpperCase()} file`, exact: true }).click()
+      await expectDisk(expected, `g0-manual.${format}`)
+      await waitReady(`g0-manual.${format}`, expected)
+      await setFileMenu(false)
     }
     const changed = document.replace('x="10"', 'x="25"')
     await studio.getByLabel('Geometry x', { exact: true }).fill('25')
@@ -112,6 +146,109 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     await renderedBox.waitFor({ state: 'visible', timeout: 15000 })
     if (await renderedBox.getAttribute('x') !== '25') throw new Error('Reopened SVG canvas did not render saved x=25')
     record('sidebar UI reopen reads persisted SVG', 'PASS', 'workspace remount and file reopen read Geometry x=25 from disk')
+    await waitReady('g0-art.svg', changed)
+
+    const createdHtml = '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<title>Nouvelle page</title>\n</head>\n<body>\n' +
+      '<h1 id="titre">Nouvelle page</h1>\n<p id="intro">Modifiez ce texte depuis le canevas.</p>\n</body>\n</html>\n'
+    // Independent expected bytes: creation must write the native template, not a
+    // document inferred from whatever the UI happened to write.
+    await createNativeFile('html', createdHtml)
+    const htmlFrame = studio.frameLocator('iframe[title="Isolated design preview"]')
+    await htmlFrame.locator('#titre').click()
+    record('sidebar UI creates native HTML', 'PASS', 'g0-manual.html exact template on disk; heading rendered and selected by real preview click')
+    await studio.getByRole('textbox', { name: 'HTML element text', exact: true }).fill('Titre modifié sans IA')
+    await studio.getByRole('button', { name: 'Apply HTML element text', exact: true }).click()
+    const editedHtml = createdHtml.replace('>Nouvelle page</h1>', '>Titre modifié sans IA</h1>')
+    await expectDisk(editedHtml, 'g0-manual.html')
+    await waitReady('g0-manual.html', editedHtml)
+    await htmlFrame.getByRole('heading', { name: 'Titre modifié sans IA', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
+    await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+    await expectDisk(createdHtml, 'g0-manual.html')
+    await waitReady('g0-manual.html', createdHtml)
+    await htmlFrame.getByRole('heading', { name: 'Nouvelle page', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
+    record('sidebar HTML text save and Undo are byte-exact', 'PASS', 'only heading text changed; Undo restored complete original HTML and preview')
+
+    const widths = {}
+    for (const [mode, expected] of [['desktop', 1280], ['tablet', 768], ['mobile', 390]]) {
+      await studio.getByRole('button', { name: 'HTML viewport ' + mode, exact: true }).click()
+      await page.waitForFunction(({ mode, expected }) => {
+        const editor = document.querySelector('[aria-label="Design Studio panel"] .dsh-studio-workbench')
+        const frame = editor?.querySelector('iframe[title="Isolated design preview"]')
+        return editor?.querySelector('[aria-label="HTML viewport ' + mode + '"]')?.getAttribute('aria-pressed') === 'true' &&
+          frame && Math.abs(frame.getBoundingClientRect().width - expected) <= 1 &&
+          Math.abs(frame.contentWindow.innerWidth - expected) <= 1
+      }, { mode, expected }, { timeout: 15000 })
+      widths[mode] = {
+        element: await studio.locator('iframe[title="Isolated design preview"]').evaluate(frame => frame.getBoundingClientRect().width),
+        viewport: await htmlFrame.locator('html').evaluate(() => window.innerWidth),
+      }
+    }
+    await expectDisk(createdHtml, 'g0-manual.html')
+    record('sidebar HTML responsive preview widths are measured', 'PASS', JSON.stringify(widths) + '; HTML bytes unchanged')
+
+    const css = ':root {\n  --accent: #bda991;\n}\n\nbody {\n  font-family: system-ui, sans-serif;\n  color: #1f2124;\n}\n'
+    await createNativeFile('css', css)
+    await studio.getByRole('button', { name: 'Select CSS rule body', exact: true }).click()
+    record('sidebar UI creates native CSS', 'PASS', 'g0-manual.css exact template on disk; native body rule inspector opened')
+    await studio.getByLabel('CSS rule property', { exact: true }).selectOption('color')
+    await studio.getByLabel('CSS rule value', { exact: true }).fill('#123456')
+    await studio.getByRole('button', { name: 'Apply CSS rule style', exact: true }).click()
+    const editedCss = css.replace('color: #1f2124', 'color: #123456')
+    await expectDisk(editedCss, 'g0-manual.css')
+    await waitReady('g0-manual.css', editedCss)
+    await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+    await expectDisk(css, 'g0-manual.css')
+    await waitReady('g0-manual.css', css)
+    record('sidebar CSS rule save and Undo are byte-exact', 'PASS', 'only body color changed; Undo restored complete original CSS')
+
+    // Deliberate external-writer fixture, confined to the newly created file.
+    const external = css + '/* external writer wins exactly */\n'
+    await writeFile(path.join(workspaceDir, 'g0-manual.css'), external, 'utf8')
+    await studio.getByLabel('CSS rule value', { exact: true }).fill('#abcdef')
+    Object.assign(refusalEvidence, { active: true, confirmed: false, requestCount: 0,
+      url: new URL('/design-studio-native/apply', page.url()).href })
+    const countRequest = request => {
+      if (request.url() === refusalEvidence.url && request.method() === 'POST') refusalEvidence.requestCount += 1
+    }
+    page.on('request', countRequest)
+    try {
+      const refusedResponse = page.waitForResponse(response => {
+        if (response.url() !== refusalEvidence.url || response.request().method() !== 'POST') return false
+        const payload = response.request().postDataJSON()
+        return payload?.workspaceId === workspaceId && !payload.sessionId &&
+          payload.file === 'g0-manual.css' && payload.kind === 'css-rule' && payload.value === '#abcdef'
+      }, { timeout: 15000 })
+      const [response] = await Promise.all([refusedResponse,
+        studio.getByRole('button', { name: 'Apply CSS rule style', exact: true }).click()])
+      const body = await response.json()
+      const alert = studio.getByRole('alert')
+      await alert.waitFor({ state: 'visible', timeout: 15000 })
+      const feedback = await alert.innerText()
+      if (response.status() !== 409 || body?.error !== 'stale-revision' || refusalEvidence.requestCount !== 1 ||
+          !/changed|revision|identity|reload|recharg/i.test(feedback)) {
+        throw new Error(`External conflict was not explicitly refused: HTTP ${response.status()}, ${JSON.stringify(body)}, ${feedback}`)
+      }
+      if (await readFile(path.join(workspaceDir, 'g0-manual.css'), 'utf8') !== external) {
+        throw new Error('Refused stale CSS edit overwrote external bytes')
+      }
+      refusalEvidence.confirmed = true
+      record('sidebar external conflict refuses stale CSS save', 'PASS', 'one real UI apply → HTTP409 stale-revision + visible feedback; external bytes unchanged')
+    } finally {
+      refusalEvidence.active = false
+      page.removeListener('request', countRequest)
+    }
+    // Explicit recovery adopts the external revision before returning to SVG.
+    const reload = studio.getByRole('button', { name: 'Reload after save error', exact: true })
+    if (await reload.count()) await reload.click()
+    else await studio.getByRole('button', { name: 'Recharger le fichier', exact: true }).click()
+    await waitReady('g0-manual.css', external)
+    await expectDisk(external, 'g0-manual.css')
+    await setFileMenu(true)
+    await studio.getByLabel('Workspace file', { exact: true }).fill('g0-art.svg')
+    await studio.getByRole('button', { name: 'Open', exact: true }).click()
+    await waitReady('g0-art.svg', changed)
+    await setFileMenu(false)
+    await renderedBox.waitFor({ state: 'visible', timeout: 15000 })
     return studio
   } finally {
     await page.evaluate(() => {
