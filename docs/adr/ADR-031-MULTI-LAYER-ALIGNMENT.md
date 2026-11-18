@@ -114,6 +114,9 @@ clic.
 | 2 | specs `align:` ciblées | 3 specs : succès/Undo (**57 assertions**), refus multiples (**80 assertions**), verrou d'ancêtre nommé (4 assertions) ; une seule requête par geste, zéro requête pour un refus ou un calque déjà aligné |
 | 3 | `npm run test:dsh` | **NOT_RUN** pour l'alignement |
 
+CI du commit `26b4989` : [run 44327336416](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/44327336416)
+**entièrement vert** (Ubuntu, navigateurs, Windows, benchmark).
+
 Revue indépendante : un passage, deux fuites d'écouteurs réelles (`Échap`, démontage),
 une sélection incohérente sur geste rapide, un message de refus faux sur rotation
 90°/270° et une confirmation de succès masquée par les raisons. Les cinq points sont
