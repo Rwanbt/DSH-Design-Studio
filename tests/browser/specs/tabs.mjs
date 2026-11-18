@@ -216,3 +216,54 @@ export const tabsKeyboardSpec = {
     assert.equal(applies(harness).length, 0)
   },
 }
+
+export const tabDialogFocusSpec = {
+  name: 'tab: closing a modified document focuses the confirmation, Escape cancels and focus returns',
+  async run({ page, harness, assert }) {
+    await harness.write('focus-a.svg', SVG_DOCUMENT)
+    await harness.write('focus-b.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'focus-a.svg', { expect: 'svg' })
+    await openWorkspaceFile(page, 'focus-b.svg', { expect: 'svg' })
+
+    // Make the active document dirty WITHOUT writing: edit the source buffer and
+    // never press Save, exactly like a user mid-edit.
+    // The source drawer is collapsed by default, like for a user.
+    const drawer = page.locator('details.dsh-studio-source')
+    if (!(await drawer.evaluate((node) => node.open))) await drawer.locator('summary').click()
+    const source = drawer.locator('textarea')
+    await source.waitFor({ state: 'visible', timeout: 15000 })
+    await source.fill(SVG_DOCUMENT.replace('id="card"', 'id="card" data-draft="1"'))
+    await page.waitForFunction(() =>
+      document.querySelector('.dsh-studio-source textarea')?.value.includes('data-draft="1"'),
+      null, { timeout: 15000 })
+    assert.equal(await harness.read('focus-b.svg'), SVG_DOCUMENT,
+      'editing the buffer must not write the file')
+
+    const closeButton = page.getByRole('button', { name: 'Fermer focus-b.svg' })
+    await closeButton.click()
+    // The apostrophe is a typographic one; match the file name only so the
+    // assertion does not depend on that detail.
+    const dialog = page.locator('[data-tab-close-confirm="focus-b.svg"]')
+    await dialog.waitFor({ state: 'visible', timeout: 15000 })
+
+    // The safe choice owns the focus: pressing Enter must not discard.
+    const focused = await page.evaluate(() => {
+      const node = document.activeElement
+      return node ? (node.textContent || '').trim() : ''
+    })
+    assert.equal(focused, 'Annuler',
+      'the confirmation must focus the non-destructive choice, got ' + JSON.stringify(focused))
+
+    // Escape cancels the dialog and gives the focus back to the tab that asked.
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'detached', timeout: 10000 })
+    const restored = await page.evaluate(() => {
+      const node = document.activeElement
+      return node ? (node.getAttribute('aria-label') || (node.textContent || '').trim()) : ''
+    })
+    assert.equal(restored, 'Fermer focus-b.svg',
+      'cancelling must return the focus to the tab close button, got ' + JSON.stringify(restored))
+    // Nothing was written by opening or cancelling the confirmation.
+    assert.equal(await harness.read('focus-b.svg'), SVG_DOCUMENT)
+  },
+}

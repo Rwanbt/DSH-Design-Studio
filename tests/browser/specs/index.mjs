@@ -36,7 +36,7 @@ import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferen
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
-import { tabsSwitchSpec, tabsSaveIsolationSpec, tabsCloseConfirmSpec, tabsKeyboardSpec } from './tabs.mjs'
+import { tabsSwitchSpec, tabsSaveIsolationSpec, tabsCloseConfirmSpec, tabsKeyboardSpec, tabDialogFocusSpec } from './tabs.mjs'
 import { pngExportSpec, pngUnsavedSourceSpec, pngNonSvgSpec, pngScriptRefusalSpec, pngDimensionSpec, pngInertImageSpec } from './png-export.mjs'
 import { recoveryAfterCrashSpec, recoveryIgnoreSpec, recoverySaveClearsSpec, recoveryWorkspaceIsolationSpec, recoveryStorageFailureSpec, recoveryPreferenceSpec, recoveryChangedOnDiskSpec, recoveryTypingDuringSaveSpec, recoveryBaseRevisionSpec, recoveryOpenTabDivergenceSpec, recoveryDiscardClearsSpec } from './recovery.mjs'
 
@@ -54,6 +54,7 @@ export const specs = [
   tabsSaveIsolationSpec,
   tabsCloseConfirmSpec,
   tabsKeyboardSpec,
+  tabDialogFocusSpec,
   pngExportSpec,
   pngUnsavedSourceSpec,
   pngNonSvgSpec,

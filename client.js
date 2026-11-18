@@ -839,7 +839,22 @@ window.__ModuleLoader__.load({
       const [tabs,setTabs] = React.useState([])
       const [activeTabId,setActiveTabId] = React.useState(null)
       // A dirty tab is never closed silently: this holds the pending question.
+      // The confirmation is a real dialog for assistive technology: focus moves
+      // into it, Escape cancels it, and focus returns to the tab that asked.
+      const tabCloseConfirmRef = React.useRef(null)
+      const tabCloseTriggerRef = React.useRef(null)
       const [tabCloseConfirm,setTabCloseConfirm] = React.useState(null)
+      React.useEffect(()=>{
+        if(!tabCloseConfirm) return
+        // Cancel is the safe default: focusing it means Enter never discards.
+        tabCloseConfirmRef.current?.querySelector('button:last-of-type')?.focus()
+      },[tabCloseConfirm])
+      React.useEffect(()=>{
+        if(tabCloseConfirm) return
+        const trigger=tabCloseTriggerRef.current
+        tabCloseTriggerRef.current=null
+        if(trigger && trigger.isConnected) trigger.focus?.()
+      },[tabCloseConfirm])
       const tabsRef = React.useRef([])
       const tabSeqRef = React.useRef(0)
       const [workspaceFiles,setWorkspaceFiles] = React.useState([])
@@ -1477,7 +1492,11 @@ window.__ModuleLoader__.load({
         if(index<0) return false
         const entry = list[index]
         const dirty = entry.id===activeTabId ? isDirty() : !!entry.dirty
-        if(dirty && !discard) { setTabCloseConfirm({id, file:entry.file}); return false }
+        if(dirty && !discard) {
+          tabCloseTriggerRef.current=typeof document!=='undefined'?document.activeElement:null
+          setTabCloseConfirm({id, file:entry.file})
+          return false
+        }
         // D6: “close without saving” is the explicit no for this file's unsaved
         // work, so its journaled copy must go too; otherwise a reload would
         // offer back exactly what the user abandoned.
@@ -4177,8 +4196,14 @@ window.__ModuleLoader__.load({
                     'aria-label':'Fermer '+entry.file,title:'Fermer '+entry.file,
                     disabled:busy,onClick:()=>closeTab(entry.id)},'×'))
               })),
-            tabCloseConfirm&&h('div',{className:'dsh-studio-tab-confirm',role:'alertdialog',
-              'aria-label':'Fermer l’onglet '+tabCloseConfirm.file,'data-tab-close-confirm':tabCloseConfirm.file},
+            tabCloseConfirm&&h('div',{ref:tabCloseConfirmRef,role:'alertdialog',
+              'aria-label':'Fermer l’onglet '+tabCloseConfirm.file,'data-tab-close-confirm':tabCloseConfirm.file,
+              onKeyDown:event=>{
+                if(event.key!=='Escape')return
+                event.preventDefault()
+                event.stopPropagation()
+                setTabCloseConfirm(null)
+              }},
               h('span',null,'Fermer ',h('code',null,tabCloseConfirm.file),
                 ' ? Des modifications ne sont pas enregistrées : elles seront perdues.'),
               h('button',{type:'button',style:button,disabled:busy,
