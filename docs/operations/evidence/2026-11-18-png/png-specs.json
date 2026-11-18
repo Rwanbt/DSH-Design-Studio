@@ -1,0 +1,103 @@
+{
+  "build": "c8be6938abd92bef8d5f0fefa0a88507c5dd574c",
+  "playwright": "/mnt/Stockage/App/twake-qualification/wt/drive/node_modules/playwright",
+  "startedAt": "2026-11-18T19:59:27.577Z",
+  "browsers": {
+    "chromium": {
+      "version": "145.0.7632.6",
+      "specs": [
+        {
+          "name": "png: the current SVG downloads as a valid PNG at 1x and 2x with zero writes and zero Host requests",
+          "checks": 19,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "png: an unsaved source edit is rasterised while the file on disk keeps its old bytes",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "png: HTML and CSS documents disable the export and show the reason",
+          "checks": 11,
+          "failures": [],
+          "consoleErrors": [
+            "console: Loading the stylesheet 'http://127.0.0.1:34809/styles.css' violates the following Content Security Policy directive: \"style-src 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so "
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "png: a source containing <script> is refused explicitly and never downloaded",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [
+            "console: Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set."
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "png: viewBox fallback works, invalid or oversized plans are refused without a download",
+          "checks": 11,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    "firefox": {
+      "version": "146.0.1",
+      "specs": [
+        {
+          "name": "png: the current SVG downloads as a valid PNG at 1x and 2x with zero writes and zero Host requests",
+          "checks": 19,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "png: an unsaved source edit is rasterised while the file on disk keeps its old bytes",
+          "checks": 9,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "png: HTML and CSS documents disable the export and show the reason",
+          "checks": 11,
+          "failures": [],
+          "consoleErrors": [
+            "console: [JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at http://127.0.0.1:36177/styles.css from being applied because it violates the following directive: “"
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "png: a source containing <script> is refused explicitly and never downloaded",
+          "checks": 6,
+          "failures": [],
+          "consoleErrors": [],
+          "status": "PASS"
+        },
+        {
+          "name": "png: viewBox fallback works, invalid or oversized plans are refused without a download",
+          "checks": 11,
+          "failures": [],
+          "consoleErrors": [
+            "console: [JavaScript Error: \"XML Parsing Error: unclosed token\nLocation: http://127.0.0.1:37719/\nLine Number 1, Column 66:\" {file: \"http://127.0.0.1:37719/\" line: 1}]"
+          ],
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "summary": {
+    "pass": 10,
+    "fail": 0,
+    "notRun": 0
+  },
+  "finishedAt": "2026-11-18T19:59:48.204Z"
+}
