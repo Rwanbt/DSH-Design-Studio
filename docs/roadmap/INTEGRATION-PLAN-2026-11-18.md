@@ -135,6 +135,39 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 > ratio verrouillé, pas de redimensionnement par poignées de planche, et essai
 > dans un vrai DSH `NOT_RUN`.
 
+> **3.3 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Le bouton
+> **« Exporter PNG »** convertit la **source actuelle de l'éditeur** (y compris
+> les modifications non enregistrées), jamais `doc.source` sur disque : la
+> source est sérialisée en `Blob` SVG, chargée dans une `Image`, dessinée dans un
+> `canvas` à l'échelle choisie (**1×/2×**) puis téléchargée via
+> `canvas.toBlob`. Aucun `/apply`, aucune écriture disque, aucune entrée Undo,
+> aucune requête Host : le fichier reste byte-identique et le PNG est produit en
+> mémoire. La taille vient de `width`/`height` déclarés, sinon du `viewBox` ; une
+> planche non résoluble est refusée, et une sortie > **8192 px** par côté est
+> refusée avec la taille calculée. Le nom dérive du fichier courant
+> (`carte.svg` → `carte.png`). Un document HTML/CSS désactive le bouton avec une
+> raison visible (`PNG : disponible uniquement pour les documents SVG`). Une
+> source contenant `<script>` est refusée explicitement : le SVG chargé comme
+> image n'exécute pas de script et ne charge pas de ressource externe dans
+> Chromium/Firefox, mais l'export ne prétend pas convertir du contenu actif.
+> Preuves : `npm run check` **591/591 PASS** ; navigateur Chromium 145 + Firefox
+> 146, `--grep=png:` → **12 PASS / 0 FAIL** (6 specs, 66 vérifications par
+> moteur) : signature PNG `89 50 4E 47`, dimensions lues dans l'IHDR (600×400 en
+> 1×, 1200×800 en 2×), pixel échantillonné `#bda991` puis `#2277cc` pour la
+> source non enregistrée, **0 POST `/apply`** et **0 requête Host** au clic, octets
+> disque inchangés, Undo toujours vide ; HTML et CSS désactivés avec raison ;
+> `<script>` refusé sans téléchargement ; conversion en mode image inerte
+> vérifiée (gestionnaire `onload` non exécuté, image distante non chargée) ;
+> `viewBox` de secours, source invalide et sortie 10000×200 refusées. Non-régression ciblée : export natif, onglets,
+> presse-papiers, glisser-déposer de calque et alignement PASS sur les deux
+> moteurs. Limites : pas de pixels identiques entre moteurs (rendu de police et
+> anticrénelage), seules la signature, l'IHDR et quelques pixels de remplissage
+> sont assertés ; les ressources externes du SVG ne sont pas embarquées (le
+> navigateur ne les charge pas en mode image), donc un SVG dépendant d'une police
+> ou d'une image distante peut rendre différemment ; pas de fond opaque ni de
+> choix de qualité (PNG sans perte uniquement) ; niveau 3 (`test:dsh`/Desktop)
+> `NOT_RUN`.
+
 Sortie de vague : usage quotidien sans friction, sans élargir le périmètre
 fonctionnel.
 

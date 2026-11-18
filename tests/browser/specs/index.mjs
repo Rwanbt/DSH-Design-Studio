@@ -37,6 +37,7 @@ import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
 import { tabsSwitchSpec, tabsSaveIsolationSpec, tabsCloseConfirmSpec, tabsKeyboardSpec } from './tabs.mjs'
+import { pngExportSpec, pngUnsavedSourceSpec, pngNonSvgSpec, pngScriptRefusalSpec, pngDimensionSpec, pngInertImageSpec } from './png-export.mjs'
 
 export const specs = [
   mountSpec,
@@ -52,6 +53,12 @@ export const specs = [
   tabsSaveIsolationSpec,
   tabsCloseConfirmSpec,
   tabsKeyboardSpec,
+  pngExportSpec,
+  pngUnsavedSourceSpec,
+  pngNonSvgSpec,
+  pngScriptRefusalSpec,
+  pngDimensionSpec,
+  pngInertImageSpec,
   landingSpec,
   landingEmptySpec,
   createSpec,

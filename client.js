@@ -11,6 +11,18 @@ window.__ModuleLoader__.load({
     // the renderer, so past this hard limit the editor refuses a new tab with an
     // explicit message instead of growing without bound.
     const MAX_TABS = 8
+    /**
+     * Raster export bounds. A canvas larger than this is refused *before* any
+     * allocation: converting an 8000×8000 SVG at 2x would otherwise ask the
+     * renderer for 256 megapixels and could crash the tab instead of explaining
+     * the refusal. The limit is per side, matching the user-facing message.
+     */
+    const PNG_MAX_SIDE = 8192
+    const PNG_SCALES = [1, 2]
+    // Stable, collision-free id for the visible PNG refusal reason. A counter is
+    // used instead of React.useId because the level-1 client harness renders the
+    // component with a minimal React mock.
+    let pngReasonSequence = 0
     const pane = { background:'var(--dsw-alias-bg-base, #202124)', color:'var(--dsw-alias-label-primary, #e8e7e2)', border:'1px solid var(--dsw-alias-border-l1, #37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'var(--dsw-alias-bg-layer-2, #292b2f)', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-bg-layer-2,#27292d)', color:'inherit', padding:'6px 8px' }
@@ -94,6 +106,85 @@ window.__ModuleLoader__.load({
         '"><meta name="viewport" content="width=device-width, initial-scale=1">' +
         svgLayout + projected + marked + '</head><body style="margin:' +
         (format==='svg'?'0':'12px') + '">' + neutral + '</body></html>'
+    }
+    /**
+     * Resolve the export size of an SVG source: declared `width`/`height` first,
+     * then the `viewBox` extents. Percentages, ems and every other unit are
+     * refused instead of guessed: a PNG of the wrong size is worse than a clear
+     * message. The source is parsed, never written and never fetched.
+     */
+    function svgPngGeometry(source) {
+      try {
+        const parsed = new DOMParser().parseFromString(String(source ?? ''), 'image/svg+xml')
+        // Firefox replaces the whole document with a <parsererror> root while
+        // Chromium keeps the partial tree; check the error node first so both
+        // engines give the same explicit refusal.
+        if (parsed.getElementsByTagName('parsererror').length)
+          return { ok:false, reason:'la source SVG est invalide et ne peut pas être analysée.' }
+        const root = parsed.documentElement
+        if (!root || String(root.localName || root.nodeName).toLowerCase() !== 'svg')
+          return { ok:false, reason:'la source SVG est invalide ou ne contient pas de racine <svg>.' }
+        const declared = (value) => {
+          const match = /^\s*(\d+(?:\.\d+)?)(?:px)?\s*$/i.exec(String(value ?? ''))
+          return match ? Number(match[1]) : NaN
+        }
+        let width = declared(root.getAttribute('width'))
+        let height = declared(root.getAttribute('height'))
+        if (!(width > 0) || !(height > 0)) {
+          const viewBox = String(root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number)
+          if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value)) ||
+              !(viewBox[2] > 0) || !(viewBox[3] > 0))
+            return { ok:false, reason:'dimensions introuvables : déclarez width/height ou un viewBox valide.' }
+          width = viewBox[2]
+          height = viewBox[3]
+        }
+        return { ok:true, width, height }
+      } catch {
+        return { ok:false, reason:'la source SVG ne peut pas être analysée.' }
+      }
+    }
+    /**
+     * Active content is refused, not sanitised. Per the SVG-as-image model an
+     * `<img>` loaded from a blob URL does not execute scripts and does not fetch
+     * external resources in Chromium/Firefox; that is a browser behaviour, not a
+     * licence to convert a document that declares a script. The file stays
+     * editable as source, and the export says so.
+     */
+    function svgSourceHasScript(source) {
+      return /<\s*(?:[A-Za-z_][\w.-]*:)?script(?=[\s/>])/i.test(String(source ?? ''))
+    }
+    /** Load a blob URL into an Image, with an explicit refusal on timeout. */
+    function loadPngImage(url) {
+      return new Promise((resolve, reject) => {
+        const image = new Image()
+        let settled = false
+        const finish = (callback, value) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          callback(value)
+        }
+        const timer = setTimeout(() => finish(reject,
+          new Error('le navigateur n’a pas rendu la source SVG à temps.')), 10000)
+        image.onload = () => finish(resolve, image)
+        image.onerror = () => finish(reject,
+          new Error('le navigateur a refusé cette source SVG (image invalide ou non rendue).'))
+        image.src = url
+      })
+    }
+    function canvasToPngBlob(canvas) {
+      return new Promise((resolve, reject) => canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('la conversion canvas → PNG a échoué.')),
+        'image/png'))
+    }
+    /** Trigger one download from an in-memory blob. No filesystem or Host write. */
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
     async function request(endpoint, options) {
       const response = await fetch(new URL('/' + api + endpoint, document.baseURI),{credentials:'same-origin',...options})
@@ -227,6 +318,9 @@ window.__ModuleLoader__.load({
 .dsh-studio-workbench .dsh-studio-topbtn.dsh-studio-primary{border:1px solid #bda17e;background:#4e4235;color:white}
 .dsh-studio-workbench .dsh-studio-topbtn.dsh-studio-muted{background:transparent}
 .dsh-studio-workbench .dsh-studio-topbtn svg{width:14px;height:14px}
+.dsh-studio-workbench .dsh-studio-png-scale{height:29px;display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted);flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-png-scale select{height:29px;border:1px solid #3a404b;background:#2c3038;border-radius:6px;padding:0 5px;font-size:11px}
+.dsh-studio-workbench .dsh-studio-png-reason{font-size:10px;line-height:1.25;color:var(--muted);max-width:190px;flex-shrink:0}
 .dsh-studio-workbench .dsh-studio-toolbar{background:#1c1f25;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;padding:0 14px}
 .dsh-studio-workbench .dsh-studio-tools{display:flex;align-items:center;gap:3px}
 .dsh-studio-workbench .dsh-studio-tool{width:33px;height:33px;border-radius:6px;color:#aab2be;display:grid;place-items:center;position:relative}
@@ -672,6 +766,11 @@ window.__ModuleLoader__.load({
       // a failure the user should read in red.
       const [alignNotice,setAlignNotice] = React.useState('')
       const [busy,setBusy] = React.useState(false)
+      // PNG raster export is a local, in-memory conversion: it never touches
+      // `busy` (which means "saving") and never writes an Undo entry.
+      const [pngScale,setPngScale] = React.useState(1)
+      const [pngBusy,setPngBusy] = React.useState(false)
+      const [pngReasonId] = React.useState(()=>'dsh-studio-png-reason-'+(++pngReasonSequence))
       const layerMenuActionFocusRef=React.useRef(null)
       React.useEffect(()=>{
         const pending=layerMenuActionFocusRef.current
@@ -738,6 +837,70 @@ window.__ModuleLoader__.load({
         anchor.href=url;anchor.download=doc.file.split('/').pop()||('design.'+doc.format)
         anchor.click()
         setTimeout(()=>URL.revokeObjectURL(url),0)
+      }
+      /**
+       * Export the CURRENT editor source as a PNG, entirely in memory.
+       *
+       * Truth is `source` (the visible editor text, including unsaved edits), not
+       * `doc.source` on disk. The image is serialised into a Blob, loaded by an
+       * `<img>`, painted into a canvas at the chosen scale and downloaded from
+       * `canvas.toBlob`. This path has no `save()`, no `/apply` request, no file
+       * write and no Undo entry; a refusal leaves the source editable.
+       */
+      async function exportPngDocument() {
+        if(!doc||pngBusy)return
+        if(doc.format!=='svg') {
+          setError('Export PNG indisponible : la conversion ne s’applique qu’aux documents SVG natifs.')
+          return
+        }
+        if(busy||reloadRequired) {
+          setError('Document occupé : terminez l’opération en cours avant l’export PNG.')
+          return
+        }
+        // A text draft lives outside the source textarea; exporting now would
+        // silently omit it. The existing refusal asks the user to save or drop it.
+        if(refuseTextDraft())return
+        const current = typeof source === 'string' ? source : ''
+        if(svgSourceHasScript(current)) {
+          setError('Export PNG refusé : la source contient un <script>. Le fichier reste éditable en source, mais cette conversion ne prétend pas convertir du contenu actif.')
+          return
+        }
+        const geometry = svgPngGeometry(current)
+        if(!geometry.ok) {
+          setError('Export PNG refusé : '+geometry.reason)
+          return
+        }
+        const width = Math.round(geometry.width * pngScale)
+        const height = Math.round(geometry.height * pngScale)
+        if(!(width > 0) || !(height > 0)) {
+          setError('Export PNG refusé : la planche ne produit pas une taille de sortie positive.')
+          return
+        }
+        if(Math.max(width, height) > PNG_MAX_SIDE) {
+          setError('Export PNG refusé : '+width+'×'+height+' px dépasse la limite de '+PNG_MAX_SIDE+' px par côté. Réduisez l’échelle ou les dimensions de la planche.')
+          return
+        }
+        setPngBusy(true); setError('')
+        let objectUrl = ''
+        try {
+          objectUrl = URL.createObjectURL(new Blob([current],{type:'image/svg+xml;charset=utf-8'}))
+          const image = await loadPngImage(objectUrl)
+          const canvas = document.createElement('canvas')
+          canvas.width = width; canvas.height = height
+          const context = canvas.getContext('2d')
+          if(!context) throw new Error('canvas 2D indisponible dans ce navigateur.')
+          context.drawImage(image, 0, 0, width, height)
+          const blob = await canvasToPngBlob(canvas)
+          const name = doc.file.split('/').pop() || 'design.svg'
+          const filename = /\.svg$/i.test(name) ? name.replace(/\.svg$/i,'.png') : name+'.png'
+          downloadBlob(blob, filename)
+          setNotice('PNG exporté : '+filename+' · '+width+'×'+height+' px (source actuelle, aucune écriture).')
+        } catch(e) {
+          setError('Export PNG impossible : '+String(e&&e.message||e))
+        } finally {
+          if(objectUrl) URL.revokeObjectURL(objectUrl)
+          setPngBusy(false)
+        }
       }
       function hasTextDraft() {
         const text=textNodes.find(item=>item.id===active)
@@ -1053,6 +1216,12 @@ window.__ModuleLoader__.load({
           await loadWorkspaceFiles()
           setFileSearch('')
           setShowFiles(true)
+          // The picker opens below the File menu; leaving that menu open on top
+          // of it made its own controls (the new-file field) swallow the clicks
+          // aimed at the picker's rename/delete buttons.
+          const openMenu=typeof document!=='undefined'
+            ? document.querySelector('.dsh-studio-top details.dsh-studio-menu[open]') : null
+          openMenu?.removeAttribute('open')
         }catch(e){setError(String(e.message))}finally{setBusy(false)}
       }
       // Files can appear while the view is open (the conversation creates them),
@@ -2196,6 +2365,13 @@ window.__ModuleLoader__.load({
       const selected=nodes.find(n=>n.id===active)
       const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
       const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
+      // The PNG control is disabled only when the conversion cannot apply to this
+      // document; the visible reason next to it says why, so it is never a dead
+      // button. Transient states (busy, conversion running) keep the same title.
+      const pngUnavailableReason = !doc ? 'PNG : aucun document SVG ouvert'
+        : doc.format!=='svg' ? 'PNG : disponible uniquement pour les documents SVG'
+        : null
+      const pngDisabled = !doc || doc.format!=='svg' || pngBusy
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
       const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
@@ -3224,7 +3400,21 @@ window.__ModuleLoader__.load({
            h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-primary',
              disabled:!doc||busy||reloadRequired||source!==doc?.source||hasTextDraft(),
              'aria-label':'Export native document',onClick:exportNativeDocument},glyph('export'),
-             doc?'Exporter '+doc.format.toUpperCase():'Exporter SVG')),
+             doc?'Exporter '+doc.format.toUpperCase():'Exporter SVG'),
+           h('label',{className:'dsh-studio-png-scale',title:'Échelle de sortie PNG'},
+             h('span',null,'PNG'),
+             h('select',{'aria-label':'PNG scale',value:pngScale,
+               disabled:!doc||doc.format!=='svg'||pngBusy,
+               onChange:e=>setPngScale(Number(e.target.value))},
+               PNG_SCALES.map(scale=>h('option',{key:scale,value:scale},scale+'×')))),
+           h('button',{type:'button',className:'dsh-studio-topbtn',
+             disabled:pngDisabled,
+             'aria-label':'Export PNG',
+             'aria-describedby':pngUnavailableReason?pngReasonId:undefined,
+             title:pngUnavailableReason||'Télécharger la source actuelle en PNG (1× ou 2×), sans écrire le fichier.',
+             onClick:()=>void exportPngDocument()},glyph('export'),
+             pngBusy?'Conversion…':'Exporter PNG'),
+           pngUnavailableReason&&h('span',{id:pngReasonId,className:'dsh-studio-png-reason',role:'note'},pngUnavailableReason)),
         h('div',{className:'dsh-studio-toolbar'},          h('div',{className:'dsh-studio-tools',role:'toolbar','aria-label':'SVG creation tools'},
             h('button',{type:'button','data-tool':'select','aria-pressed':canvasTool==='select',className:'dsh-studio-tool'+(canvasTool==='select'?' selected':''),'aria-label':'Select canvas tool',style:{background:canvasTool==='select'?'#51483d':'transparent'},title:'Sélection · V',onClick:()=>setCanvasTool('select')},glyph('select')),
             h('button',{type:'button','data-tool':'frame',className:'dsh-studio-tool',disabled:true,title:'Cadre · non implémenté','aria-label':'Frame tool unavailable'},glyph('frame')),
