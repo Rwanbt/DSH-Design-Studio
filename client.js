@@ -2697,6 +2697,18 @@ window.__ModuleLoader__.load({
         panRef.current=null
       }
       function onEditorKeyDown(event) {
+        // Native document save. Handle before input focus filtering so editing
+        // the source textarea never invokes the browser's Save Page command.
+        // The existing save() performs all Host revision and conflict checks.
+        if((event.ctrlKey||event.metaKey)&&!event.altKey&&
+          String(event.key).toLowerCase()==='s' && doc) {
+          event.preventDefault()
+          event.stopPropagation()
+          if(!busy && !reloadRequired && source!==doc.source) {
+            void save({kind:'replace-source',source})
+          }
+          return
+        }
         // Professional document navigation. Handle before the text-input guard:
         // Ctrl+Tab is a document command even when the source editor has focus.
         // The active tab is captured by activateTab (including unsaved edits),
@@ -4899,7 +4911,8 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
         doc&&h('details',{className:'dsh-studio-source',style:{padding:'10px 14px',borderTop:'1px solid #36383b',background:'var(--dsw-alias-bg-layer-1, #222427)'}},h('summary',{style:{cursor:'pointer'}},'Code source natif · avancé'),
           h('textarea',{spellCheck:false,value:source,onChange:e=>setSource(e.target.value),style:{...field,minHeight:220,font:'12px monospace',marginTop:8}}),
           h('div',{style:{display:'flex',gap:8,marginTop:8}},
-            h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,onClick:()=>save({kind:'replace-source',source})},'Save source'),
+            h('button',{style:button,disabled:busy||reloadRequired||source===doc.source,
+              title:'Enregistrer le document actif (Ctrl+S)',onClick:()=>save({kind:'replace-source',source})},'Save source'),
             h('button',{style:button,onClick:()=>setSource(doc.source)},'Discard unsaved text'))),
 
         h('footer',{className:'dsh-studio-footer'},h('span',null,'◇ DSH Design Studio'),h('span',null,h('kbd',null,'V'),' Sélection'),h('span',null,h('kbd',null,'H'),' Main'),h('span',null,h('kbd',null,'P'),' Plume'),h('span',null,'Ctrl + molette : zoom'),h('span',null,'SVG · HTML · CSS natifs'),h('span',null,'● Mode local · expérimental'))
