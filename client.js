@@ -133,6 +133,35 @@ window.__ModuleLoader__.load({
       const rounded = Math.round(value * 1000) / 1000
       return String(Object.is(rounded, -0) ? 0 : rounded)
     }
+    // Rename pre-checks mirror `src/svg-rename.mjs` for the UI only; the Host is
+    // still the only writer and re-validates every rule before touching bytes.
+    const SVG_ID_PATTERN = /^[A-Za-z_][\w.:-]*$/
+    const MAX_SVG_ID_LENGTH = 128
+    /**
+     * Conservative CLIENT pre-check: only the two cheapest, most common cases
+     * are duplicated here (`url(#id)` and any `href="#id"` in the raw source).
+     * CSS selectors, XML-encoded values, ARIA id lists, SMIL times and ids that
+     * need CSS escaping are deliberately left to the Host, which stays the only
+     * writer. A match inside a comment blocks the UI (accepted false positive);
+     * a case this pre-check misses costs exactly one POST and zero writes.
+     */
+    function svgIdLooksReferenced(source, id) {
+      if (typeof source !== 'string' || !id) return false
+      const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const boundary = '(?![\\w.:-])'
+      if (new RegExp('url\\(\\s*["\']?#' + escaped + boundary, 'i').test(source)) return true
+      return new RegExp('(?:[\\w.-]+:)?href\\s*=\\s*["\']#' + escaped + boundary + '["\']', 'i').test(source)
+    }
+    /** Rewrite one id inside a selection list, without creating duplicates. */
+    function rewriteRenameSelection(selection, from, to) {
+      if (!from || !to) return selection
+      const mapped = []
+      for (const value of selection || []) {
+        const next = value === from ? to : value
+        if (!mapped.includes(next)) mapped.push(next)
+      }
+      return mapped
+    }
     // SVG paths and shell stylesheet are translated from the committed Graphite V3 reference.
     const GRAPHITE_CSS = `
 .dsh-studio-workbench{--bg:#15171b;--shell:#1d2026;--panel:#202329;--panel2:#262a31;--line:#333740;--soft:#2a2f39;--text:var(--dsw-alias-label-primary,#e8ebf0);--muted:#949ba9;--sub:var(--dsw-alias-label-tertiary,#6e7786);--blue:#c7ad8e;--blue-bg:#4b4035;--canvas:#111317;--shadow:0 14px 50px #080a0c9c;--radius:8px}
@@ -555,6 +584,17 @@ window.__ModuleLoader__.load({
       const [textDraft,setTextDraft] = React.useState('')
       const [active,setActive] = React.useState('')
       const [extraSelection,setExtraSelection] = React.useState([])
+      // Inline layer rename: {id, value} while one row is edited. Escape cancels,
+      // Enter asks the Host for one exact `svg-rename` patch.
+      const [renaming,setRenaming]=React.useState(null)
+      React.useEffect(()=>{
+        if(!renaming)return
+        if(typeof document==='undefined'||typeof document.querySelector!=='function')return
+        const input=document.querySelector('[data-layer-rename-input]')
+        if(!input)return
+        if(typeof input.focus==='function')input.focus()
+        try{if(typeof input.select==='function')input.select()}catch(_){}
+      },[renaming?.id])
       const [attribute,setAttribute] = React.useState('')
       const [value,setValue] = React.useState('')
       const [error,setError] = React.useState('')
@@ -647,6 +687,7 @@ window.__ModuleLoader__.load({
             // A selection belongs to the document that owns those ids; keeping
             // it across files would point at layers that no longer exist.
             setExtraSelection([])
+            setRenaming(null)
             setCanvasTool('select')
             setPenPathId('');setPenOutgoing(null);setPenPreview(null)
             penGestureRef.current=null;penPendingRef.current=false
@@ -741,6 +782,7 @@ window.__ModuleLoader__.load({
         setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
         setHtmlActive('');setHtmlValue('')
         setGeometry({artboard:null,handles:[]});setActive('');setExtraSelection([])
+        setRenaming(null)
         setUndoStack([]);setRedoStack([]);setReloadRequired(false)
         setAlignNotice('')
         setEditingText('');setTextDraft('');setWarning('')
@@ -827,7 +869,7 @@ window.__ModuleLoader__.load({
             :String(e.message))
         }finally{setCreating(false)}
       }
-      async function save(payload, historyMode='record',onSaved=null) {
+      async function save(payload, historyMode='record',onSaved=null,retainSelection=null) {
         if(!doc || busy)return false
         if(payload.kind!=='svg-text' && refuseTextDraft())return false
         if(reloadRequired){setError('Document state uncertain. Reload the file before making further changes.');return false}
@@ -835,7 +877,7 @@ window.__ModuleLoader__.load({
         setBusy(true);setError('')
         try {
           const response=await request('/apply',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...scopeBody,file:doc.file,baseHash:doc.hash,baseIdentity:doc.identity,...payload})})
-          const reloaded=await load(true,doc.file,response.createdId||active)
+          const reloaded=await load(true,doc.file,response.createdId||retainSelection||active)
           if(!reloaded) {
             setReloadRequired(true)
             setUndoStack([]);setRedoStack([])
@@ -844,7 +886,10 @@ window.__ModuleLoader__.load({
           }
           if(response.result?.changed) {
             if(historyMode==='record') {
-              const entry={undo:response.result.inverse,redo:response.patches}
+              // A rename changes the address of the layer: the entry remembers
+              // both names so Undo/Redo can restore the selection coherently.
+              const entry={undo:response.result.inverse,redo:response.patches,
+                rename:payload.kind==='svg-rename'?{from:payload.id,to:payload.next}:null}
               // Avoid storing dozens of full-document copies in memory.
               const bytes=JSON.stringify(entry).length
               if(bytes<=2*1024*1024) setUndoStack(previous=>[...previous,entry].slice(-30))
@@ -944,7 +989,7 @@ window.__ModuleLoader__.load({
         layerMenuTriggerRef.current=event.currentTarget
         const keyboard=event.type==='keydown'
         const rect=keyboard?event.currentTarget.getBoundingClientRect():null
-        const width=232, height=430
+        const width=232, height=460
         const x=Math.max(8,Math.min(keyboard?rect.left:event.clientX, (window.innerWidth||1200)-width-8))
         const y=Math.max(8,Math.min(keyboard?rect.bottom:event.clientY, (window.innerHeight||800)-height-8))
         setLayerMenu({id:target,x,y})
@@ -978,6 +1023,136 @@ window.__ModuleLoader__.load({
       function layerLockedByAncestor(node) {
         const ancestors=Array.isArray(node?.ancestorIds)?node.ancestorIds:[]
         return ancestors.some(id=>nodes.find(item=>item.id===id)?.locked===true)
+      }
+      /**
+       * Can this layer be renamed at all? Document availability, pending drafts
+       * and the layer's own state are checked before the input is shown, so a
+       * locked or read-only row explains itself instead of opening a dead field.
+       */
+      function renameTargetState(id) {
+        const blocked=reason=>({ok:false,reason})
+        if(!doc) return blocked('Ouvrez un document SVG pour renommer un calque.')
+        if(doc.format!=='svg') return blocked('Renommage indisponible : ce document n’est pas un SVG.')
+        if(busy) return blocked('Enregistrement en cours : réessayez ensuite.')
+        if(reloadRequired) return blocked('Document à recharger avant de renommer.')
+        if(source!==doc.source||hasTextDraft()) {
+          return blocked('Modifications non enregistrées : enregistrez ou abandonnez-les avant de renommer.')
+        }
+        const node=nodes.find(item=>item.id===id)
+        if(!node) return blocked('Calque introuvable : resélectionnez-le.')
+        if(!node.id) return blocked('Ce calque n’a pas d’identifiant : renommage impossible.')
+        if(node.depth===0) return blocked('La racine SVG ne peut pas être renommée : choisissez un calque.')
+        if(node.readOnly) return blocked('Lecture seule : ce contenu SVG référencé ne peut pas être renommé.')
+        if(node.locked||layerLockedByAncestor(node)) {
+          return blocked('Calque verrouillé : déverrouillez #'+id+' avant de le renommer.')
+        }
+        return {ok:true,node}
+      }
+      /**
+       * Full UI pre-check, mirroring the Host refusals so a collision or a
+       * referenced id is explained WITHOUT a request and without a write.
+       */
+      function layerRenameState(id,next) {
+        const target=renameTargetState(id)
+        if(!target.ok) return target
+        const value=String(next ?? '')
+        if(!value) return {ok:false,reason:'Indiquez un nouveau nom de calque.'}
+        if(value.length>MAX_SVG_ID_LENGTH) {
+          return {ok:false,reason:'Nom trop long : '+MAX_SVG_ID_LENGTH+' caractères maximum.'}
+        }
+        if(!SVG_ID_PATTERN.test(value)) {
+          return {ok:false,reason:'Nom invalide : commencez par une lettre ou _, puis lettres, chiffres, _ . : - uniquement.'}
+        }
+        if(value===id) return {ok:false,reason:'Le nom est identique à l’actuel : aucune écriture nécessaire.'}
+        if(nodes.some(item=>item.id===value)) {
+          return {ok:false,reason:'Un calque porte déjà le nom « '+value+' » : renommage refusé (collision d’id).'}
+        }
+        if(svgIdLooksReferenced(doc.source,id)) {
+          return {ok:false,reason:'L’identifiant #'+id+' est référencé dans le document (url(#), href ou xlink:href) : le renommer casserait la référence.'}
+        }
+        return {ok:true,node:target.node}
+      }
+      /** Open the inline editor for one row, or explain why it cannot open. */
+      function startRename(id) {
+        const state=renameTargetState(id)
+        if(!state.ok) {
+          setNotice('')
+          setError(state.reason)
+          return false
+        }
+        setAlignNotice('')
+        setError('')
+        setNotice('')
+        if(id!==active) select(id)
+        else setEditingText('')
+        setRenaming({id,value:id})
+        return true
+      }
+      /** Close the inline editor and give focus back to the row, never writing. */
+      function cancelRename() {
+        const pending=renaming
+        setRenaming(null)
+        if(!pending?.id)return
+        if(typeof document==='undefined'||typeof document.querySelector!=='function')return
+        // Restore focus after the row is rendered again; a no-match (the layer
+        // was replaced meanwhile) is simply ignored. If another inline editor
+        // opened in the meantime, focusing an old row would steal its focus.
+        setTimeout(()=>{
+          if(typeof document==='undefined'||typeof document.querySelector!=='function')return
+          if(document.querySelector('[data-layer-rename-input]'))return
+          const row=document.querySelector('[data-layer-id="'+pending.id+'"]')
+          if(row&&typeof row.focus==='function')row.focus()
+        },0)
+      }
+      /**
+       * Commit one rename through the single `svg-rename` Host operation.
+       *
+       * The editor is closed only AFTER the Host confirms the write. On a
+       * refusal (CSS/ARIA/SMIL/encoded reference, ambiguous entity, stale
+       * revision) the field stays open with exactly what the user typed and
+       * gets focus back, so the reason and the value are both visible. A
+       * client-side pre-check refusal never reaches this function.
+       */
+      async function commitRename() {
+        const pending=renaming
+        if(!pending)return false
+        const state=layerRenameState(pending.id,pending.value)
+        if(!state.ok) {
+          setNotice('')
+          setError(state.reason)
+          return false
+        }
+        const id=pending.id
+        const next=String(pending.value)
+        setError('');setNotice('')
+        const saved=await save({kind:'svg-rename',id,next},'record',()=>{
+          // The layer is now addressed by its new name: keep a multi-selection
+          // and an in-progress Plume path coherent instead of dropping them.
+          // Undo/Redo replay the {from,to} pair symmetrically below.
+          setExtraSelection(previous=>rewriteRenameSelection(previous,id,next))
+          if(penPathId===id)setPenPathId(next)
+          setNotice('Calque renommé : #'+id+' → #'+next)
+        })
+        if(!saved) {
+          // Host refusal: keep the field open with its value and give focus
+          // back. `save()` already surfaced the typed reason through `error`.
+          setRenaming(previous=>previous?{...previous}:previous)
+          if(typeof document!=='undefined'&&typeof document.querySelector==='function') {
+            setTimeout(()=>{
+              const input=document.querySelector('[data-layer-rename-input]')
+              if(input&&typeof input.focus==='function')input.focus()
+            },0)
+          }
+          return false
+        }
+        setRenaming(null)
+        if(typeof document!=='undefined'&&typeof document.querySelector==='function') {
+          setTimeout(()=>{
+            const row=document.querySelector('[data-layer-id="'+next+'"]')
+            if(row&&typeof row.focus==='function')row.focus()
+          },0)
+        }
+        return true
       }
       /**
        * Resolve the current multi-selection into alignment entries, or into one
@@ -1327,7 +1502,17 @@ window.__ModuleLoader__.load({
       async function undo() {
         if(busy || reloadRequired || source!==doc?.source || !undoStack.length)return
         const entry=undoStack[undoStack.length-1]
-        if(await save({kind:'patches',patches:entry.undo},'replay')) {
+        // Undoing a rename restores the old id: the selection must follow it so
+        // the layer stays selected under the name that now exists again.
+        const retained=entry.rename?entry.rename.from:null
+        if(await save({kind:'patches',patches:entry.undo},'replay',null,retained)) {
+          // Undo restores the OLD id. Replaying only the active id would leave
+          // the new id in the multi-selection, and the phantom id would then
+          // block every alignment ("Un calque sélectionné n'existe plus").
+          if(entry.rename) {
+            setExtraSelection(previous=>rewriteRenameSelection(previous,entry.rename.to,entry.rename.from))
+            setPenPathId(previous=>previous===entry.rename.to?entry.rename.from:previous)
+          }
           setUndoStack(previous=>previous.slice(0,-1))
           setRedoStack(previous=>[...previous,entry])
         }
@@ -1335,7 +1520,12 @@ window.__ModuleLoader__.load({
       async function redo() {
         if(busy || reloadRequired || source!==doc?.source || !redoStack.length)return
         const entry=redoStack[redoStack.length-1]
-        if(await save({kind:'patches',patches:entry.redo},'replay')) {
+        const retained=entry.rename?entry.rename.to:null
+        if(await save({kind:'patches',patches:entry.redo},'replay',null,retained)) {
+          if(entry.rename) {
+            setExtraSelection(previous=>rewriteRenameSelection(previous,entry.rename.from,entry.rename.to))
+            setPenPathId(previous=>previous===entry.rename.from?entry.rename.to:previous)
+          }
           setRedoStack(previous=>previous.slice(0,-1))
           setUndoStack(previous=>[...previous,entry])
         }
@@ -2266,6 +2456,10 @@ window.__ModuleLoader__.load({
             layerMenuItem(menuLayer?.locked?'Déverrouiller le calque':'Verrouiller le calque','',
               ()=>save({kind:'svg-lock',id:layerMenu.id,locked:!menuLayer?.locked}),menuBlocked),
             h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
+            // Renaming opens the same inline editor as a double-click. The entry
+            // stays enabled (unless no write is possible at all) and explains a
+            // locked/read-only row instead of being a dead button.
+            layerMenuItem('Renommer le calque','Double-clic',()=>startRename(layerMenu.id),menuBlocked),
             layerMenuItem('Fermer le menu','Échap',()=>{},false))),
         h('header',{className:'dsh-studio-top'},
           h('span',{className:'dsh-studio-brandmark'},glyph('brand')),
@@ -2427,14 +2621,33 @@ window.__ModuleLoader__.load({
                   onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
                   h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
                 (nodes.length?nodes.filter(n=>!layerSearch||
-                    (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>h('button',{key:n.id,
+                    (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>renaming?.id===n.id
+                  // Inline rename: a real input, never a fake button. Enter asks
+                  // the Host for one exact patch; Escape closes without writing.
+                  ? h('div',{key:n.id,className:'dsh-studio-item dsh-studio-renaming','data-layer-id':n.id,
+                    style:{width:'100%',paddingLeft:10+(Math.max(0,Math.min(12,n.depth||0))*11)}},
+                    h('span',{className:'dsh-studio-mini'},n.isGroup?'▤':n.tag==='text'?'T':n.tag==='ellipse'||n.tag==='circle'?'◯':n.tag==='path'?'⌁':'▢'),
+                    h('input',{className:'dsh-studio-rename-input','data-layer-rename-input':'',type:'text',
+                      style:{...field,flex:1,minWidth:0,height:25,padding:'2px 6px'},
+                      value:renaming.value,
+                      title:'Entrée : valider · Échap : annuler',
+                      'aria-label':'Nouveau nom du calque #'+n.id,
+                      autoFocus:true,
+                      onChange:e=>setRenaming(previous=>previous?{...previous,value:e.target.value}:previous),
+                      onFocus:e=>{try{e.currentTarget.select()}catch(_){}},
+                      onKeyDown:e=>{
+                        if(e.key==='Enter'){e.preventDefault();e.stopPropagation();void commitRename()}
+                        else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancelRename()}
+                      },
+                      onBlur:()=>cancelRename()}))
+                  : h('button',{key:n.id,
                   type:'button',className:'dsh-studio-item'+(active===n.id?' dsh-studio-active':'')+
                     (layerDrag?.id===n.id?' dsh-studio-layer-dragging':'')+
                     (layerDrag?.overId===n.id&&layerDrag?.plan?.ok?' dsh-studio-drop-target':'')+
                     (layerDrag?.overId===n.id&&layerDrag?.plan&&!layerDrag.plan.ok&&!layerDrag.plan.same
                       ?' dsh-studio-drop-refused':''),
                   'data-layer-id':n.id,
-                  title:'Glisser pour réordonner · Ctrl+] avancer · Ctrl+[ reculer',
+                  title:'Double-clic : renommer · Glisser : réordonner · Ctrl+] avancer · Ctrl+[ reculer',
                   'aria-label':'Select layer '+n.tag+' #'+n.id+
                     (n.hidden?' (hidden)':'')+(n.locked?' (locked)':'')+
                     (extraSelection.includes(n.id)?' (in selection)':''),
@@ -2447,6 +2660,7 @@ window.__ModuleLoader__.load({
                     if(layerDragClickRef.current){layerDragClickRef.current=false;return}
                     select(n.id,!!(event?.ctrlKey||event?.metaKey||event?.shiftKey))
                   },
+                  onDoubleClick:event=>{event.preventDefault();startRename(n.id)},
                   onPointerDown:event=>startLayerDrag(event,n.id),
                   onPointerMove:event=>moveLayerDrag(event),
                   onPointerUp:event=>endLayerDrag(event),

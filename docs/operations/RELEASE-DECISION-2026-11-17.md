@@ -2,7 +2,7 @@
 
 > **Actualisation du 18 novembre 2026 — cette décision reste NO-GO.** Les compteurs
 > ci-dessous sont ceux de la session du 17 ; l'état mesuré du 18 est :
-> **531 tests noyau**, **130 runs navigateur** (65 specs × 2 moteurs), **31 PASS /
+> **553 tests noyau**, **146 runs navigateur** (73 specs × 2 moteurs), **31 PASS /
 > 0 FAIL / 6 NOT_RUN** en DSH Web réel sans IA, benchmark moteur reproductible
 > (`npm run benchmark`) exécuté aussi en CI, et **Desktop `NOT_RUN`** pour l'UI
 > actuelle. Voir `REAL-WEB-2026-11-18.md`, `PERFORMANCE-BUDGETS-2026-11-18.md` et
@@ -24,8 +24,8 @@ standalone application, no separate process, no own window/port; installation is
 
 | Item | State | Evidence |
 |---|---|---|
-| Core suite | **531 / 531 PASS**, 0 fail, 0 skip, no dependencies installed (18 Nov) | `npm run check` |
-| Real browser gate | 65 specs × Chromium 145 + Firefox 146 = **130 PASS / 0 FAIL** (18 Nov, report committed) | `npm run test:browser`, report JSON |
+| Core suite | **553 / 553 PASS**, 0 fail, 0 skip, no dependencies installed (18 Nov) | `npm run check` |
+| Real browser gate | 73 specs × Chromium 145 + Firefox 146 = **146 PASS / 0 FAIL** (18 Nov, report committed) | `npm run test:browser`, report JSON |
 | Real DSH gate (Web, no AI) | **31 PASS / 0 FAIL / 6 NOT_RUN** in disposable profiles; Desktop NOT_RUN for this UI | `npm run test:dsh`, `REAL-WEB-2026-11-18.md` |
 | CI — Linux | PASS | GitHub Actions `core (ubuntu-latest)` |
 | CI — Windows | every observed failure fixed (rename, lock release, POSIX bits, path separators) | GitHub Actions `core (windows-latest)` history |

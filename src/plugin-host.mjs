@@ -4,6 +4,7 @@ import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
+import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -311,6 +312,14 @@ export function createRouteHandler(ctx) {
           // trusted source of markup, even for bytes it copied itself.
           const inserted=svgFragmentInsertPatch(doc.source,{fragment:params.fragment})
           patches=[inserted.patch];createdId=inserted.id
+        } else if (params.kind === 'svg-rename') {
+          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          // One patch over the exact `id` value span: the inverse is exact and
+          // Undo restores the original bytes. References to the old id and
+          // collisions are refused before anything is written.
+          const renamed = svgRenamePatch(doc.source,{id:params.id,next:params.next})
+          patches=[renamed.patch]
+          createdId=renamed.next
         } else if (params.kind === 'svg-pen') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           if(params.operation==='start') {

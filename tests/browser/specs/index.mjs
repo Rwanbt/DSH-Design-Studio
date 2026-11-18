@@ -27,6 +27,7 @@ import { createSpec, createCssSpec, createFeedbackSpec, createRefusalSpec } from
 import { panelSpec, panelUnavailableSpec, panelEmptySpec } from './panel.mjs'
 import { renameFileSpec, deleteFileSpec, cancelDeleteSpec } from './file-admin.mjs'
 import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderSpec, layerDragSpec } from './layer-menu.mjs'
+import { renameLayerSpec, renameMenuSpec, renameRefusalSpec, renameHostRefusalSpec, renameUndoSelectionSpec } from './rename.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -56,6 +57,11 @@ export const specs = [
   pasteMenuSpec,
   reorderSpec,
   layerDragSpec,
+  renameLayerSpec,
+  renameMenuSpec,
+  renameRefusalSpec,
+  renameHostRefusalSpec,
+  renameUndoSelectionSpec,
   deleteFileSpec,
   cancelDeleteSpec,
   panelUnavailableSpec,

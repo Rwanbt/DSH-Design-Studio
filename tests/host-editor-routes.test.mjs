@@ -273,3 +273,129 @@ test('grouped layers can be deleted and duplicated through the route with exact 
       'child ids are rewritten in the clone')
   } finally { await host.close() }
 })
+
+/** The single differing range between two strings. */
+function singleRange(before, after) {
+  const limit = Math.min(before.length, after.length)
+  let prefix = 0
+  while (prefix < limit && before[prefix] === after[prefix]) prefix += 1
+  let suffix = 0
+  while (suffix < limit - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix += 1
+  return { prefix, suffix, before: before.slice(prefix, before.length - suffix),
+    after: after.slice(prefix, after.length - suffix) }
+}
+
+test('renaming a layer id writes one patch over the value and is undone exactly', async () => {
+  const host = await mount()
+  try {
+    await host.write('rename.svg', SVG)
+    const opened = await host.open('rename.svg')
+    const renamed = await host.apply({ ...host.revision(opened), kind: 'svg-rename', id: 'a', next: 'zulu' })
+    assert.equal(renamed.status, 200, JSON.stringify(renamed.body))
+    assert.equal(renamed.body.createdId, 'zulu', 'the client must reselect the new id')
+    const disk = await host.read('rename.svg')
+    const window = singleRange(SVG, disk)
+    assert.equal(window.before, 'a')
+    assert.equal(window.after, 'zulu')
+    assert.ok(disk.includes('<rect id="b" x="60" y="10" width="40" height="30" fill="#8a9a7b"/>'),
+      'sibling layers keep every byte')
+
+    const undo = await host.apply({ file: 'rename.svg', baseHash: renamed.body.result.hash,
+      baseIdentity: renamed.body.result.identity, kind: 'patches', patches: renamed.body.result.inverse })
+    assert.equal(undo.status, 200, JSON.stringify(undo.body))
+    assert.equal(await host.read('rename.svg'), SVG, 'the inverse restores the original bytes exactly')
+  } finally { await host.close() }
+})
+
+test('svg-rename refuses invalid, identical, colliding, referenced, locked and read-only targets', async () => {
+  const host = await mount()
+  try {
+    await host.write('rename.svg', SVG)
+    let opened = await host.open('rename.svg')
+    const refusal = async (payload, code) => {
+      const response = await host.apply({ ...host.revision(opened), kind: 'svg-rename', ...payload })
+      assert.equal(response.status, 400, `${payload.id}→${payload.next}: ${JSON.stringify(response.body)}`)
+      assert.equal(response.body.error, code)
+      assert.equal(await host.read('rename.svg'), SVG, 'a refused rename never touches the file')
+    }
+    await refusal({ id: 'a', next: '1bad' }, 'invalid-id')
+    await refusal({ id: 'a', next: 'bad name' }, 'invalid-id')
+    await refusal({ id: 'a', next: 'a' }, 'unchanged')
+    await refusal({ id: 'a', next: 'b' }, 'id-collision')
+    await refusal({ id: 'ghost', next: 'x' }, 'unknown-node')
+
+    // References are refused rather than rewritten: the old id is still used.
+    const url = `<svg xmlns="http://www.w3.org/2000/svg"><rect id="a" x="1" y="1" width="2" height="2"/><rect x="0" y="0" width="9" height="9" fill="url(#a)"/></svg>`
+    await host.write('url.svg', url)
+    opened = await host.open('url.svg')
+    const refusedUrl = await host.apply({ ...host.revision(opened), kind: 'svg-rename', id: 'a', next: 'alpha' })
+    assert.equal(refusedUrl.status, 400)
+    assert.equal(refusedUrl.body.error, 'id-referenced')
+    assert.equal(await host.read('url.svg'), url)
+
+    const locked = SVG.replace('<rect id="a"', '<rect id="a" data-locked="true"')
+    await host.write('locked.svg', locked)
+    opened = await host.open('locked.svg')
+    const refusedLocked = await host.apply({ ...host.revision(opened), kind: 'svg-rename', id: 'a', next: 'alpha' })
+    assert.equal(refusedLocked.status, 400)
+    assert.equal(refusedLocked.body.error, 'locked')
+    assert.equal(await host.read('locked.svg'), locked)
+
+    const readOnly = `<svg xmlns="http://www.w3.org/2000/svg"><defs><rect id="tint" x="1" y="1" width="2" height="2"/></defs></svg>`
+    await host.write('defs.svg', readOnly)
+    opened = await host.open('defs.svg')
+    const refusedDefs = await host.apply({ ...host.revision(opened), kind: 'svg-rename', id: 'tint', next: 'teinte' })
+    assert.equal(refusedDefs.status, 400)
+    assert.equal(refusedDefs.body.error, 'read-only')
+    assert.equal(await host.read('defs.svg'), readOnly)
+  } finally { await host.close() }
+})
+
+test('svg-rename refuses CSS, entity, ARIA and SMIL references at the real route', async () => {
+  const host = await mount()
+  try {
+    const svg = (extra) => `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect id="a" x="1" y="1" width="2" height="2"/>${extra}</svg>`
+    const cases = [
+      ['css-pseudo.svg', svg('<style>#a:hover{opacity:.5}</style>'), 'a', 'id-referenced'],
+      ['css-attribute.svg', svg('<style>[id="a"]{opacity:.5}</style>'), 'a', 'id-referenced'],
+      ['encoded-href.svg', svg('<use href="&#35;a" x="0" y="0"/>'), 'a', 'id-referenced'],
+      ['foreign-href.svg', svg('<use xmlns:x="http://www.w3.org/1999/xlink" x:href="#a" x="0" y="0"/>'), 'a', 'id-referenced'],
+      ['aria.svg', svg('<g aria-labelledby="title a footer"/>'), 'a', 'id-referenced'],
+      ['smil.svg', svg('<animate begin="a.click" attributeName="opacity" dur="1s"/>'), 'a', 'id-referenced'],
+      ['ambiguous.svg', svg('<text data-note="AT&T">x</text>'), 'a', 'ambiguous-entities'],
+      ['escaped-id.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect id="layer.1" x="1" y="1" width="2" height="2"/><style>#layer\\.1{opacity:.5}</style></svg>`, 'layer.1', 'id-not-renamable'],
+    ]
+    for (const [file, source, id, code] of cases) {
+      await host.write(file, source)
+      const opened = await host.open(file)
+      const response = await host.apply({ ...host.revision(opened), kind: 'svg-rename', id, next: 'panneau' })
+      assert.equal(response.status, 400, file + ': ' + JSON.stringify(response.body))
+      assert.equal(response.body.error, code, file)
+      assert.equal(await host.read(file), source, file + ' is never written')
+    }
+  } finally { await host.close() }
+})
+
+test('svg-rename keeps the revision contract and refuses non-SVG documents', async () => {
+  const host = await mount()
+  try {
+    await host.write('rename.svg', SVG)
+    const opened = await host.open('rename.svg')
+
+    const missing = await host.call('POST', '/design-studio-native/apply',
+      { sessionId: 's1', file: 'rename.svg', baseHash: opened.document.hash, kind: 'svg-rename', id: 'a', next: 'alpha' })
+    assert.equal(missing.status, 428, JSON.stringify(missing.body))
+    assert.equal(missing.body.error, 'missing-revision')
+
+    const stale = await host.apply({ ...host.revision(opened), baseHash: 'a'.repeat(64), kind: 'svg-rename', id: 'a', next: 'alpha' })
+    assert.equal(stale.status, 409, JSON.stringify(stale.body))
+    assert.equal(stale.body.error, 'stale-revision')
+    assert.equal(await host.read('rename.svg'), SVG)
+
+    await host.write('styles.css', 'h1 { color: #202124; }\n')
+    const css = await host.open('styles.css')
+    const refused = await host.apply({ ...host.revision(css), kind: 'svg-rename', id: 'a', next: 'alpha' })
+    assert.equal(refused.status, 400, JSON.stringify(refused.body))
+    assert.equal(refused.body.error, 'unsupported-format')
+  } finally { await host.close() }
+})
