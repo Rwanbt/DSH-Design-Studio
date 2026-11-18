@@ -81,6 +81,16 @@ export const gradientStopEditSpec = {
     assert.equal(withColor, GRADIENT_SVG.replace('stop-color="#102030"', 'stop-color="#205080"'),
       'no other byte moved: comments, offsets, quote style and other stops are untouched')
     assert.equal(applies(), 1, 'one stop colour is exactly one Host write')
+    // The field must show what the file now says, not what was typed: if the
+    // client stopped reloading, a stale panel would silently misreport the file.
+    await page.waitForFunction(() => document.querySelector('[aria-label="Gradient stop 0 colour"]')?.value === '#205080')
+    assert.equal(await color.inputValue(), '#205080', 'the colour field resynchronises from the saved file')
+
+    // Writing the same value again must not reach the Host at all.
+    await color.fill('#205080')
+    await color.press('Enter')
+    await page.waitForTimeout(300)
+    assert.equal(applies(), 1, 'an identical value must not call the Host')
 
     // The same inspector, after reload, edits the third stop opacity.
     const thirdOpacity = page.getByLabel('Gradient stop 2 opacity', { exact: true })
@@ -105,6 +115,9 @@ export const gradientStopEditSpec = {
     await waitForDisk(harness, 'degrade.svg', (text) => text === GRADIENT_SVG, { label: 'undo stop colour' })
     assert.equal(await harness.read('degrade.svg'), GRADIENT_SVG, 'the second Undo restores the original file')
     assert.equal(applies(), 4, 'each Undo is exactly one Host write')
+    // After Undo the panel must show the restored value, not the edited one.
+    await page.waitForFunction(() => document.querySelector('[aria-label="Gradient stop 0 colour"]')?.value === '#102030')
+    assert.equal(await color.inputValue(), '#102030', 'Undo resynchronises the colour field from disk')
   },
 }
 

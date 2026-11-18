@@ -194,3 +194,26 @@ le tactile, le lecteur d'écran et Electron restent non exécutés.
 **Gate G3/G4 : PARTIAL** — geste prouvé dans deux moteurs réels sur une coquille
 DSH simulée, pas dans le vrai DSH ; aucune création ni édition d'arrêt au-delà
 des trois attributs existants.
+
+## Corrections après revue indépendante (18 novembre 2026)
+
+Trois défauts réels ont été trouvés et corrigés, chacun avec une régression :
+
+1. **`stop-color="none"`** était accepté et écrit. Ce n'est pas une `<color>` : Chromium
+   **et** Firefox rendent le noir. La valeur est désormais refusée (`invalid-value`)
+   et retirée de la grammaire — un test le verrouille.
+2. **Un `<style>` du document** (ou une instruction `xml-stylesheet`) peut redéfinir
+   un arrêt : le panneau était actif et l'écriture n'avait aucun effet rendu. Tout
+   dégradé devient maintenant non modifiable avec la raison `document-styles`.
+3. **Un id encodé XML** (`id="sk&#121;"`) peut se décoder vers le même id qu'un
+   dégradé littéral ; l'écriture tombait alors sur l'élément que le navigateur
+   n'utilise pas. La présence d'un id encodé rend tous les dégradés non modifiables
+   (`encoded-id`).
+
+Deux limites d'affichage sont également explicites : une opacité non numérique
+(`50%`, valide en SVG) est montrée **en lecture seule avec sa valeur réelle** au
+lieu d'un champ actif vide, et l'infobulle de couleur ne promet plus `none`.
+
+Les manques de preuve signalés (aucune requête pour une valeur identique,
+resynchronisation après enregistrement et après Undo) sont traités dans les specs
+navigateur.

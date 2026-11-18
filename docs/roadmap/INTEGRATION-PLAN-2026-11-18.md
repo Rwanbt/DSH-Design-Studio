@@ -55,7 +55,7 @@ indépendante, gates niveau 1/2, puis commit atomique sur `dev`.
 
 | Tranche | Contenu | Dépendances | Preuve exigée |
 |---|---|---|---|
-| 1.1 | **Arrêts de dégradé** : lister les dégradés, éditer couleur/opacité/offset d'un arrêt existant, refus explicites (hérité par `href`, `style=`, entités, hors bornes) | — | module + route + specs navigateur ; octets exacts, 1 écriture, Undo exact |
+| 1.1 | **Arrêts de dégradé** — livré : couleur et opacité d'un arrêt existant ; `offset` supporté par module/Host mais non exposé ; refus explicites (hérité par `href`, `style=`, feuille de style du document, id encodé, entités, hors bornes, `none`) | — | module + route + specs navigateur ; octets exacts, 1 écriture, Undo exact |
 | 1.2 | **Contours** : `stroke`, `stroke-width`, `stroke-opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray` borné ; panneau « Contour » réellement actif ou refusé avec raison | 1.1 | idem |
 | 1.3 | **Opacité de remplissage** distincte de l'opacité globale (`fill-opacity`) | 1.2 | idem |
 | 1.4 | **Arrêts ajoutés/supprimés** (structure du `<defs>`) — seulement si 1.1 est stable | 1.1 | patch réversible, refus si le `<defs>` n'est pas structurable |

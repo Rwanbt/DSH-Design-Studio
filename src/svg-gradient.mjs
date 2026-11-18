@@ -45,7 +45,9 @@ export const GRADIENT_TAGS = new Set(['linearGradient', 'radialGradient'])
 export const GRADIENT_STOP_ATTRIBUTES = new Set(['stop-color', 'stop-opacity', 'offset'])
 
 const ID_PATTERN = /^[A-Za-z_][\w.:-]*$/
-const STOP_COLOR = /^(?:none|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/
+// `none` is deliberately absent: it is not a valid <color> for stop-color and
+// both Chromium and Firefox render it black, which would contradict the panel.
+const STOP_COLOR = /^(?:#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/
 const NUMBER = /^(?:\d+(?:\.\d+)?|\.\d+)$/
 const PERCENTAGE = /^(?:\d+(?:\.\d+)?|\.\d+)%$/
 const URL_FRAGMENT = /url\(\s*(?:(["'])(.*?)\1|([^)]*?))\s*\)/gi
@@ -82,7 +84,20 @@ function stopNodes(node) {
 }
 
 /** The single reason a gradient is not writable, or null when it is. */
-function gradientReason(node) {
+/** Document-level style sources that can override stop attributes. */
+function documentCarriesStyles(scan, source) {
+  if (/<\?xml-stylesheet\b/i.test(source)) return true
+  return scan.nodes.some((entry) => entry.tag === 'style')
+}
+
+/** An id written with an entity decodes to a different identity. */
+function documentHasEncodedId(scan) {
+  return scan.nodes.some((entry) => (entry.attributes.get('id')?.value || '').includes('&'))
+}
+
+function gradientReason(node, context = {}) {
+  if (context.encodedId) return 'encoded-id'
+  if (context.documentStyles) return 'document-styles'
   for (const attribute of node.attributeList) {
     if (attribute.name === 'href' || attribute.name.endsWith(':href')) return 'inherited-gradient'
   }
@@ -158,13 +173,18 @@ export function listSvgGradients(source, options = {}) {
   if (typeof source !== 'string') fail('invalid-source', 'Expected SVG source text')
   const scan = options.scan || scanOrFail(source)
   const references = collectReferences(scan)
+  // Document-level facts decide usability once, not per gradient.
+  const context = {
+    documentStyles: documentCarriesStyles(scan, source),
+    encodedId: documentHasEncodedId(scan),
+  }
   const gradients = []
   for (const node of scan.nodes) {
     if (!GRADIENT_TAGS.has(node.tag)) continue
     // Non-addressable gradients (no id, invalid id, duplicate id) are not
     // listed: nothing could name them in a request.
     if (node.id === null || scan.byId.get(node.id) !== node) continue
-    const reason = gradientReason(node)
+    const reason = gradientReason(node, context)
     gradients.push({
       id: node.id,
       type: node.tag === 'linearGradient' ? 'linear' : 'radial',
@@ -179,7 +199,7 @@ export function listSvgGradients(source, options = {}) {
 
 function validateStopValue(attribute, value) {
   if (attribute === 'stop-color') {
-    if (!STOP_COLOR.test(value)) fail('invalid-value', 'stop-color must be #rgb, #rrggbb or none')
+    if (!STOP_COLOR.test(value)) fail('invalid-value', 'stop-color must be #rgb or #rrggbb')
     return value
   }
   if (attribute === 'stop-opacity') {
@@ -224,7 +244,12 @@ export function svgGradientStopPatch(source, { gradientId, index, attribute, val
   if (!GRADIENT_TAGS.has(node.tag)) {
     fail('unknown-gradient', 'The id "' + gradientId + '" does not address a linear or radial gradient')
   }
-  const reason = gradientReason(node)
+  // Document-level context matters as much as the gradient itself: a style sheet
+  // or an encoded id makes the addressed element ambiguous.
+  const reason = gradientReason(node, {
+    documentStyles: documentCarriesStyles(scan, source),
+    encodedId: documentHasEncodedId(scan),
+  })
   if (reason) fail(reason, REFUSAL_MESSAGES[reason] || reason)
 
   const stops = stopNodes(node)

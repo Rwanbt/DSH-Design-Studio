@@ -132,12 +132,11 @@ test('one stop-color edit changes only that value and its inverse restores every
   assert.equal(undone.source, SVG, 'the inverse restores the original bytes exactly')
 })
 
-test('offset, percentage offsets, opacity and none keep their written form', () => {
+test('offset percentages and opacity keep their written form', () => {
   const cases = [
     [{ index: 0, attribute: 'offset', value: '0.25' }, 'offset="0"', 'offset="0.25"'],
     [{ index: 2, attribute: 'offset', value: '75%' }, 'offset="100%"', 'offset="75%"'],
     [{ index: 2, attribute: 'stop-opacity', value: '0.35' }, 'stop-opacity="0.8"', 'stop-opacity="0.35"'],
-    [{ index: 1, attribute: 'stop-color', value: 'none' }, 'stop-color="#405060"', 'stop-color="none"'],
   ]
   for (const [request, from, to] of cases) {
     const patch = svgGradientStopPatch(SVG, { gradientId: 'sky', ...request })
@@ -204,4 +203,39 @@ test('a shared scan produces the same listing as an internal scan', () => {
   // points must be indistinguishable.
   assert.deepEqual(listSvgGradients(SVG, { scan: scanSvgDocument(SVG) }), listSvgGradients(SVG))
   assert.deepEqual(listSvgGradients(SVG, { scan: null }), listSvgGradients(SVG))
+})
+
+test('a document style sheet makes every gradient non-writable instead of silently inert', () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg"><style>#g stop { stop-color: #00ff00 }</style>' +
+    '<defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000"/></linearGradient></defs>' +
+    '<rect id="r" width="10" height="10" fill="url(#g)"/></svg>'
+  const [gradient] = listSvgGradients(source)
+  assert.equal(gradient.usable, false)
+  assert.equal(gradient.reason, 'document-styles')
+  assert.throws(() => svgGradientStopPatch(source, {
+    gradientId: 'g', index: 0, attribute: 'stop-color', value: '#0000ff',
+  }), (error) => error.code === 'document-styles' || error.code === 'invalid-gradient')
+})
+
+test('an XML-encoded id anywhere in the document refuses every gradient', () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="sk&#121;"><stop offset="0" stop-color="#111111"/></linearGradient>' +
+    '<linearGradient id="sky"><stop offset="0" stop-color="#222222"/></linearGradient>' +
+    '</defs><rect id="r" width="10" height="10" fill="url(#sky)"/></svg>'
+  const listed = listSvgGradients(source)
+  assert.equal(listed.length, 1, 'the literal id is still listed')
+  assert.equal(listed[0].usable, false)
+  assert.equal(listed[0].reason, 'encoded-id')
+})
+
+test('stop-color `none` is refused because both engines render it black', () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#ff0000"/></linearGradient></defs></svg>'
+  assert.throws(() => svgGradientStopPatch(source, {
+    gradientId: 'g', index: 0, attribute: 'stop-color', value: 'none',
+  }), (error) => error.code === 'invalid-value')
+  for (const value of ['#abc', '#a1b2c3']) {
+    const patch = svgGradientStopPatch(source, { gradientId: 'g', index: 0, attribute: 'stop-color', value })
+    assert.equal(patch.end - patch.start > 0, true)
+  }
 })

@@ -33,14 +33,18 @@ distinguer un clic d'un glissement, capture du pointeur, ligne sous le curseur
 résolue par `elementFromPoint`. Un glyphe discret `⠿` (`aria-hidden`) signale
 l'affordance au survol et au focus, sans ajouter d'arrêt de tabulation.
 
-### 3. Seul un frère **adjacent** est une cible
+### 3. Seul un frère **adjacent** est surligné comme cible
 
 `svg-order` n'expose que « un plan en avant », « un plan en arrière » et les deux
-extrémités : il n'y a pas d'« insérer à l'index N ». Déposer sur une ligne
-lointaine aurait donc promis une position inatteignable. Le dépôt n'accepte
-qu'un **frère voisin** ; au-delà, le refus est explicite et renvoie au menu ou
-aux raccourcis. Ce compromis est assumé : mieux vaut une affordance vraie qu'un
-geste qui atterrit ailleurs.
+extrémités : il n'y a pas d'« insérer à l'index N ». Seul un **frère voisin** est
+donc surligné comme cible, parce que c'est la destination réelle.
+
+Déposer sur une ligne plus lointaine **n'est plus refusé** : le calque avance ou
+recule d'**un seul plan, vers cette ligne**. Le refus précédent perdait un geste
+parfaitement lisible et devenait fragile dès que la liste défilait pendant le
+glisser (le relâchement ne tombait plus sur la ligne voisine). Le statut dit ce
+qui se passe (« avancer d'un plan »), et un dépôt reste un patch atomique, donc
+un seul Undo.
 
 ### 4. Les refus sont explicites et n'écrivent rien
 

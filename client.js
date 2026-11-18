@@ -1501,14 +1501,11 @@ window.__ModuleLoader__.load({
         if(!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex===toIndex) {
           return {ok:false,reason:'Position des calques indisponible : utilisez Ctrl+] ou Ctrl+[.'}
         }
-        // One drop is exactly one rank (one atomic patch, one Undo). Highlighting
-        // a distant row as the socket would promise a move to that position, so
-        // only the adjacent sibling is a valid socket; further moves stay
-        // explicit through the menu and Ctrl+] / Ctrl+[.
-        if(Math.abs(fromIndex-toIndex)!==1) {
-          return {ok:false,
-            reason:'Déposez sur le calque voisin : un dépôt déplace d’un seul plan (Ctrl+] / Ctrl+[ pour répéter).'}
-        }
+        // One drop is exactly one rank (one atomic patch, one Undo). Only an
+        // adjacent row is *highlighted* as the socket, because that is the true
+        // destination; dropping on a farther sibling still moves one rank toward
+        // it instead of being refused, which is what the gesture means and avoids
+        // losing a drop when the list scrolls mid-drag.
         return {ok:true,direction:fromIndex<toIndex?'forward':'backward',from,to}
       }
       function startLayerDrag(event,id) {
@@ -2585,20 +2582,102 @@ window.__ModuleLoader__.load({
                 h('input',{type:'text',defaultValue:stop.color??'',
                   key:active+':stop:'+stop.index+':'+(stop.color??''),spellCheck:false,
                   style:{...field,height:30,minWidth:0},'aria-label':'Gradient stop '+stop.index+' colour',
-                  title:stop.colorSpan?'#rgb, #rrggbb ou none':'stop-color absent : aucune insertion dans cette tranche',
+                  title:stop.colorSpan?'#rgb ou #rrggbb':'stop-color absent : aucune insertion dans cette tranche',
                   disabled:!editable||!stop.colorSpan,
                   onBlur:e=>commitGradientStop(stop.index,'stop-color',e.target.value,stop.color),
                   onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
-              h('input',{type:'number',min:0,max:1,step:0.01,defaultValue:stop.opacity??'',
-                key:active+':stop-opacity:'+stop.index+':'+(stop.opacity??''),
-                style:{...field,height:30},'aria-label':'Gradient stop '+stop.index+' opacity',
-                title:stop.opacitySpan?'Opacité native de l’arrêt (0..1)':'stop-opacity absent : aucune insertion dans cette tranche',
-                disabled:!editable||!stop.opacitySpan,
-                onBlur:e=>commitGradientStop(stop.index,'stop-opacity',e.target.value,stop.opacity),
-                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}))),
+              // A percentage (`50%`) or an exotic expression is valid SVG but
+              // cannot be represented by a number input; showing an empty active
+              // field would misreport the file, so it stays read-only with its
+              // real value.
+              (stop.opacity===null&&stop.opacitySpan===null)||stop.opacity===undefined?
+                h('input',{type:'number',min:0,max:1,step:0.01,defaultValue:'',
+                  style:{...field,height:30},'aria-label':'Gradient stop '+stop.index+' opacity',
+                  title:'stop-opacity absent : aucune insertion dans cette tranche',
+                  disabled:true}):
+              !/^(?:0|1|0?\.\d+)$/.test(String(stop.opacity||''))&&stop.opacitySpan!==null?
+                h('input',{type:'text',defaultValue:String(stop.opacity??''),readOnly:true,
+                  style:{...field,height:30,opacity:.7},'aria-label':'Gradient stop '+stop.index+' opacity',
+                  title:'Valeur native non numérique : lecture seule dans cette tranche',
+                  'data-gradient-readonly':'true'}):
+                h('input',{type:'number',min:0,max:1,step:0.01,defaultValue:stop.opacity??'',
+                  key:active+':stop-opacity:'+stop.index+':'+(stop.opacity??''),
+                  style:{...field,height:30},'aria-label':'Gradient stop '+stop.index+' opacity',
+                  title:'Opacité native de l’arrêt (0..1)',
+                  disabled:!editable||!stop.opacitySpan,
+                  onBlur:e=>commitGradientStop(stop.index,'stop-opacity',e.target.value,stop.opacity),
+                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}))),
             selectedGradient.stops.some(stop=>!stop.colorSpan||!stop.opacitySpan)&&
               h('p',{className:'dsh-studio-hint'},'Attribut absent sur un arrêt : cette tranche ne crée pas d’attribut.'),
             h('p',{className:'dsh-studio-hint'},'Une modification = une écriture exacte, annulable (Undo).')))
+      /**
+       * Stroke editing. Every control writes ONE validated attribute of the
+       * selected layer through the same transactional path as the rest of the
+       * inspector: a missing declaration is inserted as a single reversible
+       * span, an existing one is replaced in place.
+       */
+      const strokeValue = typeof attr.stroke === 'string' ? attr.stroke : ''
+      const strokePaint = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(strokeValue)
+      const strokeNone = strokeValue === '' || strokeValue === 'none'
+      const strokeInspector = h('section',{className:'dsh-studio-ins-block','data-stroke-panel':''},
+        h('div',{className:'dsh-studio-ins-head'},'Contour',h('span',null,'＋')),
+        h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
+          h('input',{type:'color','aria-label':'Stroke colour',value:strokePaint?strokeValue:'#000000',
+            disabled:!selected||!editable,style:{width:30,height:30,padding:2},
+            title:strokePaint?'Couleur de trait native':'Aucun trait hexadécimal : choisir une couleur en crée un',
+            onChange:e=>commitAttributes({stroke:e.target.value})}),
+          h('input',{type:'text',key:active+':stroke:'+strokeValue,'defaultValue':strokeValue||'none',
+            'aria-label':'Stroke value',spellCheck:false,disabled:!selected||!editable,
+            style:{...field,height:30},title:'none ou couleur hexadécimale',
+            onBlur:e=>{
+              const next=e.target.value.trim()
+              if(next==='none'||/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next))commitAttributes({stroke:next})
+            },
+            onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}),
+          h('button',{type:'button',style:{...button,height:30,padding:'0 8px'},
+            'aria-label':'Remove stroke',disabled:!selected||!editable||strokeNone,
+            onClick:()=>commitAttributes({stroke:'none'})},'Aucun')),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}},
+          h('label',null,'Épaisseur',
+            h('input',{type:'number',min:0,step:'any',style:field,'aria-label':'Stroke width',
+              key:active+':sw:'+(attr['stroke-width']??''),defaultValue:attr['stroke-width']??'',
+              placeholder:'1',disabled:!selected||!editable,
+              onBlur:e=>{const v=e.target.value.trim();if(v&&Number(v)>=0)commitAttributes({'stroke-width':v})},
+              onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+          h('label',null,'Opacité',
+            h('input',{type:'number',min:0,max:1,step:'0.05',style:field,'aria-label':'Stroke opacity',
+              key:active+':so:'+(attr['stroke-opacity']??''),defaultValue:attr['stroke-opacity']??'',
+              placeholder:'1',disabled:!selected||!editable,
+              onBlur:e=>{const v=e.target.value.trim();const n=Number(v);if(v&&n>=0&&n<=1)commitAttributes({'stroke-opacity':v})},
+              onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}))),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}},
+          h('label',null,'Extrémités',
+            h('select',{style:field,'aria-label':'Stroke line cap',value:attr['stroke-linecap']||'butt',
+              disabled:!selected||!editable,
+              onChange:e=>void commitAttributes({'stroke-linecap':e.target.value})},
+              [['butt','Droit'],['round','Arrondi'],['square','Carré']].map(([value,label])=>
+                h('option',{key:value,value},label)))),
+          h('label',null,'Jonctions',
+            h('select',{style:field,'aria-label':'Stroke line join',value:attr['stroke-linejoin']||'miter',
+              disabled:!selected||!editable,
+              onChange:e=>void commitAttributes({'stroke-linejoin':e.target.value})},
+              [['miter','Angle'],['round','Arrondi'],['bevel','Biseau']].map(([value,label])=>
+                h('option',{key:value,value},label))))),
+        h('div',{className:'dsh-studio-rowspace'}),
+        h('label',null,'Tirets',
+          h('input',{type:'text',style:field,'aria-label':'Stroke dash array',spellCheck:false,
+            key:active+':sd:'+(attr['stroke-dasharray']??''),defaultValue:attr['stroke-dasharray']??'',
+            placeholder:'ex : 4 2 · none',disabled:!selected||!editable,
+            onBlur:e=>{
+              const v=e.target.value.trim()
+              if(v==='none'||/^(?:\d+(?:\.\d*)?|\.\d+)(?:[\s,]+(?:\d+(?:\.\d*)?|\.\d+))*$/.test(v))
+                commitAttributes({'stroke-dasharray':v})
+            },
+            onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+        h('p',{className:'dsh-studio-hint'},'Un seul attribut par action · Undo exact. Les filtres restent hors périmètre.'))
+
       const appearanceInspector=h(React.Fragment,null,
         h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Apparence',h('span',null,'＋')),
            h('div',{className:'dsh-studio-toggle-row'},h('span',null,'Opacité'),
@@ -3279,7 +3358,8 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
               h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedMedia?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
                 h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedMedia?'Règle CSS conditionnelle · @media '+selectedMedia.condition:selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
             alignmentInspector,(!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
-            (!doc||doc.format==='svg')&&['Contour','Effets'].map(title=>h('section',{className:'dsh-studio-ins-block',key:title},h('div',{className:'dsh-studio-ins-head'},title,h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Édition visuelle non implémentée ; source préservée'},'＋ Ajouter '+(title==='Contour'?'un contour':'un effet')),h('p',{className:'dsh-studio-hint'},'Non implémenté · source native préservée.'))),
+            (!doc||doc.format==='svg')&&strokeInspector,
+            (!doc||doc.format==='svg')&&h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Effets',h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Les filtres SVG ne sont pas éditables dans ce périmètre'},'＋ Ajouter un effet'),h('p',{className:'dsh-studio-hint'},'Hors périmètre : filtres SVG éditables. Source native préservée.')),
             h(doc&&doc.format!=='svg'?'section':'details',{className:'dsh-studio-technical',
                ...(doc&&doc.format!=='svg'?{}:{open:inspectAdvanced,onToggle:event=>{
                  setInspectAdvanced(event.currentTarget.open)
