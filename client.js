@@ -3592,6 +3592,25 @@ window.__ModuleLoader__.load({
       const fillGradient=/^url\(\s*#([A-Za-z_][\w.:-]*)\s*\)$/.exec(fillValue)
       const selectedGradient=fillGradient&&doc?.format==='svg'
         ?gradients.find(item=>item.id===fillGradient[1])||null:null
+      // A read-only stop strip: only literal hex colours, numeric offsets and
+      // numeric opacities are projected. Unresolved SVG values never become a
+      // misleading black swatch or an interpolated CSS expression.
+      const gradientPreviewStops=selectedGradient?.stops.map(stop=>{
+        const raw=String(stop.color||'')
+        if(!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(raw))return null
+        const hex=raw.length===4?'#'+raw.slice(1).split('').map(v=>v+v).join(''):raw
+        const position=stop.offset===null?0:
+          /^(?:\d+(?:\.\d+)?|\.\d+)%$/.test(String(stop.offset))
+            ?Number(String(stop.offset).slice(0,-1)):
+            /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(String(stop.offset))
+              ?Number(stop.offset)*100:NaN
+        const alpha=stop.opacity===null?1:Number(stop.opacity)
+        if(!Number.isFinite(position)||position<0||position>100||
+          !Number.isFinite(alpha)||alpha<0||alpha>1)return null
+        const rgba=hex+Math.round(alpha*255).toString(16).padStart(2,'0')
+        return rgba+' '+position+'%'
+      })||[]
+      const gradientPreviewReady=gradientPreviewStops.length>0&&gradientPreviewStops.every(Boolean)
       const GRADIENT_REASONS={
         'inherited-gradient':'dégradé hérité par href : les attributs de ses arrêts ne sont pas définis localement.',
         'ambiguous-style':'un arrêt porte un attribut style= : la source de vérité est ambiguë.',
@@ -3652,6 +3671,14 @@ window.__ModuleLoader__.load({
           h('span',null,selectedGradient.type==='linear'?'↗':'◎')),
         h('small',{className:'dsh-studio-hint','data-gradient-meta':''},
           selectedGradient.type+'Gradient · #'+selectedGradient.id+' · '+selectedGradient.stops.length+' arrêt(s)'),
+        gradientPreviewReady
+          ?h('div',{role:'img','aria-label':'Aperçu indicatif des arrêts du dégradé',
+            'data-gradient-preview':selectedGradient.id,
+            title:'Progression des arrêts seulement ; la géométrie SVG reste celle du document.',
+            style:{height:24,margin:'9px 0',borderRadius:4,
+              border:'1px solid var(--line)',backgroundImage:'linear-gradient(90deg, '+gradientPreviewStops.join(', ')+')'}})
+          :h('small',{className:'dsh-studio-hint','data-gradient-preview-unavailable':''},
+            'Aperçu non disponible : couleur, opacité ou position native non interprétable.'),
         !selectedGradient.usable?
           h(React.Fragment,null,
             h('p',{className:'dsh-studio-hint','data-gradient-reason':selectedGradient.reason},
