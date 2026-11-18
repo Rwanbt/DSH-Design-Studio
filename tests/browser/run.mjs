@@ -174,6 +174,15 @@ async function main() {
           status = 'FAIL'
           record.failures.push(String(error && error.message ? error.message : error))
         }
+        // Cleanup is part of the spec result. Close both resources even if
+        // one fails, and retain the complete report rather than aborting the
+        // whole browser gate on a single leftover temporary directory.
+        const cleanupFailures = []
+        try { await context.close() }
+        catch (error) { cleanupFailures.push('context.close: ' + String(error)) }
+        try { await harness.close({ keepWorkspace: flag('keep-workspace') }) }
+        catch (error) { cleanupFailures.push('harness.close: ' + String(error)) }
+        if (cleanupFailures.length) record.failures.push(...cleanupFailures)
         if (record.failures.length > 0) status = 'FAIL'
         browserRecord.specs.push({ ...record, status })
         if (status === 'FAIL') browserRecord.status = 'FAIL'
@@ -181,12 +190,10 @@ async function main() {
         const detail = status === 'PASS'
           ? `${record.checks} checks`
           : record.failures.slice(0, 3).join(' | ')
-        console.log(`${status === 'PASS' ? 'PASS' : 'FAIL'}  ${spec.name} — ${status === 'PASS' ? detail : detail}`)
+        console.log(`${status}  ${spec.name} — ${detail}`)
         if (status === 'FAIL' && record.consoleErrors.length > 0) {
           console.log('      console: ' + record.consoleErrors.slice(0, 3).join(' ; '))
         }
-        await context.close()
-        await harness.close({ keepWorkspace: flag('keep-workspace') })
       }
     } finally {
       await browser.close()
