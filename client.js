@@ -3713,6 +3713,11 @@ window.__ModuleLoader__.load({
           h('span',null,selectedGradient.type==='linear'?'↗':'◎')),
         h('small',{className:'dsh-studio-hint','data-gradient-meta':''},
           selectedGradient.type+'Gradient · #'+selectedGradient.id+' · '+selectedGradient.stops.length+' arrêt(s)'),
+        selectedGradient.referencedBy?.length>1&&h('p',{
+          className:'dsh-studio-hint','data-gradient-shared-count':selectedGradient.referencedBy.length,
+          role:'status'},
+          'Dégradé partagé par '+selectedGradient.referencedBy.length+
+          ' éléments : modifier ses arrêts ou sa géométrie affecte toutes ces formes.'),
         gradientPreviewReady
           ?h('div',{role:'img','aria-label':'Aperçu indicatif des arrêts du dégradé',
             'data-gradient-preview':selectedGradient.id,
