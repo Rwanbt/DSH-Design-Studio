@@ -2,8 +2,8 @@
  * HTML visual editing: click-to-select inside the inert preview frame and
  * targeted inline-style writes that preserve every other byte.
  */
-import { HTML_DOCUMENT, CSS_DOCUMENT, assertSingleDifferingRange, openWorkspaceFile, sourceOf, waitForDisk,
-  waitForEditorSource } from './helpers.mjs'
+import { HTML_DOCUMENT, CSS_DOCUMENT, assertSingleDifferingRange, openFileMenu, openWorkspaceFile, sourceOf,
+  waitForDisk, waitForEditorSource } from './helpers.mjs'
 
 export const htmlSelectSpec = {
   allowConsoleErrors: 'csp-only',
@@ -169,5 +169,144 @@ export const layoutPresetExtrasSpec = {
     const restored = await waitForDisk(harness, 'layout2.html', (content) => content === HTML_DOCUMENT,
       { label: 'undo all presets' })
     assert.equal(restored, HTML_DOCUMENT, 'undoing every preset restores the byte-identical original')
+  },
+}
+
+const MEDIA_CSS = `/* conditional rules */
+h1 {
+  color: #444444;
+}
+
+.card {
+  color: #333333;
+}
+
+@media (max-width: 600px) {
+  .card {
+    color: #111111;
+  }
+}
+
+@media (max-width: 600px) {
+  .card {
+    color: #222222;
+  }
+}
+`
+
+export const cssMediaEditSpec = {
+  name: 'css: a conditional declaration is edited at its exact offset and its twin block is untouched',
+  async run({ page, harness, assert }) {
+    await harness.write('media.css', MEDIA_CSS)
+    await openWorkspaceFile(page, 'media.css', { expect: 'css' })
+
+    // Both conditional rows name the same selector: only the condition and the
+    // exact position distinguish them.
+    const rows = page.getByRole('button', { name: /^Select conditional CSS rule / })
+    await rows.first().waitFor({ state: 'visible', timeout: 15000 })
+    assert.equal(await rows.count(), 2, 'both conditional blocks are listed separately')
+    const labels = await rows.evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')))
+    // Two identical selector+condition blocks must still be distinguishable by
+    // an accessible name, not only by their position on screen.
+    assert.deepEqual(labels, [
+      'Select conditional CSS rule (max-width: 600px) .card block 1',
+      'Select conditional CSS rule (max-width: 600px) .card block 2',
+    ], 'identical selector and condition remain distinguishable: ' + JSON.stringify(labels))
+
+    // An editable conditional block must never be labelled read-only, and the
+    // inspector header must name the real condition.
+    await rows.first().click()
+    const rowText = await rows.first().innerText()
+    assert.ok(!/lecture seule/.test(rowText),
+      'an editable @media block must not advertise itself as read-only: ' + JSON.stringify(rowText))
+    const header = await page.locator('.dsh-studio-inspect-detail').first().innerText()
+    assert.ok(/@media \(max-width: 600px\)/.test(header),
+      'the inspector must name the conditional target: ' + JSON.stringify(header))
+    await page.getByLabel('Conditional CSS rule property').selectOption('color')
+    await page.getByLabel('Conditional CSS rule value').fill('#abcdef')
+    await page.getByRole('button', { name: 'Apply conditional CSS rule style' }).click()
+
+    const edited = await waitForDisk(harness, 'media.css', (content) => content !== MEDIA_CSS,
+      { label: 'conditional css edit' })
+    const changed = assertSingleDifferingRange(assert, MEDIA_CSS, edited,
+      'a conditional edit must rewrite exactly one declaration value')
+    // The `#` is common to both values, so the differing range starts after it.
+    assert.equal(changed.before, '111111')
+    assert.equal(changed.after, 'abcdef')
+    assert.ok(edited.includes('color: #222222;'), 'the second identical media block keeps its bytes')
+    assert.ok(edited.includes('color: #333333;'), 'the unconditional .card rule is untouched')
+    assert.ok(edited.includes('color: #444444;'), 'the unrelated top-level rule is untouched')
+
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    const restored = await waitForDisk(harness, 'media.css', (content) => content === MEDIA_CSS,
+      { label: 'undo conditional css edit' })
+    assert.equal(restored, MEDIA_CSS, 'Undo restores the exact original stylesheet bytes')
+  },
+}
+
+export const cssMediaExclusiveSpec = {
+  name: 'css: a conditional and an unconditional rule never both stay the edit target',
+  async run({ page, harness, assert }) {
+    await harness.write('exclusive.css', MEDIA_CSS)
+    await openWorkspaceFile(page, 'exclusive.css', { expect: 'css' })
+
+    const mediaRow = page.getByRole('button', { name: /^Select conditional CSS rule / }).first()
+    await mediaRow.click()
+    await page.getByLabel('Conditional CSS rule value').waitFor({ state: 'visible', timeout: 15000 })
+
+    // Selecting an unconditional rule must drop the conditional target entirely.
+    await page.getByRole('button', { name: 'Select CSS rule h1' }).click()
+    await page.getByLabel('CSS rule value').waitFor({ state: 'visible', timeout: 15000 })
+    // `:visible` matters: the compact layout keeps a hidden copy of the panel in
+    // the DOM, and only what the user can reach is the real edit target.
+    assert.equal(await page.locator('[aria-label="Conditional CSS rule value"]:visible').count(), 0,
+      'the conditional editor must disappear once an unconditional rule is selected')
+    assert.equal(await page.locator('[aria-label="Apply conditional CSS rule style"]:visible').count(), 0,
+      'no conditional apply control may stay reachable from another selection')
+    assert.equal(await page.locator('[aria-label="CSS rule value"]:visible').count(), 1,
+      'the unconditional editor is the only visible target')
+
+    // And the other way round.
+    await mediaRow.click()
+    await page.getByLabel('Conditional CSS rule value').waitFor({ state: 'visible', timeout: 15000 })
+    assert.equal(await page.locator('[aria-label="CSS rule value"]:visible').count(), 0,
+      'the unconditional editor must disappear once a conditional rule is selected')
+    assert.equal(await page.locator('[aria-label="Conditional CSS rule value"]:visible').count(), 1,
+      'only the conditional editor stays visible')
+    assert.equal(await harness.read('exclusive.css'), MEDIA_CSS, 'switching selection writes nothing')
+  },
+}
+
+export const cssMediaDeleteSpec = {
+  name: 'css: deleting an open stylesheet with a conditional rule selected returns to a clean landing state',
+  async run({ page, harness, assert }) {
+    await harness.write('doomed.css', MEDIA_CSS)
+    await openWorkspaceFile(page, 'doomed.css', { expect: 'css' })
+
+    const mediaRow = page.getByRole('button', { name: /^Select conditional CSS rule / }).first()
+    await mediaRow.click()
+    await page.getByLabel('Conditional CSS rule value').waitFor({ state: 'visible', timeout: 15000 })
+    assert.equal(await page.getByLabel('Conditional CSS rule value').isVisible(), true)
+
+    // Delete the very file that is open, while its conditional rule is selected:
+    // per-document state must be dropped together with the document.
+    await openFileMenu(page)
+    await page.getByRole('button', { name: 'Browse workspace design files' }).click()
+    await page.locator('.dsh-studio-file-picker').waitFor({ state: 'visible', timeout: 20000 })
+    await page.getByRole('button', { name: 'Delete doomed.css' }).click()
+    await page.getByRole('group', { name: 'Confirm file delete' }).waitFor({ state: 'visible', timeout: 20000 })
+    const removed = page.waitForResponse((value) => value.url().includes('/design-studio-native/delete'))
+    await page.getByRole('button', { name: 'Confirm delete of doomed.css' }).click()
+    assert.equal((await removed).status(), 200)
+
+    // The landing state returns and nothing reads the deleted document.
+    await page.getByRole('region', { name: 'Open a design file' })
+      .waitFor({ state: 'visible', timeout: 20000 })
+    assert.equal(await page.getByLabel('Conditional CSS rule value').count(), 0,
+      'the conditional editor must be gone with the deleted document')
+    const text = await page.locator('#root').innerText()
+    assert.match(text, /Design Studio/, 'the workbench is still rendered after the deletion')
+    assert.equal(await harness.read('doomed.css').then(() => false, () => true), true,
+      'the deleted file is really gone')
   },
 }

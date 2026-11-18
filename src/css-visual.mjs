@@ -22,7 +22,10 @@
  * Deliberate limits: this is not a browser CSS engine. There is no cascade,
  * no computed style, no inheritance, no `@import` resolution, no external or
  * framework/preprocessor CSS, no CSS nesting support, no source maps and no
- * script/JS execution. Conditional rules are never edited.
+ * script/JS execution. Conditional rules are never exposed as unconditional
+ * `editable` rules: a declaration inside exactly one simple `(min|max)-width`
+ * `@media` block can only be edited through `cssMediaDeclarationPatch`, which
+ * addresses the block by its exact offset and re-validates the condition.
  */
 import { HTML_STYLE_PROPERTIES } from './html-visual.mjs'
 
@@ -33,6 +36,9 @@ const MAX_SELECTOR_MEMBERS=8
 const LEGACY_SELECTOR=/^[#.][A-Za-z_][A-Za-z0-9_-]{0,79}$/
 const IDENT=/^-?[A-Za-z_][A-Za-z0-9_-]*$/
 const CUSTOM_PROPERTY=/^--[A-Za-z0-9_-]{1,64}$/
+// Exactly one width feature in parentheses. `screen and (...)`, comma lists,
+// range syntax and any other feature stay refused: this is not a media engine.
+const SIMPLE_MEDIA=/^\(\s*(min|max)-width\s*:\s*(\d{1,5}(?:\.\d{1,4})?)px\s*\)$/i
 const CUSTOM_VALUE=/^[A-Za-z0-9#%.,()\-+*/_\s]+$/
 function fail(code,message,details={}){
   const error=new Error(message)
@@ -460,6 +466,22 @@ function scanCssStructure(source) {
 }
 
 /**
+ * Normalises an at-rule ancestry into a simple media condition, or null.
+ * Only a single `@media` ancestor whose prelude is one `(min|max)-width: Npx`
+ * feature qualifies; everything else is refused rather than approximated.
+ */
+export function simpleMediaCondition(atRules) {
+  if(!Array.isArray(atRules)||atRules.length!==1)return null
+  const ancestor=atRules[0]
+  if(!ancestor||ancestor.name!=='media')return null
+  // The scanner keeps the whole prelude, at-keyword included.
+  const condition=String(ancestor.prelude||'').trim().replace(/^@media\b/i,'').trim()
+  const match=SIMPLE_MEDIA.exec(condition)
+  if(!match)return null
+  return '('+match[1].toLowerCase()+'-width: '+match[2]+'px)'
+}
+
+/**
  * Lists every rule the conservative scanner can see, including rules nested
  * inside at-rules. Nested rules are always read-only and carry the typed
  * `inside-at-rule` refusal plus the at-rule name; unsupported selector
@@ -503,6 +525,18 @@ export function listCssVisualRuleDetails(source) {
       }
     }
     const parsed=parseCssSelectorList(rule.selector)
+    // Conditional editing is a separate, narrower contract: the historical
+    // `editable` flag stays false so the HTML preview projection (which guards
+    // on it) can never flatten an @media block into the page.
+    const mediaCondition=rule.scope==='inside-at-rule'?simpleMediaCondition(rule.atRules):null
+    let mediaReason=null
+    if(mediaCondition){
+      if(declarationError)mediaReason=declarationError
+      else if(!parsed.ok)mediaReason='unsupported-selector'
+      else if(!entries.length)mediaReason='empty-block'
+      else if(entries.some((entry,at)=>entries.findIndex(other=>
+        other.property===entry.property)!==at))mediaReason='duplicate-property'
+    }
     return {
       selector:rule.selector,
       rawSelector:rule.rawSelector,
@@ -517,6 +551,9 @@ export function listCssVisualRuleDetails(source) {
       scope:rule.scope,
       atRules:rule.atRules.map(entry=>entry.name),
       atRule,
+      mediaCondition,
+      mediaEditable:mediaCondition!==null&&mediaReason===null,
+      mediaReason,
       editable:reasonCode===null,
       reason:reason,
       reasonCode,
@@ -619,6 +656,52 @@ export function cssVisualDeclarationPatch(source,{selector,property,value}={}) {
     }
     fail('unsupported-css',rule.reason||'Rule cannot be edited safely',{
       reasonCode:rule.reasonCode,reason:rule.reason,
+    })
+  }
+  return declarationValuePatch(source,rule.bodyStart,rule.bodyEnd,
+    rule.declarations,property,value)
+}
+
+/**
+ * Patches one declaration of a rule inside a single simple `@media` block.
+ *
+ * The rule is addressed by its exact `start` offset — never by selector, since
+ * the same selector may legitimately appear in several media blocks — and the
+ * caller must echo the `condition` it was shown. Both are re-validated against
+ * the current source, so a stale or falsified reference is refused instead of
+ * editing a different block. Only the declaration bytes change; the inverse is
+ * exact. No cascade, computed value or media evaluation is performed.
+ */
+export function cssMediaDeclarationPatch(source,{start,condition,property,value}={}) {
+  if(!Number.isInteger(start)||start<0)
+    fail('invalid-target','A CSS rule start offset is required')
+  if(typeof condition!=='string'||!condition.trim())
+    fail('invalid-target','The media condition shown to the user is required')
+  if(typeof property!=='string'||typeof value!=='string'||
+     !validCssPropertyValue(property,value)){
+    fail('invalid-value','Unsupported CSS property or value')
+  }
+  const rule=listCssVisualRuleDetails(source).find(entry=>entry.start===start)
+  if(!rule)fail('unknown-node','No CSS rule starts at the given offset')
+  if(rule.scope!=='inside-at-rule'||!rule.mediaCondition){
+    fail('inside-at-rule',
+      'Only a rule inside one simple (min|max)-width @media block can be edited this way',{
+        atRule:rule.atRule||null,reasonCode:'inside-at-rule',
+        reason:'the addressed rule is not inside a single simple @media block',
+      })
+  }
+  if(rule.mediaCondition!==simpleMediaCondition([{name:'media',prelude:condition}])){
+    fail('stale-reference',
+      'The media condition no longer matches the addressed rule; reload before editing',{
+        reasonCode:'stale-reference',reason:'media condition mismatch',
+      })
+  }
+  if(!rule.mediaEditable){
+    const code=rule.mediaReason==='duplicate-property'?'duplicate-property'
+      :rule.mediaReason==='empty-block'?'unsupported-css'
+        :rule.mediaReason||'unsupported-css'
+    fail(code,'Conditional rule cannot be edited safely: '+(rule.mediaReason||'unsupported-css'),{
+      reasonCode:code,reason:rule.mediaReason||'unsupported-css',
     })
   }
   return declarationValuePatch(source,rule.bodyStart,rule.bodyEnd,

@@ -23,7 +23,7 @@ Le moteur alpha.19 sauvegarde précisément les styles HTML inline et les valeur
 
 ## Ce que cette décision ne résout pas
 
-- Les controls **Flex/Grid ne sont pas un constructeur visuel complet de la cascade ou des breakpoints** : pas d'édition de `@media`, `@container` dans le fichier utilisateur, pas de matrice CSS, pas de placement interactif au pointeur, ni d'inspecteur de style réellement calculé.
+- Les controls **Flex/Grid ne sont pas un constructeur visuel complet de la cascade ou des breakpoints** : pas de `@container` dans le fichier utilisateur, pas de matrice CSS, pas de placement interactif au pointeur, ni d'inspecteur de style réellement calculé. **Actualisation du 18 novembre 2026 :** une déclaration *existante* dans un unique `@media (min|max)-width` simple est désormais éditable par position exacte, sans création de breakpoint ni cascade — voir [ADR-029](ADR-029-CONDITIONAL-CSS-EDITING.md).
 - Le CSS externe peut imposer un `display` effectif différent des déclarations visibles dans l'inspecteur HTML. Les boutons indiquent le style déclaré dans la source choisie, **pas** la valeur calculée.
 - Les interactions au doigt, l'accessibilité clavier/lecteur d'écran, le comportement réel des container queries dans DSH Web/Desktop et la fidélité des rendus restent **NOT_RUN**. Le panneau compact utilise des rôles `tablist`/`tab`, mais la navigation complète aux flèches et le focus management doivent encore être vérifiés et implémentés.
 - La sécurité filesystem face aux logiciels externes non coopératifs et la frontière de confiance iframe d'ADR-017 demeurent ouvertes.

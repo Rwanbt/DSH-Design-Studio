@@ -13,7 +13,7 @@ import { svgGroupingPatch } from './svg-groups.mjs'
 import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
-import { listCssVisualRules, cssVisualRulePatch } from './css-visual.mjs'
+import { listCssVisualRules, listCssVisualRuleDetails, cssVisualRulePatch, cssMediaDeclarationPatch } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
 export const name = 'dsh-design-studio'
@@ -145,7 +145,7 @@ export function createRouteHandler(ctx) {
           workspaceId:url.searchParams.get('workspaceId'),
         })
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let cssMedia=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             // One structure scan feeds the whole layer list. Calling the per-node
@@ -202,9 +202,20 @@ export function createRouteHandler(ctx) {
         }
         if(document.format==='css') {
           cssRules=listCssVisualRules(document.source)
+          // Conditional rules are a separate, offset-addressed surface: they are
+          // never `editable` (so no unconditional projection) and are listed here
+          // with their condition so the inspector can show the real scope.
+          cssMedia=listCssVisualRuleDetails(document.source)
+            .filter(rule=>rule.mediaCondition!==null)
+            .map(rule=>({start:rule.start,condition:rule.mediaCondition,selector:rule.selector,
+              // Deliberately NOT named `editable`: that flag is what the HTML
+              // preview guards on, and a conditional rule must never be projected
+              // unconditionally by a future consumer.
+              conditionalEditable:rule.mediaEditable,reason:rule.mediaReason,
+              declarations:rule.declarations.map(({property,value})=>({property,value}))}))
           if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/create') {
         // Creating a document is exclusive: an existing path is refused (409),
@@ -266,6 +277,13 @@ export function createRouteHandler(ctx) {
         if (params.kind === 'css-rule') {
           if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[cssVisualRulePatch(doc.source,{selector:params.selector,property:params.property,value:params.value})]
+        } else if (params.kind === 'css-media') {
+          // Conditional editing is addressed by the rule's exact offset and the
+          // condition the user was shown, so two identical selectors can never be
+          // confused. It is never a cascade or a computed-value edit.
+          if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[cssMediaDeclarationPatch(doc.source,{start:params.start,condition:params.condition,
+            property:params.property,value:params.value})]
         } else if (params.kind === 'html-style') {
           if(!['html','htm'].includes(doc.format))return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[htmlVisualStylePatch(doc.source,{id:params.id,property:params.property,value:params.value})]

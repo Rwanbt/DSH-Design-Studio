@@ -14,7 +14,7 @@
 import { mountSpec } from './mount.mjs'
 import { dshThemeSpec } from './dsh-theme.mjs'
 import { svgEditSpec, svgNavigationSpec, svgLayersSpec } from './edit-svg.mjs'
-import { htmlSelectSpec, htmlClickInvalidationSpec, htmlLayoutSpec, layoutPresetExtrasSpec, cssRuleSpec } from './edit-web.mjs'
+import { htmlSelectSpec, htmlClickInvalidationSpec, htmlLayoutSpec, layoutPresetExtrasSpec, cssRuleSpec, cssMediaEditSpec, cssMediaExclusiveSpec, cssMediaDeleteSpec } from './edit-web.mjs'
 import { externalConflictSpec, refusedWriteSpec, unsavedSourceGuardSpec } from './conflict.mjs'
 import { htmlSecuritySpec, svgSecuritySpec, svgRemoteAssetSpec, cssInjectionSpec } from './security.mjs'
 import { keyboardSpec, panelsAccessibilitySpec, reducedMotionSpec } from './a11y.mjs'
@@ -82,6 +82,9 @@ export const specs = [
   htmlLayoutSpec,
   layoutPresetExtrasSpec,
   cssRuleSpec,
+  cssMediaEditSpec,
+  cssMediaExclusiveSpec,
+  cssMediaDeleteSpec,
   externalConflictSpec,
   refusedWriteSpec,
   unsavedSourceGuardSpec,

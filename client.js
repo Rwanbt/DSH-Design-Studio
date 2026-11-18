@@ -466,6 +466,12 @@ window.__ModuleLoader__.load({
       const [htmlStyleMatches,setHtmlStyleMatches] = React.useState([])
       const [returnHtmlRef,setReturnHtmlRef] = React.useState(null)
       const [cssRules,setCssRules] = React.useState([])
+      // Conditional rules are a separate surface: addressed by their exact start
+      // offset and never presented as unconditional styles.
+      const [cssMedia,setCssMedia] = React.useState([])
+      const [cssMediaStart,setCssMediaStart] = React.useState(null)
+      const [cssMediaProperty,setCssMediaProperty] = React.useState('color')
+      const [cssMediaValue,setCssMediaValue] = React.useState('')
       const [cssActive,setCssActive] = React.useState('')
       const [cssProperty,setCssProperty] = React.useState('color')
       const [cssValue,setCssValue] = React.useState('')
@@ -573,12 +579,20 @@ window.__ModuleLoader__.load({
           setHtmlPreviewCoverage(data.previewCoverage||null)
           setHtmlStyleMatches(data.styleMatches||[])
           setCssRules(data.cssRules||[])
+          setCssMedia(data.cssMedia||[])
           if(doc?.file!==targetFile){
             setHtmlActive('');setHtmlValue('')
             setCssActive('');setCssValue('')
+            setCssMediaStart(null);setCssMediaValue('')
           } else if(data.cssRules?.length && cssActive){
             const retained=data.cssRules.find(rule=>rule.selector===cssActive)
             setCssValue(retained?.declarations?.find(d=>d.property===cssProperty)?.value||'')
+          }
+          if(doc?.file===targetFile && cssMediaStart!==null){
+            const retainedMedia=(data.cssMedia||[]).find(rule=>rule.start===cssMediaStart)
+            if(retainedMedia)setCssMediaValue(retainedMedia.declarations
+              .find(d=>d.property===cssMediaProperty)?.value||'')
+            else setCssMediaStart(null)
           }
           setReloadRequired(false)
           setTextNodes(data.textNodes||[]);setEditingText('')
@@ -641,6 +655,7 @@ window.__ModuleLoader__.load({
         setNodes([]);setTextNodes([]);setPathNodes([])
         setHtmlElements([]);setHtmlStylesheets([]);setHtmlStyleMatches([]);setHtmlPreviewCss('')
         setHtmlPreviewCoverage(null);setCssRules([]);setCssActive('');setCssValue('')
+        setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
         setHtmlActive('');setHtmlValue('')
         setGeometry({artboard:null,handles:[]});setActive('')
         setUndoStack([]);setRedoStack([]);setReloadRequired(false)
@@ -1083,6 +1098,17 @@ window.__ModuleLoader__.load({
       const selectedHtml=htmlElements.find(node=>node.id===htmlActive)
       const selectedHtmlRules=htmlStyleMatches.find(entry=>entry.id===htmlActive)?.matches||[]
       const selectedCss=cssRules.find(rule=>rule.selector===cssActive)
+      const selectedMedia=cssMedia.find(rule=>rule.start===cssMediaStart)||null
+      // Conditional reasons are typed codes; show them as readable text instead
+      // of leaking the raw code into the UI.
+      const CONDITIONAL_REASONS={
+        'unsupported-selector':'sélecteur non pris en charge',
+        'duplicate-property':'déclaration dupliquée dans le bloc',
+        'empty-block':'bloc de déclarations vide',
+        'unsupported-css':'contenu CSS non pris en charge',
+        'structure-unavailable':'structure du fichier indisponible',
+      }
+      const conditionalReason=reason=>CONDITIONAL_REASONS[reason]||'bloc conditionnel non pris en charge'
       const htmlProps=['color','background-color','display','width','height','padding','margin',
         'flex-wrap','align-content','align-self','flex-grow','flex-shrink','flex-basis',
         'grid-template-rows','row-gap','column-gap','justify-items','place-items',
@@ -1205,6 +1231,9 @@ window.__ModuleLoader__.load({
         }
       }
       function chooseCssRule(selector) {
+        // Conditional and unconditional targets are mutually exclusive: a
+        // leftover media selection must never stay the edit target.
+        setCssMediaStart(null);setCssMediaValue('')
         setCssActive(selector)
         const rule=cssRules.find(item=>item.selector===selector)
         setCssValue(rule?.declarations?.find(item=>item.property===cssProperty)?.value||'')
@@ -1213,6 +1242,17 @@ window.__ModuleLoader__.load({
         setCssProperty(property)
         const rule=cssRules.find(item=>item.selector===cssActive)
         setCssValue(rule?.declarations?.find(item=>item.property===property)?.value||'')
+      }
+      function chooseCssMedia(start) {
+        setCssActive('');setCssValue('')
+        setCssMediaStart(start)
+        const rule=cssMedia.find(item=>item.start===start)
+        setCssMediaValue(rule?.declarations?.find(item=>item.property===cssMediaProperty)?.value||'')
+      }
+      function chooseCssMediaProperty(property) {
+        setCssMediaProperty(property)
+        const rule=cssMedia.find(item=>item.start===cssMediaStart)
+        setCssMediaValue(rule?.declarations?.find(item=>item.property===property)?.value||'')
       }
       /** Exact source text of a mapped element, or '' when it is not addressable. */
       function htmlElementText(item) {
@@ -1885,7 +1925,7 @@ window.__ModuleLoader__.load({
             h('div',{className:'dsh-studio-sidehead'},
               h('span',null,'Explorer'),
               h('span',{style:{fontWeight:400,color:'var(--g-sub)',fontSize:10.5}},
-                String(doc?.format==='css'?cssRules.length:doc?.format==='html'||doc?.format==='htm'?htmlElements.length:nodes.length))),
+                String(doc?.format==='css'?cssRules.length+cssMedia.length:doc?.format==='html'||doc?.format==='htm'?htmlElements.length:nodes.length))),
             h('div',{className:'dsh-studio-tabs',role:'tablist','aria-label':'Left panel tabs'},
               h('button',{type:'button',role:'tab',className:'dsh-studio-tab dsh-studio-selected','aria-selected':true},'Calques'),
               h('button',{type:'button',role:'tab',className:'dsh-studio-tab','aria-selected':false,disabled:true,
@@ -1900,11 +1940,22 @@ window.__ModuleLoader__.load({
             h('div',{className:'dsh-studio-group',style:{marginTop:9}},'Calques',h('span',{style:{float:'right',letterSpacing:0}},nodes.length)),
             h('div',{className:'dsh-studio-layer-list'},
               doc?.format==='css'?
-                (cssRules.length?cssRules.map(rule=>h('button',{
-                  key:rule.selector,type:'button','aria-label':'Select CSS rule '+rule.selector,
-                  style:{...button,textAlign:'left',background:cssActive===rule.selector?'#494034':'transparent'},
-                  onClick:()=>chooseCssRule(rule.selector)},
-                  rule.selector+(rule.editable?'':' · lecture seule'))):
+                ((cssRules.length||cssMedia.length)?[
+                  ...cssRules.map(rule=>h('button',{
+                    key:'top:'+rule.selector,type:'button','aria-label':'Select CSS rule '+rule.selector,
+                    style:{...button,textAlign:'left',background:cssActive===rule.selector?'#494034':'transparent'},
+                    onClick:()=>chooseCssRule(rule.selector)},
+                    rule.selector+(rule.editable?'':' · lecture seule'))),
+                  ...cssMedia.map((rule,mediaIndex)=>h('button',{
+                    key:'media:'+rule.start,type:'button',
+                    'aria-label':'Select conditional CSS rule '+rule.condition+' '+rule.selector+
+                      ' block '+(mediaIndex+1),
+                    style:{...button,textAlign:'left',paddingLeft:16,background:cssMediaStart===rule.start?'#494034':'transparent'},
+                    onClick:()=>chooseCssMedia(rule.start)},
+                    h('span',{style:{opacity:.75,fontSize:11}},'@media '+rule.condition+' · '),
+                    rule.selector+(rule.conditionalEditable?'':' · lecture seule')+
+                      (cssMedia.filter(other=>other.condition===rule.condition&&
+                        other.selector===rule.selector).length>1?' · bloc '+(mediaIndex+1):'')))]:
                   h('small',null,'Règles simples #id ou .classe uniquement.')):
               (doc?.format==='html'||doc?.format==='htm')?
                 (htmlElements.length?htmlElements.map(n=>h('button',{key:n.id,type:'button',
@@ -2264,15 +2315,41 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
             h('div',{className:'dsh-studio-inspect-scroll'},
             h('div',{className:'dsh-studio-inspect-head'},
               glyph(selected?.tag==='text'?'text':selected?.isGroup?'Calques':selected?.tag==='ellipse'||selected?.tag==='circle'?'ellipse':'rect'),
-              h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
-                h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
+              h('div',null,h('div',{className:'dsh-studio-inspect-title'},selectedCss?.selector||selectedMedia?.selector||selectedHtml?.id||selected?.id||'Aucune sélection'),
+                h('div',{className:'dsh-studio-inspect-detail'},selectedHtml?'Élément HTML natif':selectedMedia?'Règle CSS conditionnelle · @media '+selectedMedia.condition:selectedCss?'Règle CSS native':selected?selected.tag+' · SVG natif':'Sélectionnez un calque'))),
             (!doc||doc.format==='svg')&&geometryInspector,(!doc||doc.format==='svg')&&appearanceInspector,typographyInspector,
             (!doc||doc.format==='svg')&&['Contour','Effets'].map(title=>h('section',{className:'dsh-studio-ins-block',key:title},h('div',{className:'dsh-studio-ins-head'},title,h('span',null,'＋')),h('button',{className:'dsh-studio-addprop',type:'button',disabled:true,title:'Édition visuelle non implémentée ; source préservée'},'＋ Ajouter '+(title==='Contour'?'un contour':'un effet')),h('p',{className:'dsh-studio-hint'},'Non implémenté · source native préservée.'))),
             h(doc&&doc.format!=='svg'?'section':'details',{className:'dsh-studio-technical',
                ...(doc&&doc.format!=='svg'?{}:{open:inspectAdvanced,onToggle:event=>{
                  setInspectAdvanced(event.currentTarget.open)
                  if(event.currentTarget.open)event.currentTarget.scrollIntoView?.({block:'nearest'})
-               }})},(!doc||doc.format==='svg')&&h('summary',null,'Contrôles natifs avancés'),selectedCss?
+               }})},(!doc||doc.format==='svg')&&h('summary',null,'Contrôles natifs avancés'),
+              selectedMedia?
+              h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
+                h('strong',{style:{color:ACCENT}},'@media '+selectedMedia.condition),
+                h('code',{style:{fontSize:11,color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},selectedMedia.selector),
+                h('small',{style:{color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},
+                  'Règle conditionnelle adressée par sa position exacte. L’aperçu HTML ne l’applique pas : aucune valeur calculée ni cascade n’est affichée.'),
+                !selectedMedia.conditionalEditable?h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
+                  'Lecture seule : '+conditionalReason(selectedMedia.reason)):
+                  h('div',{style:{display:'grid',gap:8}},
+                    h('label',null,'Propriété',
+                      h('select',{style:field,'aria-label':'Conditional CSS rule property',
+                        value:cssMediaProperty,onChange:e=>chooseCssMediaProperty(e.target.value)},
+                        htmlProps.map(property=>h('option',{key:property,value:property},property)))),
+                    h('label',null,'Valeur',
+                      h('input',{style:field,'aria-label':'Conditional CSS rule value',
+                        value:cssMediaValue,placeholder:'ex : 12px, flex, #bda991',
+                        onChange:e=>setCssMediaValue(e.target.value)})),
+                    h('button',{style:{...button,borderColor:ACCENT},
+                      'aria-label':'Apply conditional CSS rule style',
+                      disabled:busy||reloadRequired||source!==doc?.source||!cssMediaValue,
+                      onClick:()=>void save({kind:'css-media',start:selectedMedia.start,
+                        condition:selectedMedia.condition,property:cssMediaProperty,value:cssMediaValue})
+                    },'Appliquer dans @media · sans IA'),
+                    h('small',{style:{opacity:.7}},
+                      'Un seul emplacement modifié ; Undo/Redo natif. Les autres blocs identiques restent intacts.')))
+              :selectedCss?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},selectedCss.selector),
                 returnHtmlRef&&h('button',{type:'button',style:button,
@@ -2280,7 +2357,7 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
                   disabled:busy||reloadRequired||source!==doc.source,
                   onClick:()=>void returnToHtml()},'← Retour à la page HTML'),
                 h('small',{style:{color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},
-                  'Édition ciblée d’une règle dans le fichier CSS natif. Les @media et sélecteurs complexes restent en lecture seule.'),
+                  'Édition ciblée d’une règle dans le fichier CSS natif. Les sélecteurs complexes restent en lecture seule ; un bloc @media simple s’édite depuis sa propre ligne.'),
                 !selectedCss.editable?h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
                   'Lecture seule : '+(selectedCss.reason||'sélecteur complexe')):
                   h('div',{style:{display:'grid',gap:8}},
