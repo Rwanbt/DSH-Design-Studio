@@ -128,3 +128,33 @@ export const pasteMenuSpec = {
     assert.ok(pasted.includes('id="card"'))
   },
 }
+
+export const reorderSpec = {
+  name: 'menu: paint order changes the real document order and Undo restores it',
+  async run({ page, harness, assert }) {
+    await harness.write('ordre.svg', SVG_DOCUMENT)
+    await openWorkspaceFile(page, 'ordre.svg', { expect: 'svg' })
+    const order = (text) => [...text.matchAll(/id="(bg|card|dot|title)"/g)].map((match) => match[1])
+    assert.deepEqual(order(await harness.read('ordre.svg')), ['bg', 'card', 'dot', 'title'])
+
+    // Bring the first painted layer to the front through the menu.
+    await page.getByRole('button', { name: 'Select layer rect #bg' }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Mettre au premier plan' }).click()
+    const reordered = await waitForDisk(harness, 'ordre.svg', (text) => order(text).at(-1) === 'bg')
+    assert.deepEqual(order(reordered), ['card', 'dot', 'title', 'bg'])
+    assert.ok(reordered.includes('<rect id="bg" x="0" y="0" width="600" height="400" fill="#f4f1ea"/>'),
+      'the moved layer keeps its exact bytes')
+
+    // The same operation is available from the keyboard: Ctrl+[ moves it back.
+    await page.getByRole('button', { name: 'Select canvas tool' }).click()
+    await page.keyboard.press('Control+[')
+    const back = await waitForDisk(harness, 'ordre.svg', (text) => order(text)[2] === 'bg')
+    assert.deepEqual(order(back), ['card', 'dot', 'bg', 'title'])
+
+    // Undo restores the original order byte for byte.
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    assert.equal(await waitForDisk(harness, 'ordre.svg',
+      (text) => JSON.stringify(order(text)) === JSON.stringify(['card', 'dot', 'title', 'bg'])),
+    (await harness.read('ordre.svg')))
+  },
+}

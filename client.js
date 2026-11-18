@@ -805,6 +805,12 @@ window.__ModuleLoader__.load({
         closeLayerMenu()
         await save({kind:'svg-paste',fragment:clipboard.fragment})
       }
+      /** Move the selected layer in paint order (SVG has no z-index). */
+      async function reorderLayer(direction, id) {
+        const target=id||active
+        if(!target || busy || reloadRequired || !doc || doc.format!=='svg' || source!==doc.source) return
+        await save({kind:'svg-order',id:target,direction})
+      }
       /**
        * Right-click menu over a canvas shape or a layer row.
        *
@@ -819,7 +825,7 @@ window.__ModuleLoader__.load({
         event.preventDefault()
         event.stopPropagation()
         if(id && id!==active) select(id)
-        const width=224, height=268
+        const width=232, height=430
         const x=Math.max(8,Math.min(event.clientX, (window.innerWidth||1200)-width-8))
         const y=Math.max(8,Math.min(event.clientY, (window.innerHeight||800)-height-8))
         setLayerMenu({id:target,x,y})
@@ -971,6 +977,10 @@ window.__ModuleLoader__.load({
             event.preventDefault();copyLayer(active)
           }else if(event.key?.toLowerCase()==='v' && doc?.format==='svg'){
             event.preventDefault();void pasteLayer()
+          }else if(event.key===']' && active && doc?.format==='svg'){
+            event.preventDefault();void reorderLayer(event.shiftKey?'front':'forward')
+          }else if(event.key==='[' && active && doc?.format==='svg'){
+            event.preventDefault();void reorderLayer(event.shiftKey?'back':'backward')
           }
           return
         }
@@ -1672,6 +1682,7 @@ window.__ModuleLoader__.load({
           h('div',{role:'menu','aria-label':'Actions du calque','data-layer-menu':'',
             style:{position:'fixed',left:layerMenu.x,top:layerMenu.y,zIndex:71,minWidth:224,
               display:'flex',flexDirection:'column',gap:2,padding:6,background:'#262a30',
+              maxHeight:'min(86vh, 460px)',overflowY:'auto',
               border:'1px solid #3d434c',borderRadius:8,boxShadow:'0 14px 34px #0009'},
             onKeyDown:event=>{if(event.key==='Escape'){event.stopPropagation();closeLayerMenu()}}},
             h('small',{style:{padding:'2px 6px 4px',opacity:0.62}},menuLayer?menuLayer.tag+' #'+menuLayer.id:'Aucun calque'),
@@ -1679,6 +1690,11 @@ window.__ModuleLoader__.load({
               ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'duplicate'}),menuBlocked),
             layerMenuItem('Copier le calque','Ctrl+C',()=>copyLayer(layerMenu.id),menuBlocked),
             layerMenuItem('Coller l’élément copié','Ctrl+V',()=>pasteLayer(),menuBlocked||!clipboard),
+            h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
+            layerMenuItem('Avancer d’un plan','Ctrl+]',()=>reorderLayer('forward',layerMenu.id),menuBlocked),
+            layerMenuItem('Reculer d’un plan','Ctrl+[',()=>reorderLayer('backward',layerMenu.id),menuBlocked),
+            layerMenuItem('Mettre au premier plan','Ctrl+Maj+]',()=>reorderLayer('front',layerMenu.id),menuBlocked),
+            layerMenuItem('Mettre à l’arrière-plan','Ctrl+Maj+[',()=>reorderLayer('back',layerMenu.id),menuBlocked),
             layerMenuItem('Supprimer le calque','Suppr',
               ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'delete'}),menuBlocked,
               {color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}),

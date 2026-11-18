@@ -20,11 +20,21 @@ Deux frictions restaient pour un usage quotidien :
 ### 1. Le menu contextuel est un second point d'entrée, pas une seconde implémentation
 
 Clic droit sur une forme du canevas ou sur une ligne de calque → un menu
-`role="menu"` propose : `Dupliquer`, `Copier`, `Coller`, `Supprimer`, `Grouper`,
-`Dégrouper`, `Masquer`/`Afficher`, `Verrouiller`/`Déverrouiller`. Chaque entrée
+`role="menu"` propose : `Dupliquer`, `Copier`, `Coller`, `Avancer`/`Reculer d'un plan`,
+`Premier plan`/`Arrière-plan`, `Supprimer`, `Grouper`, `Dégrouper`,
+`Masquer`/`Afficher`, `Verrouiller`/`Déverrouiller`. Chaque entrée
 appelle **exactement** le même genre de patch que le bouton correspondant de
-l'inspecteur (`svg-layer`, `svg-grouping`, `svg-visibility`, `svg-lock`) : aucun
-chemin d'écriture parallèle, aucune sémantique divergente.
+l'inspecteur (`svg-layer`, `svg-grouping`, `svg-visibility`, `svg-lock`,
+`svg-order`) : aucun chemin d'écriture parallèle, aucune sémantique divergente.
+
+### 1 bis. L'ordre de plan est un déplacement de source
+
+En SVG, l'ordre du document **est** l'ordre de peinture : il n'y a pas de
+`z-index`. `svg-order` déplace donc la tranche exacte du calque parmi ses
+frères, en un seul remplacement contigu (`Ctrl+]` / `Ctrl+[`, `Ctrl+Maj+]` /
+`Ctrl+Maj+[`) ; l'Undo restaure les octets d'origine. Les refus sont explicites :
+déjà au premier/dernier plan, sans frère, racine, contenu référencé, calque
+verrouillé.
 
 L'action cible **la ligne cliquée**, pas la sélection précédente : cliquer à
 droite sur un autre calque le sélectionne d'abord. Le menu nomme le calque, est
@@ -89,15 +99,16 @@ documenté et sans permission supplémentaire.
 - pas de presse-papiers système, donc pas de copie entre DSH et un autre
   logiciel, ni après un rechargement de la vue ;
 - pas de copie de `image`, `use`, `symbol`, `defs` ni de dégradés référencés ;
-- pas de coupe (`Ctrl+X`), pas d'ordre de plan (premier plan / arrière-plan),
-  pas de collage à la position du pointeur : l'élément collé arrive en fin
-  d'ordre du document, comme une duplication ;
+- pas de coupe (`Ctrl+X`), pas de collage à la position du pointeur : l'élément
+  collé arrive en fin d'ordre du document, comme une duplication ;
+- l'ordre de plan ne s'applique qu'entre frères d'un même parent, pas entre
+  calques de profondeurs différentes ;
 - pas de glisser-déposer entre documents.
 
 ## Preuves
 
 | Niveau | Commande | Résultat |
 |---|---|---|
-| 1 | `npm run check` | **478/478 PASS** (dont `tests/svg-paste.test.mjs` : 8 tests module + 2 tests de route réelle) |
-| 2 | `npm run test:browser` | **60 specs × Chromium 145 + Firefox 146 = 120 PASS / 0 FAIL**, dont `menu: right-clicking a shape…`, `menu: a row action targets…`, `menu: copying a layer…` et `menu: the paste entry stays disabled…` |
+| 1 | `npm run check` | **485/485 PASS** (dont `tests/svg-paste.test.mjs` : 8 tests module + 2 tests de route réelle, et `tests/svg-order.test.mjs` : 5 tests module + 2 tests de route réelle) |
+| 2 | `npm run test:browser` | **61 specs × Chromium 145 + Firefox 146 = 122 PASS / 0 FAIL**, dont `menu: right-clicking a shape…`, `menu: a row action targets…`, `menu: copying a layer…`, `menu: the paste entry stays disabled…` et `menu: paint order changes…` |
 | — | Refus vérifiés | balisage autour de l'élément, deux éléments, `script`, `foreignObject`, `onclick`, `href`/`xlink:href`, fragment vide, fragment > 1 MiB, cible sans enfant |

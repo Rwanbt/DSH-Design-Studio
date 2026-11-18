@@ -3,6 +3,7 @@ import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
+import { svgOrderPatch } from './svg-order.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
@@ -268,6 +269,11 @@ export function createRouteHandler(ctx) {
           const positioned=Object.hasOwn(params,'x') || Object.hasOwn(params,'y')
           const created=svgShapeInsertPatch(doc.source,params.shape,positioned?{x:params.x,y:params.y}:null)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind === 'svg-order') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          // Document order is paint order in SVG: moving one exact span is the
+          // whole implementation, so Undo restores the original bytes.
+          patches=[svgOrderPatch(doc.source,{id:params.id,direction:params.direction}).patch]
         } else if (params.kind === 'svg-paste') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           // The clipboard payload is re-validated here: the renderer is not a
