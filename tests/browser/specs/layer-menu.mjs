@@ -112,6 +112,48 @@ export const copyPasteSpec = {
     const twice = await waitForDisk(harness, 'cible.svg', (text) => text.includes('id="card-copy-2"'),
       { label: 'second paste' })
     assert.ok(twice.includes('id="card-copy"'), 'the first paste is kept')
+
+    // Source context is checked by the real Host, including an anonymous root.
+    const group='<g id="parent" transform="translate(30 40)" fill="#aa2211"><rect id="child" x="1" y="2" width="20" height="10"/></g>'
+    const nested='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">'+group+'</svg>'
+    await harness.write('nested.svg',nested)
+    await openWorkspaceFile(page,'nested.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer rect #child'}).click({button:'right'})
+    await page.getByRole('menuitem',{name:'Copier le calque'}).click()
+    await page.getByRole('alert').filter({hasText:'Copie refusée'}).waitFor()
+    assert.ok((await page.getByRole('alert').innerText()).includes('groupe parent'))
+    assert.equal(await page.locator('[data-created]').count(),0,'refusal clears stale copy success')
+    assert.equal(await harness.read('nested.svg'),nested,'refused copy never changes source')
+    assert.equal(await harness.read('cible.svg'),twice,'refused copy never changes target')
+
+    // Refusal must not replace the previous root-card clipboard.
+    await openWorkspaceFile(page,'cible.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select canvas tool'}).click()
+    await page.keyboard.press('Control+v')
+    await waitForDisk(harness,'cible.svg',text=>text.includes('id="card-copy-3"'))
+    assert.equal(await harness.read('nested.svg'),nested)
+
+    // The complete group keeps the transform and inherited fill inside its slice.
+    await openWorkspaceFile(page,'nested.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer g #parent'}).click({button:'right'})
+    await page.getByRole('menuitem',{name:'Copier le calque'}).click()
+    await page.locator('[data-created]').filter({hasText:'Calque copié'}).waitFor()
+    await openWorkspaceFile(page,'cible.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select canvas tool'}).click()
+    await page.keyboard.press('Control+v')
+    const withGroup=await waitForDisk(harness,'cible.svg',text=>text.includes('id="parent"'))
+    assert.ok(withGroup.includes(group),'whole group exact bytes preserve transform and fill')
+    assert.equal(await harness.read('nested.svg'),nested)
+
+    // Root presentation is outside the slice too, even for a direct child.
+    const styled=nested.replace('viewBox=','style="fill:blue" viewBox=')
+    await harness.write('styled.svg',styled)
+    await openWorkspaceFile(page,'styled.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer g #parent'}).click({button:'right'})
+    await page.getByRole('menuitem',{name:'Copier le calque'}).click()
+    await page.getByRole('alert').filter({hasText:'Copie refusée'}).waitFor()
+    assert.equal(await harness.read('styled.svg'),styled)
+    assert.equal(await harness.read('cible.svg'),withGroup)
   },
 }
 

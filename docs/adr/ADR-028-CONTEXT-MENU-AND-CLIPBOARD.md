@@ -105,7 +105,36 @@ documenté et sans permission supplémentaire.
   calques de profondeurs différentes ;
 - pas de glisser-déposer entre documents.
 
-## Preuves
+## Durcissement du 18 novembre 2026 — limites explicites
+
+La revue indépendante a reproduit des collisions d'IDs encodés XML et des
+références internes non suivies. Le collage refuse désormais :
+
+- les IDs contenant des entités dans le fragment **ou la destination** ;
+- chaque descendant hors de la liste de formes supportées ou en lecture seule,
+  pas seulement la racine du fragment ;
+- les attributs avec références `url/var/env/attr`, encodages XML, échappements ou
+  commentaires CSS ambigus, plutôt que prétendre résoudre leur sémantique.
+
+Le refus est volontairement conservateur, y compris pour des attributs encodés
+inoffensifs. Le texte simple reste copiable ; `tspan` et le texte structuré ou
+multiligne sont temporairement refusés au collage, sans modifier le texte source.
+
+L'éligibilité de copie est calculée côté Host depuis le scanner complet : un
+élément imbriqué ne peut pas être extrait sans son contexte ancestral ; copier
+le groupe parent complet est proposé. Racine portant une présentation héritée
+ou document portant des styles : refus explicite. Le client exige une métadonnée
+positive ; un Host ancien sans cette métadonnée ne déclenche pas de copie
+optimiste. Un refus conserve le presse-papiers précédent.
+
+Ce contrôle concerne le contexte **source**, pas une fidélité générale au rendu :
+le document destination peut appliquer ses propres styles. Aucune promesse de
+copie de style calculé ou de résolution de cascade n'est faite. La détection des
+processing instructions `xml-stylesheet` est également fail-closed : même un
+marqueur dans un commentaire est refusé par précaution. Une déclaration XML seule
+reste admise. Ce choix conservateur est couvert par une régression Host.
+
+## Preuves historiques (avant ce durcissement)
 
 | Niveau | Commande | Résultat |
 |---|---|---|

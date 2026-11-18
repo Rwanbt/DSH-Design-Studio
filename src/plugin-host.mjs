@@ -153,6 +153,15 @@ export function createRouteHandler(ctx) {
             // 1500-layer open into quadratic work (measured: 12 s instead of 0.7 s).
             let layerScan=null
             try { layerScan=scanSvgDocument(document.source) } catch(_) { layerScan=null }
+            // Source-context eligibility only, not a rendering-fidelity promise:
+            // the destination may still have its own CSS/inherited presentation.
+            const structuralRootAttributes=new Set(['xmlns','xmlns:xlink','width','height','viewBox','preserveAspectRatio','version','id'])
+            const rootContextReason=!layerScan?'structure-unavailable'
+              // The scanner skips processing instructions. Fail closed even for
+              // an xml-stylesheet marker inside a comment (accepted false positive).
+              :layerScan.nodes.some(node=>node.tag==='style')||/<\?xml-stylesheet\b/i.test(document.source)?'document-styles'
+                :layerScan.root.attributeList.some(attribute=>!structuralRootAttributes.has(attribute.name))?'root-context'
+                  :null
             nodes=listEditableSvgNodes(document.source).map(node=>{
               // Visibility/lock/transform state is read from the very bytes the
               // patch engine will edit, never inferred from a rendered preview.
@@ -160,7 +169,11 @@ export function createRouteHandler(ctx) {
               const attribute=name=>scanned?.attributes.get(name)?.value??null
               const display=attribute('display')
               const visibility=attribute('visibility')
+              const copyContextReason=rootContextReason||(!scanned?'structure-unavailable'
+                :scanned.parent!==layerScan.root?'ancestor-context':null)
               return {...node,
+                copyContextSafe:copyContextReason===null,
+                copyContextReason,
                 hidden:display==='none'||visibility==='hidden'||visibility==='collapse',
                 locked:attribute('data-locked')==='true',
                 transform:attribute('transform')}

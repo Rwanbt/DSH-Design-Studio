@@ -46,6 +46,13 @@ export function svgFragmentInsertPatch(source, { fragment }) {
   }
   if (fragment.length > MAX_FRAGMENT) fail('too-large', 'Copied element exceeds 1 MiB')
   const document = scanSvgDocument(source)
+  // byId contains only literal, syntactically valid ids. An XML entity can
+  // conceal an id that would collide with a newly allocated literal name.
+  for (const member of document.nodes) {
+    if (member.attributes.get('id')?.value.includes('&')) {
+      fail('ambiguous-svg', 'The destination carries an encoded id; paste cannot allocate ids safely')
+    }
+  }
   const wrapped = '<svg xmlns="http://www.w3.org/2000/svg">' + fragment + '</svg>'
   let scanned
   try {
@@ -57,9 +64,27 @@ export function svgFragmentInsertPatch(source, { fragment }) {
     fail('invalid-fragment', 'A paste must contain exactly one element')
   }
   const node = scanned.root.children[0]
-  if (!COPYABLE.has(node.tag)) fail('invalid-fragment', 'This element cannot be pasted: ' + node.tag)
-  if (node.readOnly) fail('invalid-fragment', 'Referenced content cannot be pasted')
-  for (const member of subtree(node)) {
+  const members = subtree(node)
+  for (const member of members) {
+    if (!COPYABLE.has(member.tag) || member.readOnly) {
+      // In particular tspan is not silently flattened: simple text remains
+      // supported, but structured text requires a separately supported contract.
+      fail('invalid-fragment', 'This element cannot be pasted: ' + member.tag)
+    }
+    if (member.attributes.get('id')?.value.includes('&')) {
+      fail('invalid-fragment', 'The copied element carries an encoded id')
+    }
+    for (const attribute of member.attributeList) {
+      // Do not pretend to parse CSS. Refuse encoded/indirect forms as ambiguous,
+      // including XML numeric/predefined entities and CSS escapes/comments.
+      // This is deliberately conservative even for non-presentation attributes.
+      if (/[&\\]/.test(attribute.value) || /\/\*|\*\//.test(attribute.value)) {
+        fail('invalid-fragment', 'Encoded or ambiguous attribute values cannot be pasted: ' + attribute.name)
+      }
+      if (/(?:url|var|env|attr)\s*\(/i.test(attribute.value)) {
+        fail('invalid-fragment', 'URL or indirect attribute references cannot be pasted: ' + attribute.name)
+      }
+    }
     for (const name of REFERENCE_ATTRIBUTES) {
       if (member.attributes.has(name)) {
         fail('invalid-fragment', 'A copied element that carries a reference cannot be pasted yet')
@@ -88,7 +113,7 @@ export function svgFragmentInsertPatch(source, { fragment }) {
     return candidate
   }
   const edits = []
-  for (const member of subtree(node)) {
+  for (const member of members) {
     const attribute = member.attributes.get('id')
     if (!attribute) continue
     if (!ID_PATTERN.test(attribute.value)) {

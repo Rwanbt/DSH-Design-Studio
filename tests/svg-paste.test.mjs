@@ -100,6 +100,51 @@ test('a target document without any child gets the paste right after the open ta
   assert.equal(text, '<svg xmlns="http://www.w3.org/2000/svg"><rect id="a" width="1" height="1"/></svg>')
 })
 
+test('encoded ids anywhere in the destination or fragment fail closed', () => {
+  for (const id of ['card&#45;copy-2', '&#99;ard', 'a&amp;b']) {
+    for (const target of [`<svg id="${id}"></svg>`, `<svg><defs><path id="${id}"/></defs></svg>`]) {
+      assert.throws(() => svgFragmentInsertPatch(target, { fragment: '<rect id="card"/>' }),
+        (error) => error.code === 'ambiguous-svg' && /encoded id/i.test(error.message))
+    }
+    assert.throws(() => svgFragmentInsertPatch(DOC, { fragment: `<g><rect id="${id}"/></g>` }),
+      (error) => error.code === 'invalid-fragment' && /encoded id/i.test(error.message))
+  }
+})
+
+test('every descendant must be copyable and editable, including text spans', () => {
+  for (const child of ['<defs><path/></defs>', '<style>rect{fill:red}</style>', '<image/>',
+    '<title>title</title>', '<use/>', '<text><tspan>must not disappear</tspan></text>']) {
+    assert.throws(() => svgFragmentInsertPatch(DOC, { fragment: `<g>${child}</g>` }),
+      (error) => error.code === 'invalid-fragment' && /cannot be pasted/i.test(error.message), child)
+  }
+  for (const name of ['href', 'xlink:href', 'src']) {
+    assert.throws(() => svgFragmentInsertPatch(DOC, { fragment: `<g><rect ${name}="#card"/></g>` }),
+      (error) => error.code === 'invalid-fragment')
+  }
+})
+
+test('attribute URL references and ambiguous CSS encodings are refused without rewriting', () => {
+  for (const value of ['url(#paint)', 'URL( &quot;#paint&quot; )', '&#117;rl(#paint)',
+    'u&#x72;l(#paint)', 'url&#40;#paint)', String.raw`u\72 l(#paint)`,
+    String.raw`\75rl(#paint)`, 'u/**/rl(#paint)', 'var(--paint)', '&unknown;']) {
+    for (const name of ['fill', 'style', 'data-custom']) {
+      assert.throws(() => svgFragmentInsertPatch(DOC, { fragment: `<g><rect ${name}="${value}"/></g>` }),
+        (error) => error.code === 'invalid-fragment', `${name}=${value}`)
+    }
+  }
+})
+
+test('allocation cannot collide with another original id inside the fragment', () => {
+  const { result } = applied('<svg><rect id="a"/></svg>', '<g><rect id="a"/><rect id="a-copy"/></g>')
+  assert.deepEqual(result.idMap, { a: 'a-copy', 'a-copy': 'a-copy-copy' })
+  assert.equal(result.patch.after, '<g><rect id="a-copy"/><rect id="a-copy-copy"/></g>')
+})
+
+test('simple text and safe literal attributes retain their exact bytes', () => {
+  const fragment = '<text id="label" fill="#abc" style="font-size:12px">A &amp; B</text>'
+  assert.equal(applied(DOC, fragment).result.patch.after, fragment)
+})
+
 async function fixture(run) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-paste-'))
   try {
@@ -134,6 +179,21 @@ test('the Host applies a paste through the real route and reports the created id
   const text = await readFile(path.join(root, 'cible.svg'), 'utf8')
   assert.ok(text.includes('<rect id="card-copy-2" width="7" height="7"/>'))
   assert.ok(text.includes('id="card-copy"'), 'existing ids are untouched')
+}))
+
+test('new fail-closed refusals survive the Host route without changing bytes', () => fixture(async ({ invoke, root }) => {
+  const before = await readFile(path.join(root, 'cible.svg'), 'utf8')
+  const document = (await invoke('GET', DOCUMENT_URL)).json.document
+  for (const fragment of ['<g><defs><path/></defs></g>', '<rect fill="url(#card)"/>',
+    '<rect fill="&#117;rl(#card)"/>', '<rect id="&#99;ard"/>', '<text><tspan>x</tspan></text>']) {
+    const response = await invoke('POST', '/design-studio-native/apply', {
+      sessionId: 'known', file: 'cible.svg', baseHash: document.hash, baseIdentity: document.identity,
+      kind: 'svg-paste', fragment,
+    })
+    assert.equal(response.status, 400)
+    assert.equal(response.json.error, 'invalid-fragment')
+    assert.equal(await readFile(path.join(root, 'cible.svg'), 'utf8'), before)
+  }
 }))
 
 test('a refused paste over the real route leaves the file byte-identical', () => fixture(async ({ invoke, root }) => {

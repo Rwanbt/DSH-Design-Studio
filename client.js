@@ -785,6 +785,11 @@ window.__ModuleLoader__.load({
         const target=id||active
         const node=nodes.find(entry=>entry.id===target)
         if(!doc || doc.format!=='svg' || !node) {setError('Sélectionnez un calque SVG à copier.');return}
+        if(node.copyContextSafe!==true) {
+          setNotice('')
+          setError('Copie refusée : le contexte ancestral ou les styles du document ne peuvent pas être préservés. Copiez le groupe parent complet depuis une racine neutre, ou utilisez le code source.')
+          return
+        }
         if(!Number.isInteger(node.start) || !Number.isInteger(node.end) || node.end<=node.start) {
           setError('Ce document ne peut pas être copié couche par couche : ouvrez-le comme SVG structuré.')
           return
