@@ -3,6 +3,7 @@ import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
+import { listSvgGradients, svgGradientStopPatch } from './svg-gradient.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
@@ -146,7 +147,7 @@ export function createRouteHandler(ctx) {
           workspaceId:url.searchParams.get('workspaceId'),
         })
         const document=await store.read(file)
-        let nodes=[]; let textNodes=[]; let pathNodes=[]; let htmlElements=[]; let cssRules=[]; let cssMedia=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
+        let nodes=[]; let textNodes=[]; let pathNodes=[]; let gradients=[]; let htmlElements=[]; let cssRules=[]; let cssMedia=[]; let stylesheets=[]; let styleMatches=[]; let previewCss=''; let previewCoverage=null; let warning=null; let geometry={artboard:null, handles:[]}
         if(document.format==='svg') {
           try {
             // One structure scan feeds the whole layer list. Calling the per-node
@@ -185,7 +186,13 @@ export function createRouteHandler(ctx) {
             // ancestor+self matrix so a visible drag maps back to local coordinates.
             geometry=svgGeometry(document.source,{transforms:true})
             pathNodes=listSvgPathModels(document.source)
-            if(geometry.warning) warning=geometry.warning
+            // Gradient stops are their own addressable surface: the client only
+            // offers fields for attributes that already exist, and every edit is
+            // one exact attribute-value patch. An unstructurable document is an
+            // empty list plus a visible warning, never a guessed gradient.
+            try { gradients=listSvgGradients(document.source,{scan:layerScan}) }
+            catch(e){ warning=(warning?warning+' · ':'')+'Gradient inspector unavailable: '+(e.code||'parse-failed') }
+            if(geometry.warning) warning=warning?warning+' · '+geometry.warning:geometry.warning
           } catch(e){ warning='SVG property inspector unavailable: ' + (e.code || 'parse-failed') }
         }
         if(document.format==='html'||document.format==='htm') {
@@ -216,7 +223,7 @@ export function createRouteHandler(ctx) {
               declarations:rule.declarations.map(({property,value})=>({property,value}))}))
           if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
+        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,gradients,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,warning})
       }
       if (req.method === 'POST' && endpoint === '/create') {
         // Creating a document is exclusive: an existing path is refused (409),
@@ -338,6 +345,13 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'svg-path-point') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=svgPathPointPatches(doc.source,{id:params.id,index:params.index,x:params.x,y:params.y})
+        } else if (params.kind === 'svg-gradient-stop') {
+          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          // One existing stop attribute, one exact value span: the inverse is
+          // byte-exact, so Undo restores the original file. No attribute is
+          // ever inserted or removed by this operation.
+          patches=[svgGradientStopPatch(doc.source,{gradientId:params.gradientId,index:params.index,
+            attribute:params.attribute,value:params.value})]
         } else if (params.kind === 'svg-text') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTextPatch(doc.source,{id:params.id,value:params.value})]

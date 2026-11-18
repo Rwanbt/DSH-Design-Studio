@@ -29,6 +29,7 @@ import { renameFileSpec, deleteFileSpec, cancelDeleteSpec } from './file-admin.m
 import { layerMenuSpec, layerMenuRowSpec, copyPasteSpec, pasteMenuSpec, reorderSpec, layerDragSpec } from './layer-menu.mjs'
 import { renameLayerSpec, renameMenuSpec, renameRefusalSpec, renameHostRefusalSpec, renameUndoSelectionSpec } from './rename.mjs'
 import { geometryInspectorSpec, fillInspectorSpec } from './inspector.mjs'
+import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
@@ -68,6 +69,9 @@ export const specs = [
   panelEmptySpec,
   geometryInspectorSpec,
   fillInspectorSpec,
+  gradientStopEditSpec,
+  gradientInheritedReadOnlySpec,
+  gradientNotReferencedSpec,
   dshThemeSpec,
   svgEditSpec,
   svgNavigationSpec,

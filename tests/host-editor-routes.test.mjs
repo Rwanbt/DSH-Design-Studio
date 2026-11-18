@@ -399,3 +399,107 @@ test('svg-rename keeps the revision contract and refuses non-SVG documents', asy
     assert.equal(refused.body.error, 'unsupported-format')
   } finally { await host.close() }
 })
+
+const GRADIENT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#102030" stop-opacity="1"/>
+      <stop offset="1" stop-color="#405060"/>
+    </linearGradient>
+    <linearGradient id="inherited" href="#sky"/>
+  </defs>
+  <rect id="panel" x="10" y="10" width="40" height="30" fill="url(#sky)"/>
+  <rect id="ghost" x="60" y="10" width="40" height="30" fill="url(#inherited)"/>
+</svg>
+`
+
+test('the document payload exposes addressable gradients with stops and references', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradients.svg', GRADIENT_SVG)
+    const document = await host.open('gradients.svg')
+    const byId = Object.fromEntries(document.gradients.map((gradient) => [gradient.id, gradient]))
+    assert.deepEqual(Object.keys(byId).sort(), ['inherited', 'sky'])
+    assert.equal(byId.sky.usable, true)
+    assert.equal(byId.sky.reason, null)
+    assert.equal(byId.sky.type, 'linear')
+    assert.deepEqual(byId.sky.referencedBy, ['panel'])
+    assert.equal(byId.sky.stops.length, 2)
+    assert.equal(byId.sky.stops[0].color, '#102030')
+    assert.equal(byId.sky.stops[1].opacity, null)
+    assert.equal(typeof byId.sky.stops[0].colorSpan.start, 'number')
+    assert.equal(byId.inherited.usable, false)
+    assert.equal(byId.inherited.reason, 'inherited-gradient')
+    assert.equal(document.nodes.find((node) => node.id === 'ghost').attributes.fill, 'url(#inherited)')
+  } finally { await host.close() }
+})
+
+test('svg-gradient-stop writes one attribute value at the real route and undoes exactly', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradient.svg', GRADIENT_SVG)
+    const opened = await host.open('gradient.svg')
+    const response = await host.apply({ ...host.revision(opened), kind: 'svg-gradient-stop',
+      gradientId: 'sky', index: 1, attribute: 'stop-color', value: '#aabbcc' })
+    assert.equal(response.status, 200, JSON.stringify(response.body))
+    assert.equal(response.body.patches.length, 1, 'exactly one patch for one attribute value')
+    const expected = GRADIENT_SVG.replace('offset="1" stop-color="#405060"', 'offset="1" stop-color="#aabbcc"')
+    assert.equal(await host.read('gradient.svg'), expected, 'only the targeted attribute value changed')
+
+    const inverse = await host.apply({ file: 'gradient.svg', baseHash: response.body.result.hash,
+      baseIdentity: response.body.result.identity, kind: 'patches', patches: response.body.result.inverse })
+    assert.equal(inverse.status, 200, JSON.stringify(inverse.body))
+    assert.equal(await host.read('gradient.svg'), GRADIENT_SVG, 'Undo restores the byte-identical original')
+  } finally { await host.close() }
+})
+
+test('svg-gradient-stop refuses unknown, inherited, absent, invalid and unchanged values without writing', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradient.svg', GRADIENT_SVG)
+    const opened = await host.open('gradient.svg')
+    const cases = [
+      [{ gradientId: 'nope', index: 0, attribute: 'stop-color', value: '#ffffff' }, 'unknown-gradient'],
+      [{ gradientId: 'inherited', index: 0, attribute: 'stop-color', value: '#ffffff' }, 'inherited-gradient'],
+      [{ gradientId: 'sky', index: 1, attribute: 'stop-opacity', value: '0.4' }, 'missing-attribute'],
+      [{ gradientId: 'sky', index: 5, attribute: 'stop-color', value: '#ffffff' }, 'index-out-of-range'],
+      [{ gradientId: 'sky', index: 0, attribute: 'stop-color', value: 'red' }, 'invalid-value'],
+      [{ gradientId: 'sky', index: 0, attribute: 'stop-color', value: '#102030' }, 'unchanged'],
+      [{ gradientId: 'sky', index: 0, attribute: 'fill', value: '#ffffff' }, 'invalid-target'],
+    ]
+    for (const [request, code] of cases) {
+      const response = await host.apply({ ...host.revision(opened), kind: 'svg-gradient-stop', ...request })
+      assert.equal(response.status, 400, JSON.stringify(response.body))
+      assert.equal(response.body.error, code, JSON.stringify(request))
+      assert.equal(await host.read('gradient.svg'), GRADIENT_SVG, JSON.stringify(request) + ' writes nothing')
+    }
+  } finally { await host.close() }
+})
+
+test('svg-gradient-stop keeps the revision contract and refuses non-SVG documents', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradient.svg', GRADIENT_SVG)
+    const opened = await host.open('gradient.svg')
+
+    const missing = await host.call('POST', '/design-studio-native/apply',
+      { sessionId: 's1', file: 'gradient.svg', baseHash: opened.document.hash,
+        kind: 'svg-gradient-stop', gradientId: 'sky', index: 0, attribute: 'stop-color', value: '#ffffff' })
+    assert.equal(missing.status, 428, JSON.stringify(missing.body))
+    assert.equal(missing.body.error, 'missing-revision')
+
+    const stale = await host.apply({ ...host.revision(opened), baseHash: 'a'.repeat(64),
+      kind: 'svg-gradient-stop', gradientId: 'sky', index: 0, attribute: 'stop-color', value: '#ffffff' })
+    assert.equal(stale.status, 409, JSON.stringify(stale.body))
+    assert.equal(stale.body.error, 'stale-revision')
+    assert.equal(await host.read('gradient.svg'), GRADIENT_SVG)
+
+    await host.write('styles.css', 'h1 { color: #202124; }\n')
+    const css = await host.open('styles.css')
+    const refused = await host.apply({ ...host.revision(css), kind: 'svg-gradient-stop',
+      gradientId: 'sky', index: 0, attribute: 'stop-color', value: '#ffffff' })
+    assert.equal(refused.status, 400, JSON.stringify(refused.body))
+    assert.equal(refused.body.error, 'unsupported-format')
+    assert.equal(await host.read('styles.css'), 'h1 { color: #202124; }\n')
+  } finally { await host.close() }
+})

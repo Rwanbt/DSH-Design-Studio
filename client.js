@@ -586,6 +586,9 @@ window.__ModuleLoader__.load({
       const [doc,setDoc] = React.useState(null)
       const [source,setSource] = React.useState('')
       const [nodes,setNodes] = React.useState([])
+      // Gradients of the open SVG, addressed by id: their stops are the only
+      // values the inspector can edit, and only when they already exist.
+      const [gradients,setGradients] = React.useState([])
       const [htmlElements,setHtmlElements] = React.useState([])
       const [htmlActive,setHtmlActive] = React.useState('')
       const previewContextRef=React.useRef(null)
@@ -728,7 +731,7 @@ window.__ModuleLoader__.load({
           }
           disconnectHtmlPreview()
           setFile(targetFile)
-          setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[])
+          setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[]);setGradients(data.gradients||[])
           setHtmlElements(data.htmlElements||[])
           setHtmlStylesheets(data.stylesheets||[])
           setHtmlPreviewCss(data.previewCss||'')
@@ -809,7 +812,7 @@ window.__ModuleLoader__.load({
       /** Drop every per-document state so the landing state is honest again. */
       function closeDocument() {
         setDoc(null);setSource('')
-        setNodes([]);setTextNodes([]);setPathNodes([])
+        setNodes([]);setGradients([]);setTextNodes([]);setPathNodes([])
         setHtmlElements([]);setHtmlStylesheets([]);setHtmlStyleMatches([]);setHtmlPreviewCss('')
         setHtmlPreviewCoverage(null);setCssRules([]);setCssActive('');setCssValue('')
         setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
@@ -2519,6 +2522,83 @@ window.__ModuleLoader__.load({
         ?'#'+fillValue.slice(1).split('').map(c=>c+c).join(''):fillValue
       const fillRGB=hexFill?expandedFill.slice(0,7):'#000000'
       const fillAlpha=hexFill&&expandedFill.length===9?expandedFill.slice(7):''
+      // Dégradé : uniquement un arrêt d'un dégradé réellement référencé par le
+      // `fill` de la forme sélectionnée. Un attribut absent n'est jamais inventé :
+      // le champ reste inactif et la raison est visible.
+      const fillGradient=/^url\(\s*#([A-Za-z_][\w.:-]*)\s*\)$/.exec(fillValue)
+      const selectedGradient=fillGradient&&doc?.format==='svg'
+        ?gradients.find(item=>item.id===fillGradient[1])||null:null
+      const GRADIENT_REASONS={
+        'inherited-gradient':'dégradé hérité par href : les attributs de ses arrêts ne sont pas définis localement.',
+        'ambiguous-style':'un arrêt porte un attribut style= : la source de vérité est ambiguë.',
+        'encoded-attribute':'un arrêt encode un attribut en XML (entité) : la valeur est ambiguë.',
+        'no-stops':'ce dégradé ne déclare aucun arrêt.'
+      }
+      const stopHex=value=>/^#[0-9a-f]{3}$/i.test(value||'')
+        ?'#'+value.slice(1).split('').map(c=>c+c).join('')
+        :/^#[0-9a-f]{6}$/i.test(value||'')?value:'#000000'
+      function commitGradientStop(index,attribute,next,current) {
+        if(!selectedGradient||!selectedGradient.usable||!editable)return
+        const value=String(next??'').trim()
+        // Identical value: no request at all, matching the Host refusal.
+        if(value===String(current??'').trim())return
+        const valid=attribute==='stop-color'
+          ?/^(?:none|#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}))$/.test(value)
+          :/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(value)&&Number(value)>=0&&Number(value)<=1
+        if(!valid) {
+          setError(attribute==='stop-color'
+            ?'Couleur d’arrêt refusée : utilisez #rgb, #rrggbb ou none.'
+            :'Opacité d’arrêt refusée : nombre entre 0 et 1.')
+          return
+        }
+        // One attribute value, one exact patch, one Undo step.
+        void save({kind:'svg-gradient-stop',gradientId:selectedGradient.id,index,attribute,value})
+      }
+      const gradientInspector=selectedGradient&&h('section',{className:'dsh-studio-ins-block',
+        'data-gradient-section':selectedGradient.id,'data-gradient-usable':selectedGradient.usable?'true':'false'},
+        h('div',{className:'dsh-studio-ins-head'},'Dégradé',
+          h('span',null,selectedGradient.type==='linear'?'↗':'◎')),
+        h('small',{className:'dsh-studio-hint','data-gradient-meta':''},
+          selectedGradient.type+'Gradient · #'+selectedGradient.id+' · '+selectedGradient.stops.length+' arrêt(s)'),
+        !selectedGradient.usable?
+          h(React.Fragment,null,
+            h('p',{className:'dsh-studio-hint','data-gradient-reason':selectedGradient.reason},
+              'Lecture seule : '+(GRADIENT_REASONS[selectedGradient.reason]||selectedGradient.reason)+' Aucune écriture possible.'),
+            h('ul',{style:{margin:'6px 0 0',paddingLeft:16,fontSize:11,color:'var(--muted)'}},
+              selectedGradient.stops.map(stop=>h('li',{key:stop.index,'data-gradient-stop':stop.index},
+                'Arrêt '+(stop.index+1)+' · offset '+(stop.offset??'0')+' · '+(stop.color??'(sans stop-color)')+
+                ' · opacité '+(stop.opacity??'1')))))
+          :h(React.Fragment,null,
+            selectedGradient.stops.map(stop=>h('div',{key:stop.index,'data-gradient-stop':stop.index,
+              style:{display:'grid',gridTemplateColumns:'auto 1fr 64px',gap:6,alignItems:'center',marginTop:4}},
+              h('span',{style:{display:'flex',flexDirection:'column',minWidth:0}},
+                h('span',{style:{fontSize:11,color:ACCENT}},'Arrêt '+(stop.index+1)),
+                h('small',{style:{fontSize:10,color:'var(--muted)'},'data-gradient-offset':stop.offset??''},
+                  'offset '+(stop.offset??'0'))),
+              h('div',{style:{display:'flex',gap:4,minWidth:0}},
+                h('input',{type:'color',value:stopHex(stop.color),
+                  'aria-label':'Gradient stop '+stop.index+' colour picker',
+                  title:stop.colorSpan?'Couleur native de l’arrêt':'stop-color absent : aucune insertion dans cette tranche',
+                  disabled:!editable||!stop.colorSpan||!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(stop.color||''),
+                  style:{width:30,height:30,padding:2,flex:'0 0 auto'},
+                  onChange:e=>commitGradientStop(stop.index,'stop-color',e.target.value,stop.color)}),
+                h('input',{type:'text',defaultValue:stop.color??'',
+                  key:active+':stop:'+stop.index+':'+(stop.color??''),spellCheck:false,
+                  style:{...field,height:30,minWidth:0},'aria-label':'Gradient stop '+stop.index+' colour',
+                  title:stop.colorSpan?'#rgb, #rrggbb ou none':'stop-color absent : aucune insertion dans cette tranche',
+                  disabled:!editable||!stop.colorSpan,
+                  onBlur:e=>commitGradientStop(stop.index,'stop-color',e.target.value,stop.color),
+                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+              h('input',{type:'number',min:0,max:1,step:0.01,defaultValue:stop.opacity??'',
+                key:active+':stop-opacity:'+stop.index+':'+(stop.opacity??''),
+                style:{...field,height:30},'aria-label':'Gradient stop '+stop.index+' opacity',
+                title:stop.opacitySpan?'Opacité native de l’arrêt (0..1)':'stop-opacity absent : aucune insertion dans cette tranche',
+                disabled:!editable||!stop.opacitySpan,
+                onBlur:e=>commitGradientStop(stop.index,'stop-opacity',e.target.value,stop.opacity),
+                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}))),
+            selectedGradient.stops.some(stop=>!stop.colorSpan||!stop.opacitySpan)&&
+              h('p',{className:'dsh-studio-hint'},'Attribut absent sur un arrêt : cette tranche ne crée pas d’attribut.'),
+            h('p',{className:'dsh-studio-hint'},'Une modification = une écriture exacte, annulable (Undo).')))
       const appearanceInspector=h(React.Fragment,null,
         h('section',{className:'dsh-studio-ins-block'},h('div',{className:'dsh-studio-ins-head'},'Apparence',h('span',null,'＋')),
            h('div',{className:'dsh-studio-toggle-row'},h('span',null,'Opacité'),
@@ -2541,7 +2621,8 @@ window.__ModuleLoader__.load({
               disabled:!selected||!editable||!hexFill,style:{...field,height:30},
               onBlur:e=>{if(/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(e.target.value))commitAttributes({fill:e.target.value})},
               onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
-          h('p',{className:'dsh-studio-hint'},fillValue&&!hexFill?'Valeur native préservée : '+fillValue:'Couleur native · alpha préservé.')))
+          h('p',{className:'dsh-studio-hint'},fillValue&&!hexFill?'Valeur native préservée : '+fillValue:'Couleur native · alpha préservé.')),
+        gradientInspector)
       const typeLabels={'font-family':'Police','font-size':'Taille','font-weight':'Graisse',
         'font-style':'Style','letter-spacing':'Espacement','text-anchor':'Alignement'}
       const typeChoices={
