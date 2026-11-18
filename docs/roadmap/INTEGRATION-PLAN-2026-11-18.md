@@ -70,7 +70,7 @@ dégradé) sans jamais réécrire les octets voisins.
 | 2.1 | **Desktop Electron** sur l'UI actuelle : installation, panneau, édition, sauvegarde dans un profil jetable | **Tentative faite, `NOT_RUN`** : le shell démarre réellement en ozone headless (CDP publié) mais sa fenêtre de premier démarrage n'est pas pilotable sans display interactif ; `Xvfb` absent et son installation exige root. Commande propriétaire et cause exacte dans [DESKTOP-VERIFICATION-2026-11-18.md](../operations/DESKTOP-VERIFICATION-2026-11-18.md) |
 | 2.2 | **Lecteur d'écran réel** sur le parcours de commande | **arbre d'accessibilité réel vérifié** (CDP Chromium, noms calculés Firefox, zéro contrôle anonyme, focus clavier) — le lecteur lui-même reste `NOT_RUN` : Orca exige un display interactif, Xvfb absent, `DISPLAY=:0` interdit ([rapport](../operations/ACCESSIBILITY-2026-11-18.md)) |
 | 2.3 | **Tactile** : sélection et glissement au doigt | **émulation vérifiée** (`hasTouch` + API `touchscreen`, Chromium et Firefox) ; appareil physique, pincement et taille des poignées au doigt : `NOT_RUN` |
-| 2.4 | **Plateformes** : macOS, NFS/SMB — ou retrait explicite du périmètre certifié | `NOT_RUN` assumé si l'environnement manque |
+| 2.4 | **Plateformes** : macOS, NFS/SMB | **Retrait explicite** du périmètre certifié, avec la matrice des plateformes et le comportement fail-closed du stockage ([PLATFORM-MATRIX-2026-11-18.md](../operations/PLATFORM-MATRIX-2026-11-18.md)) |
 
 Sortie de vague : le mot « production ready » devient discutable ; tant que 2.1
 et 2.2 ne sont pas faits, le verdict reste **NO-GO**.

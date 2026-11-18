@@ -16,7 +16,7 @@ and workspace. The plugin is **MIT** and has **zero runtime dependencies**.
 |---|---|---|
 | DeepSeek Harness | 0.2.x (`0.2.2-rc.3` used for the real verification) | `dsh --version` |
 | Node.js | 22 | `node --version` |
-| OS | Linux x64 verified | Windows verified by CI, macOS **NOT_RUN** |
+| OS | Linux x64 verified | Windows verified by CI (functionally), macOS **NOT_RUN** — périmètre certifié détaillé dans [PLATFORM-MATRIX-2026-11-18.md](PLATFORM-MATRIX-2026-11-18.md) |
 | AI provider | **none** | the editor never calls a model |
 | Shell | DSH Web or DSH Desktop | Both driven end-to-end (Web 20 steps, Desktop 11 steps, 31/31 PASS) |
 

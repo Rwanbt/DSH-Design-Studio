@@ -57,8 +57,10 @@ standalone application, no separate process, no own window/port; installation is
    committed. What is *not* covered is the packaged Desktop/Electron shell: only
    its real Web server has been driven so far.
 2. **No macOS, NFS/SMB, or real touch-device verification.** Windows is covered
-   by CI; macOS and network filesystems are `NOT_RUN`, and the storage guarantee
-   is explicitly *not* a universal CAS.
+   by CI (functionally, with two documented `SKIP`s); macOS and network
+   filesystems are `NOT_RUN` and now **explicitly removed from the certified
+   perimeter** — see [PLATFORM-MATRIX-2026-11-18.md](PLATFORM-MATRIX-2026-11-18.md).
+   The storage guarantee is explicitly *not* a universal CAS.
 3. **G5 (optional AI tooling) is not implemented.** The manual editor is complete
    enough for an experimental RC, but any claim of "hybrid" workflow would be
    false today.
