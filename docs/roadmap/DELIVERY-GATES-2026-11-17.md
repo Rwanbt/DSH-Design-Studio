@@ -8,6 +8,20 @@
 
 **Preuves de cette session :** [`docs/operations/SESSION-2026-11-17-POST-MERGE.md`](../operations/SESSION-2026-11-17-POST-MERGE.md) · rapport navigateur `tests/browser/__reports__/browser-report.json` · rapport DSH réel `tests/browser/__reports__/real-dsh.json`.
 
+## Actualisation industrielle — 18 novembre 2026
+
+La [baseline industrielle](../operations/BASELINE-2026-11-18.md) prime sur les
+chiffres historiques ci-dessous pour cette mission. Correctifs `dev` :
+`149a733` (rollback rename non destructif, durabilité et double faute verrou),
+`86cd57e` (synchronisation du test de collage), `f014bde` (environnement DSH jetable).
+Dernier noyau exécuté : **502 PASS / 0 FAIL / 0 SKIP**, code 0, niveau 1.
+Gate navigateur après correction : **122 PASS / 0 FAIL / 0 NOT_RUN**, code 0,
+niveau 2, shell DSH simulé ; voir la portée SHA/arbre local dans la baseline.
+Niveau 3 de ces changements : **NOT_RUN**. Production Ready : **NO-GO**.
+Le renommage partiel conserve désormais les deux chemins plutôt que tenter un
+rollback destructif ; récupération manuelle des hardlinks encore nécessaire.
+Aucun `main`, tag ou publication modifié par cette mission.
+
 ## 1. État par chantier
 
 | Chantier | Vérifié réellement | Encore partiel / non fait | Gate |
