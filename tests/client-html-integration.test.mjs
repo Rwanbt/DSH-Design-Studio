@@ -114,11 +114,13 @@ async function harness(run,options={}) {
     const render=()=>{index=0;return component({sessionId:'known'})}
     // Open default path, then choose a file in the same active workspace.
     await find(render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick()
-    await until(()=>!!find(render(),n=>n.props?.['aria-label']==='Open file page.html'),
-      'Workspace HTML entry did not load')
+    await until(()=>{
+      const open=find(render(),n=>n.props?.['aria-label']==='Open file page.html')
+      return !!open && open.props.disabled!==true
+    },'Workspace HTML entry did not become actionable',()=>clientDiagnostics({render,calls:()=>calls}))
     find(render(),n=>n.props?.['aria-label']==='Open file page.html').props.onClick()
     await until(()=>!!find(render(),n=>String(n.props?.['aria-label']||'').startsWith('Select HTML element ')),
-      'HTML document did not open')
+      'HTML document did not open',()=>clientDiagnostics({render,calls:()=>calls}))
     await run({render,source,file,root,calls:()=>calls})
   }finally{await rm(root,{recursive:true,force:true})}
 }
