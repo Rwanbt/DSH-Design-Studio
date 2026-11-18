@@ -356,7 +356,7 @@ export const gradientCreateSpec = {
     const changed=await waitForDisk(harness,'create-gradient.svg',
       text=>text.includes('fill="url(#dsh_gradient_1)"'),{label:'gradient created'})
     assert.ok(changed.includes('<linearGradient id="dsh_gradient_1"'))
-    assert.ok(changed.includes('stop-color="#000000"'))
+    assert.ok(changed.includes('stop-color="#3a3f45"'), 'the circle\'s original fill becomes the first stop')
     assert.ok(changed.includes('stop-color="#ffffff"'))
     assert.equal(changed.includes('<!-- gradient fixture: only stop attributes may ever be rewritten -->'),true)
     assert.equal(applies(),1,'creating gradient and attaching it uses a single Host /apply')
