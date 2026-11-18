@@ -267,3 +267,43 @@ export const tabDialogFocusSpec = {
     assert.equal(await harness.read('focus-b.svg'), SVG_DOCUMENT)
   },
 }
+
+
+export const tabsCycleShortcutSpec = {
+  name: 'tab: Ctrl+Tab and Ctrl+Shift+Tab cycle documents without saving an unsaved source draft',
+  async run({ page, harness, assert }) {
+    await harness.write('a.svg', SVG_DOCUMENT)
+    await harness.write('b.svg', SECOND)
+    await openWorkspaceFile(page, 'a.svg', { expect: 'svg' })
+    await revealSource(page)
+    const unsaved = SVG_DOCUMENT.replace('Title', 'Draft via shortcut')
+    assert.ok(unsaved !== SVG_DOCUMENT, 'the draft differs from the file')
+    const source = page.locator('.dsh-studio-source textarea')
+    await source.fill(unsaved)
+    await openWorkspaceFile(page, 'b.svg', { expect: 'svg' })
+    await waitForActiveFile(page, 'b.svg')
+    const writesBefore = applies(harness).length
+
+    // Browser chrome can reserve Ctrl+Tab. Dispatching the keyboard event to
+    // the focused editor proves this plugin's shortcut handler, not that an
+    // external browser has delegated its native tab-switching accelerator.
+    const activeSource = page.locator('.dsh-studio-source textarea')
+    await revealSource(page)
+    await activeSource.focus()
+    await activeSource.dispatchEvent('keydown',
+      { key: 'Tab', code: 'Tab', ctrlKey: true, bubbles: true, cancelable: true })
+    await waitForActiveFile(page, 'a.svg')
+    assert.equal(await sourceOf(page), unsaved, 'cycling restores the exact unsaved source')
+    assert.equal(await tabNamed(page, 'a.svg').getAttribute('aria-selected'), 'true')
+    assert.equal(applies(harness).length, writesBefore, 'cycling must not write')
+
+    await page.locator('.dsh-studio-source textarea').dispatchEvent('keydown',
+      { key: 'Tab', code: 'Tab', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    await waitForActiveFile(page, 'b.svg')
+    assert.equal(await tabNamed(page, 'a.svg').getAttribute('aria-label'),
+      'a.svg · modifications non enregistrées', 'dirty marker survives both shortcuts')
+    assert.equal(await harness.read('a.svg'), SVG_DOCUMENT, 'file A remains unchanged on disk')
+    assert.equal(await harness.read('b.svg'), SECOND, 'file B remains unchanged on disk')
+    assert.equal(applies(harness).length, writesBefore, 'neither shortcut writes')
+  },
+}
