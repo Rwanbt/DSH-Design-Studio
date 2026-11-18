@@ -99,6 +99,9 @@ actifs et testés. Le glisser-déposer est un confort, pas une condition d'accè
 | 2 | spec `drag:` ciblé | **51 assertions par moteur** : ordre réel des octets après dépôt, tranches intactes, **0 POST** au survol et pendant le geste, exactement 1 écriture au dépôt, Undo octet-exact, dépôt sur soi-même sans écriture, frère non adjacent refusé, `Échap` sans écriture, parents différents refusés, verrouillé et racine refusés, déplacement **backward** réel, sélection conservée sur la ligne déplacée, clavier non régressé, brouillon de texte préservé |
 | 3 | `npm run test:dsh` | **NOT_RUN** pour ce geste : le parcours DSH réel ne couvre pas encore le glisser-déposer |
 
+CI du commit `221fbe1` : [run 44310764932](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/44310764932)
+**entièrement vert** (Ubuntu, navigateurs, Windows).
+
 Revue indépendante : un passage, un défaut modéré (tout `<svg>` refusé comme
 racine alors que seul `depth === 0` l'est), deux défauts faibles (drapeau de clic
 armé sans glissement réel, aucun nettoyage sur perte de focus) et une promesse
