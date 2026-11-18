@@ -115,4 +115,4 @@ configuration locale.
 | Merge into `main`? | **NO** — owner approval required and the DSH Desktop renderer is untested. |
 | Tag an experimental RC on `dev`? | **GO** after owner approval and step §2 executed. |
 | Publish to npm? | **NO** — explicit owner decision only. |
-| Call it production ready? | **NO**. |
+| Call it production ready? | **NO** — voir le [rapport final du 18 novembre](FINAL-REPORT-2026-11-18.md) : Desktop et lecteur d'écran réels restent `NOT_RUN`. |
