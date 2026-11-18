@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 import {
   listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch,
-  svgGradientStopRemovePatch, MAX_GRADIENT_STOPS,
+  svgGradientStopRemovePatch, svgGradientGeometryPatch, MAX_GRADIENT_STOPS,
 } from '../src/svg-gradient.mjs'
 import { scanSvgDocument } from '../src/svg-document.mjs'
 
@@ -500,4 +500,31 @@ test('document-level and unaddressable refusals apply to insertion just like edi
     '</linearGradient></defs></svg>'
   assert.equal(codeOf(() => svgGradientStopInsertPatch(rawMarkup, { gradientId: 'g', index: 1 })),
     'unsupported-style')
+})
+
+
+test('gradient geometry edits an exact value, inserts missing coordinates and undoes precisely', () => {
+  const x2=svgGradientGeometryPatch(SVG,{gradientId:'sky',attribute:'x2',value:'1'})
+  const edited=apply(SVG,[x2])
+  assert.equal(edited.ok,true)
+  assert.equal(edited.source,SVG.replace('x2="0"','x2="1"'))
+  assert.equal(apply(edited.source,edited.inverse).source,SVG)
+  const fy=svgGradientGeometryPatch(SVG,{gradientId:'glow',attribute:'cy',value:'65%'})
+  const radial=apply(SVG,[fy])
+  assert.equal(radial.ok,true)
+  assert.equal(radial.source,SVG.replace('cy="50%"','cy="65%"'))
+  assert.equal(apply(radial.source,radial.inverse).source,SVG)
+  const insert=svgGradientGeometryPatch(SVG,{gradientId:'glow',attribute:'r',value:'70%'})
+  const inserted=apply(SVG,[insert])
+  assert.equal(inserted.ok,true)
+  assert.equal(inserted.source,SVG.replace('r="50%"','r="70%"'))
+  assert.equal(apply(inserted.source,inserted.inverse).source,SVG)
+  for(const [request,expected] of [
+    [{gradientId:'sky',attribute:'cx',value:'10%'},'invalid-target'],
+    [{gradientId:'sky',attribute:'x1',value:'calc(1px)'},'invalid-value'],
+    [{gradientId:'glow',attribute:'r',value:'-2'},'invalid-value'],
+    [{gradientId:'inherited',attribute:'x1',value:'1'},'inherited-gradient'],
+  ]) {
+    assert.throws(()=>svgGradientGeometryPatch(SVG,request),e=>e?.code===expected)
+  }
 })

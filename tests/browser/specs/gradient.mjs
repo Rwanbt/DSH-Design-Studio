@@ -372,3 +372,31 @@ export const gradientCreateSpec = {
     assert.equal(applies(),2,'Undo is one reverse Host write')
   },
 }
+
+
+export const gradientGeometrySpec = {
+  name: 'gradient: editing the native linear direction changes one value and Undo restores the source',
+  async run({page,harness,assert}) {
+    const applies=countApplies(page)
+    await harness.write('gradient-direction.svg',GRADIENT_SVG)
+    await openWorkspaceFile(page,'gradient-direction.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Select layer rect #panel',exact:true}).click()
+    await openGradientSection(page,'sky')
+    const x2=page.getByRole('textbox',{name:'Gradient x2'})
+    assert.equal(await x2.inputValue(),'0','the inspector reads the original x2')
+    assert.equal(applies(),0,'opening geometry never writes')
+    await x2.fill('1')
+    await x2.press('Enter')
+    const updated=await waitForDisk(harness,'gradient-direction.svg',
+      t=>t.includes('<linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">'),
+      {label:'native gradient direction'})
+    assert.equal(updated,GRADIENT_SVG.replace('x2="0" y2="1"','x2="1" y2="1"'))
+    assert.equal(applies(),1,'one coordinate update is one exact Host write')
+    await page.waitForFunction(()=>document.querySelector('[aria-label="Gradient x2"]')?.value==='1')
+    await page.waitForFunction(()=>document.querySelector('[aria-label="Undo saved edit"]')?.disabled===false)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await waitForDisk(harness,'gradient-direction.svg',t=>t===GRADIENT_SVG,{label:'undo gradient direction'})
+    assert.equal(await harness.read('gradient-direction.svg'),GRADIENT_SVG)
+    assert.equal(applies(),2,'Undo is one reverse write')
+  },
+}

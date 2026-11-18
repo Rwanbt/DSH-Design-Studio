@@ -3665,6 +3665,19 @@ window.__ModuleLoader__.load({
         }
         void save({kind:'svg-gradient-stop-remove',gradientId:selectedGradient.id,index})
       }
+      function commitGradientGeometry(attribute,next,current) {
+        if(!selectedGradient||!selectedGradient.usable||!editable)return
+        const value=String(next??'').trim()
+        if(!value||value===String(current??'').trim())return
+        if(!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(value)||
+          !Number.isFinite(Number(value.endsWith('%')?value.slice(0,-1):value))||
+          Math.abs(Number(value.endsWith('%')?value.slice(0,-1):value))>100000||
+          (attribute==='r'&&Number(value.endsWith('%')?value.slice(0,-1):value)<0)) {
+          setError('Coordonnée de dégradé refusée : utilisez un nombre ou pourcentage natif valide.')
+          return
+        }
+        void save({kind:'svg-gradient-geometry',gradientId:selectedGradient.id,attribute,value})
+      }
       const gradientInspector=selectedGradient&&h('section',{className:'dsh-studio-ins-block',
         'data-gradient-section':selectedGradient.id,'data-gradient-usable':selectedGradient.usable?'true':'false'},
         h('div',{className:'dsh-studio-ins-head'},'Dégradé',
@@ -3679,6 +3692,18 @@ window.__ModuleLoader__.load({
               border:'1px solid var(--line)',backgroundImage:'linear-gradient(90deg, '+gradientPreviewStops.join(', ')+')'}})
           :h('small',{className:'dsh-studio-hint','data-gradient-preview-unavailable':''},
             'Aperçu non disponible : couleur, opacité ou position native non interprétable.'),
+        selectedGradient.usable&&h('div',{role:'group','aria-label':'Géométrie du dégradé',
+          style:{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:5,margin:'9px 0'}},
+          (selectedGradient.type==='linear'?['x1','y1','x2','y2']:['cx','cy','r']).map(name=>
+            h('label',{key:name,style:{display:'flex',flexDirection:'column',minWidth:0,gap:3}},
+              h('span',{style:{fontSize:10,color:'var(--muted)'}},name),
+              h('input',{type:'text',defaultValue:selectedGradient.geometry?.[name]??'',
+                key:selectedGradient.id+':geom:'+name+':'+(selectedGradient.geometry?.[name]??''),
+                'aria-label':'Gradient '+name,spellCheck:false,style:{...field,height:28,minWidth:0,fontSize:11},
+                title:'Coordonnée SVG native (nombre ou %). Une édition = un Undo.',
+                placeholder:'défaut',disabled:!editable,
+                onBlur:e=>commitGradientGeometry(name,e.target.value,selectedGradient.geometry?.[name]),
+                onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})))),
         !selectedGradient.usable?
           h(React.Fragment,null,
             h('p',{className:'dsh-studio-hint','data-gradient-reason':selectedGradient.reason},

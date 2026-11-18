@@ -434,6 +434,9 @@ export function listSvgGradients(source, options = {}) {
       usable: reason === null,
       reason,
       stops: stopNodes(node).map(describeStop),
+      geometry: Object.fromEntries((node.tag === 'linearGradient'
+        ? ['x1','y1','x2','y2'] : ['cx','cy','r']).map(name =>
+        [name, node.attributes.get(name)?.value ?? null])),
       referencedBy: references.get(node.id) || [],
     })
   }
@@ -620,4 +623,38 @@ export function svgGradientStopRemovePatch(source, { gradientId, index } = {}) {
     fail('invalid-result', 'The stop was not removed from the addressed gradient cleanly; nothing is written')
   }
   return { patch, index }
+}
+
+
+/**
+ * Edit one native gradient geometry attribute, keeping its original notation.
+ * A missing attribute is inserted as one reversible span. Existing attributes
+ * keep their quote style and only their raw value is replaced. No CSS cascade,
+ * gradientTransform or inherited href chain is guessed.
+ */
+export function svgGradientGeometryPatch(source, { gradientId, attribute, value } = {}) {
+  if (typeof source !== 'string') fail('invalid-source','Expected SVG source')
+  if (typeof value !== 'string') fail('invalid-value','A string coordinate is required')
+  const { node } = resolveGradient(source, gradientId)
+  const allowed = node.tag === 'linearGradient'
+    ? new Set(['x1','y1','x2','y2'])
+    : new Set(['cx','cy','r'])
+  if (!allowed.has(attribute)) fail('invalid-target','Unsupported coordinate for this gradient type')
+  const next = value.trim()
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(next)) {
+    fail('invalid-value','Use a finite SVG number or percentage')
+  }
+  const numeric=Number(next.endsWith('%') ? next.slice(0,-1) : next)
+  if (!Number.isFinite(numeric) || Math.abs(numeric)>100000 ||
+      (attribute==='r' && numeric<0)) {
+    fail('invalid-value','Gradient coordinate out of supported range')
+  }
+  const existing=node.attributes.get(attribute)
+  if (existing?.value.includes('&')) fail('encoded-attribute','The coordinate contains an XML entity')
+  if (existing && existing.value.trim()===next) fail('unchanged','Coordinate did not change')
+  if (existing) {
+    return {start:existing.valueStart,end:existing.valueEnd,before:existing.value,after:next}
+  }
+  const at=node.openEnd-(node.selfClosing?2:1)
+  return {start:at,end:at,before:'',after:' '+attribute+'="'+next+'"'}
 }

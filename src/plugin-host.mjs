@@ -4,7 +4,7 @@ import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
-import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch } from './svg-gradient.mjs'
+import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch, svgGradientGeometryPatch } from './svg-gradient.mjs'
 import { planSvgGradientCreation } from './svg-gradient-create.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
@@ -357,6 +357,10 @@ export function createRouteHandler(ctx) {
           const created=planSvgGradientCreation(doc.source,{id:params.id,type:params.type})
           patches=created.patches
           createdId=created.selectedId
+        } else if (params.kind === 'svg-gradient-geometry') {
+          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=[svgGradientGeometryPatch(doc.source,{gradientId:params.gradientId,
+            attribute:params.attribute,value:params.value})]
         } else if (params.kind === 'svg-gradient-stop') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           // One existing stop attribute, one exact value span: the inverse is
