@@ -1,15 +1,18 @@
 /**
- * Level 1 — edit one existing stop attribute of an SVG gradient.
+ * Level 1 — edit, insert and remove the stops of an SVG gradient.
  *
  * Every accepted edit is applied through the real patch engine
- * (`applyNativePatches`), so the value-only span and its byte-exact inverse are
+ * (`applyNativePatches`), so the exact span and its byte-exact inverse are
  * proven, not assumed. Every refusal is typed, returns no patch and never
  * touches a byte; the raw source is compared after each refusal.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
-import { listSvgGradients, svgGradientStopPatch } from '../src/svg-gradient.mjs'
+import {
+  listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch,
+  svgGradientStopRemovePatch, MAX_GRADIENT_STOPS,
+} from '../src/svg-gradient.mjs'
 import { scanSvgDocument } from '../src/svg-document.mjs'
 
 const SVG = `<?xml version="1.0" encoding="UTF-8"?>
@@ -238,4 +241,263 @@ test('stop-color `none` is refused because both engines render it black', () => 
     const patch = svgGradientStopPatch(source, { gradientId: 'g', index: 0, attribute: 'stop-color', value })
     assert.equal(patch.end - patch.start > 0, true)
   }
+})
+
+/** The typed refusal a call throws, or a failing assertion when it accepts. */
+function codeOf(run) {
+  try {
+    run()
+  } catch (error) {
+    return error.code || '(no code)'
+  }
+  assert.fail('expected a typed refusal')
+}
+
+const STOP_LINE = '\n      <stop offset="0.55" stop-color="#405060"/>'
+
+test('inserting at the end adds one complete stop line with a computed, distinct offset', () => {
+  const lastStop = '<stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>'
+  const position = SVG.indexOf(lastStop) + lastStop.length
+  const inserted = svgGradientStopInsertPatch(SVG, { gradientId: 'sky' })
+  assert.equal(inserted.index, 3, 'an omitted index appends at the end')
+  assert.equal(inserted.offset, '77.5%', 'the midpoint of the last two offsets, in the neighbour unit')
+  assert.equal(inserted.color, '#8090a0', 'the colour is copied from the neighbouring stop')
+  assert.equal(inserted.opacity, '0.8', 'the opacity is copied from the neighbouring stop')
+  assert.deepEqual(inserted.patch, {
+    start: position,
+    end: position,
+    before: '',
+    after: '\n      <stop offset="77.5%" stop-color="#8090a0" stop-opacity="0.8"/>',
+  }, 'one span, one insertion, the observed six-space indentation')
+
+  const written = apply(SVG, [inserted.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, SVG.replace(
+    '      <stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>\n',
+    '      <stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>\n' +
+    '      <stop offset="77.5%" stop-color="#8090a0" stop-opacity="0.8"/>\n'))
+  const window = diff(SVG, written.source)
+  assert.equal(window.before, '', 'an insertion must not delete any byte')
+  assert.equal(window.prefix + window.suffix, SVG.length, 'every pre-existing byte is preserved')
+  assert.equal(window.prefix + window.after.length + window.suffix, written.source.length,
+    'the only difference is one contiguous inserted region')
+
+  // Defence in depth: the resulting document is really re-scannable and lists
+  // the new stop at the requested position.
+  const scan = scanSvgDocument(written.source)
+  const sky = listSvgGradients(written.source, { scan }).find((gradient) => gradient.id === 'sky')
+  assert.equal(sky.usable, true)
+  assert.deepEqual(sky.stops.map((stop) => stop.offset), ['0', '0.55', '100%', '77.5%'])
+  assert.equal(sky.stops[3].color, '#8090a0')
+  assert.equal(sky.stops[3].opacity, '0.8')
+  assert.ok(written.source.includes('<!-- gradients keep comments and unrelated bytes -->'))
+
+  assert.equal(apply(written.source, written.inverse).source, SVG,
+    'the inverse removes exactly the inserted span and no other byte')
+})
+
+test('inserting in the middle copies the previous stop and keeps the file indentation', () => {
+  const first = '<stop offset="0" stop-color="#102030" stop-opacity="1"/>'
+  const inserted = svgGradientStopInsertPatch(SVG, { gradientId: 'sky', index: 1 })
+  assert.equal(inserted.index, 1)
+  assert.equal(inserted.offset, '0.275', 'the midpoint of 0 and 0.55')
+  assert.equal(inserted.color, '#102030')
+  assert.equal(inserted.opacity, '1')
+  assert.equal(inserted.patch.after, '\n      <stop offset="0.275" stop-color="#102030" stop-opacity="1"/>')
+  assert.equal(inserted.patch.start, SVG.indexOf(first) + first.length)
+
+  const written = apply(SVG, [inserted.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, SVG.replace(
+    '      ' + first + '\n',
+    '      ' + first + '\n      <stop offset="0.275" stop-color="#102030" stop-opacity="1"/>\n'))
+  const window = diff(SVG, written.source)
+  assert.equal(window.before, '')
+  assert.equal(window.prefix + window.suffix, SVG.length)
+  const [sky] = listSvgGradients(written.source)
+  assert.deepEqual(sky.stops.map((stop) => stop.offset), ['0', '0.275', '0.55', '100%'])
+  // The old stop 1 is now stop 2, untouched, including its absent opacity.
+  assert.equal(sky.stops[2].color, '#405060')
+  assert.equal(sky.stops[2].opacity, null)
+  assert.equal(apply(written.source, written.inverse).source, SVG)
+})
+
+test('inserting before the first stop is one span with a distinct offset', () => {
+  const first = '<stop offset="0" stop-color="#102030" stop-opacity="1"/>'
+  const inserted = svgGradientStopInsertPatch(SVG, { gradientId: 'sky', index: 0 })
+  assert.equal(inserted.index, 0)
+  assert.equal(inserted.offset, '0.275', '0 is taken, so the next gap is used: no duplicate offset')
+  assert.equal(inserted.patch.start, SVG.indexOf(first), 'insertion begins at the first stop')
+  assert.equal(inserted.patch.after, '<stop offset="0.275" stop-color="#102030" stop-opacity="1"/>\n      ')
+  const written = apply(SVG, [inserted.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, SVG.replace(first,
+    '<stop offset="0.275" stop-color="#102030" stop-opacity="1"/>\n      ' + first))
+  assert.equal(apply(written.source, written.inverse).source, SVG)
+})
+
+test('a single-line gradient receives the new stop on that same line', () => {
+  const inline = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#111111"/>' +
+    '<stop offset="1" stop-color="#222222"/></linearGradient></defs></svg>'
+  const inserted = svgGradientStopInsertPatch(inline, { gradientId: 'g', index: 1 })
+  assert.equal(inserted.offset, '0.5')
+  assert.equal(inserted.color, '#111111')
+  assert.equal(inserted.opacity, null, 'an absent opacity is copied as absent, never invented')
+  assert.equal(inserted.patch.after, '<stop offset="0.5" stop-color="#111111"/>')
+  const written = apply(inline, [inserted.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, inline.replace('<stop offset="1" stop-color="#222222"/>',
+    '<stop offset="0.5" stop-color="#111111"/><stop offset="1" stop-color="#222222"/>'))
+  assert.equal(written.source.includes('\n'), false, 'no newline is introduced into an inline gradient')
+  assert.equal(apply(written.source, written.inverse).source, inline)
+})
+
+test('an explicit offset is written exactly as asked unless it duplicates an existing one', () => {
+  const inserted = svgGradientStopInsertPatch(SVG, { gradientId: 'sky', offset: '0.3' })
+  assert.equal(inserted.offset, '0.3')
+  const written = apply(SVG, [inserted.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, SVG.replace(
+    '      <stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>\n',
+    '      <stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>\n' +
+    '      <stop offset="0.3" stop-color="#8090a0" stop-opacity="0.8"/>\n'))
+  // Once written, the same request is a collision: no duplicate can be added.
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(written.source, { gradientId: 'sky', offset: '0.3' })),
+    'offset-collision')
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', offset: '0.55' })),
+    'offset-collision')
+  // `55%` and `0.55` are the same position: units are normalised, not string-compared.
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', offset: '55%' })),
+    'offset-collision')
+})
+
+test('deleting a stop removes its own line span and nothing else, Undo included', () => {
+  const removed = svgGradientStopRemovePatch(SVG, { gradientId: 'sky', index: 1 })
+  assert.equal(removed.index, 1)
+  assert.deepEqual(removed.patch, {
+    start: SVG.indexOf(STOP_LINE),
+    end: SVG.indexOf(STOP_LINE) + STOP_LINE.length,
+    before: STOP_LINE,
+    after: '',
+  }, 'the line indentation goes with the stop, the other lines stay intact')
+  const written = apply(SVG, [removed.patch])
+  assert.equal(written.ok, true)
+  assert.equal(written.source, SVG.replace(STOP_LINE, ''))
+  const window = diff(SVG, written.source)
+  assert.equal(window.after, '', 'a deletion must not add any byte')
+  assert.equal(window.prefix + window.suffix + window.before.length, SVG.length)
+  assert.equal(SVG.length - (window.prefix + window.suffix), STOP_LINE.length,
+    'exactly the stop line span disappeared')
+  const survivingGradients = listSvgGradients(written.source)
+  assert.equal(survivingGradients.find((gradient) => gradient.id === 'sky').stops.length, 2,
+    'the other stops of this gradient are untouched')
+  assert.equal(survivingGradients.find((gradient) => gradient.id === 'glow').stops.length, 2,
+    'stops of the other gradients are untouched')
+  assert.ok(written.source.includes('<stop offset="0" stop-color="#102030" stop-opacity="1"/>'))
+  assert.ok(written.source.includes('<stop offset="100%" stop-color="#8090a0" stop-opacity="0.8"/>'))
+  assert.ok(written.source.includes('<!-- gradients keep comments and unrelated bytes -->'))
+  // The remaining stops are contiguous lines: deleting a line did not leave a
+  // blank line or glue two tags together.
+  assert.ok(written.source.includes('stop-opacity="1"/>\n      <stop offset="100%"'))
+  assert.equal(apply(written.source, written.inverse).source, SVG, 'Undo restores the removed span exactly')
+
+  // An inline stop is removed by its exact element span, without eating the
+  // whitespace that separates its neighbours.
+  const inline = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#111111"/>' +
+    '<stop offset="0.5" stop-color="#333333"/><stop offset="1" stop-color="#222222"/></linearGradient></defs></svg>'
+  const inlineRemoved = svgGradientStopRemovePatch(inline, { gradientId: 'g', index: 1 })
+  assert.equal(inlineRemoved.patch.before, '<stop offset="0.5" stop-color="#333333"/>')
+  assert.equal(apply(inline, [inlineRemoved.patch]).source,
+    '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#111111"/>' +
+    '<stop offset="1" stop-color="#222222"/></linearGradient></defs></svg>')
+})
+
+test('every structural refusal is typed, returns no patch and writes nothing', () => {
+  const oneStop = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="one"><stop offset="0" stop-color="#111111"/></linearGradient></defs></svg>'
+  const fullStops = Array.from({ length: MAX_GRADIENT_STOPS }, (_, index) =>
+    '<stop offset="' + (index / (MAX_GRADIENT_STOPS - 1)).toFixed(4) + '" stop-color="#111111"/>').join('')
+  const full = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="full">' +
+    fullStops + '</linearGradient></defs></svg>'
+  const almostStops = Array.from({ length: MAX_GRADIENT_STOPS - 1 }, (_, index) =>
+    '<stop offset="' + (index / (MAX_GRADIENT_STOPS - 2)).toFixed(4) + '" stop-color="#111111"/>').join('')
+  const almost = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="almost">' +
+    almostStops + '</linearGradient></defs></svg>'
+
+  const cases = [
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', index: 4 }), 'index-out-of-range'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', index: -1 }), 'invalid-target'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', index: 1.5 }), 'invalid-target'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', offset: '150%' }), 'invalid-value'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'sky', offset: '' }), 'invalid-value'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'missing' }), 'unknown-gradient'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'panel' }), 'unknown-gradient'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'inherited' }), 'inherited-gradient'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'styled' }), 'ambiguous-style'],
+    [() => svgGradientStopInsertPatch(SVG, { gradientId: 'encoded' }), 'encoded-attribute'],
+    [() => svgGradientStopInsertPatch(full, { gradientId: 'full' }), 'too-many-stops'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'sky', index: 3 }), 'index-out-of-range'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'sky', index: -1 }), 'invalid-target'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'sky', index: 1.5 }), 'invalid-target'],
+    [() => svgGradientStopRemovePatch(oneStop, { gradientId: 'one', index: 0 }), 'last-stop'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'inherited', index: 0 }), 'inherited-gradient'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'styled', index: 0 }), 'ambiguous-style'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'encoded', index: 0 }), 'encoded-attribute'],
+    [() => svgGradientStopRemovePatch(SVG, { gradientId: 'missing', index: 0 }), 'unknown-gradient'],
+  ]
+  for (const [run, code] of cases) assert.equal(codeOf(run), code, code)
+
+  // The ceiling is exact: 31 stops can grow to 32, the 33rd is refused.
+  const growth = svgGradientStopInsertPatch(almost, { gradientId: 'almost' })
+  const grown = apply(almost, [growth.patch])
+  assert.equal(grown.ok, true)
+  assert.equal((grown.source.match(/<stop\b/g) || []).length, MAX_GRADIENT_STOPS)
+  assert.equal(scanSvgDocument(grown.source).byId.get('almost').children.length, MAX_GRADIENT_STOPS)
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(grown.source, { gradientId: 'almost' })),
+    'too-many-stops')
+})
+
+test('document-level and unaddressable refusals apply to insertion just like editing', () => {
+  const styled = '<svg xmlns="http://www.w3.org/2000/svg"><style>#g stop { stop-color: #00ff00 }</style>' +
+    '<defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000"/></linearGradient></defs>' +
+    '<rect id="r" width="10" height="10" fill="url(#g)"/></svg>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(styled, { gradientId: 'g' })), 'document-styles')
+
+  const encodedId = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="sk&#121;"><stop offset="0" stop-color="#111111"/></linearGradient>' +
+    '<linearGradient id="sky"><stop offset="0" stop-color="#222222"/></linearGradient>' +
+    '</defs><rect id="r" width="10" height="10" fill="url(#sky)"/></svg>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(encodedId, { gradientId: 'sky' })), 'encoded-id')
+
+  const duplicate = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#111111"/></linearGradient>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#222222"/></linearGradient></defs></svg>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(duplicate, { gradientId: 'g' })), 'ambiguous-gradient')
+  assert.equal(codeOf(() => svgGradientStopRemovePatch(duplicate, { gradientId: 'g', index: 0 })),
+    'ambiguous-gradient')
+
+  const unclosed = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+    '<linearGradient id="g"><stop offset="0" stop-color="#111111"/></linearGradient>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(unclosed, { gradientId: 'g' })), 'structure-unavailable')
+
+  // An existing offset this module cannot normalise is refused rather than
+  // guessed: the computed midpoint would be meaningless.
+  const exotic = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g">' +
+    '<stop offset="1e2%" stop-color="#111111"/><stop offset="1" stop-color="#222222"/>' +
+    '</linearGradient></defs></svg>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(exotic, { gradientId: 'g' })), 'unsupported-offset')
+  // Deletion does not need to compute an offset, so it still works there.
+  assert.equal(svgGradientStopRemovePatch(exotic, { gradientId: 'g', index: 1 }).patch.before,
+    '<stop offset="1" stop-color="#222222"/>')
+
+  // A neighbour value that cannot be copied verbatim without risking the quoted
+  // embedding is refused instead of being guessed or escaped blindly.
+  const rawMarkup = '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g">' +
+    '<stop offset="0" stop-color="a<b"/><stop offset="1" stop-color="#222222"/>' +
+    '</linearGradient></defs></svg>'
+  assert.equal(codeOf(() => svgGradientStopInsertPatch(rawMarkup, { gradientId: 'g', index: 1 })),
+    'unsupported-style')
 })

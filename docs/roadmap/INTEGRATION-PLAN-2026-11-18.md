@@ -25,7 +25,7 @@ Le périmètre de release retenu est donc :
 | 2 | Formes SVG, plume, nœuds Bézier, texte et typographie | livré |
 | 3 | Calques : hiérarchie, groupe, visibilité, verrou, renommage, ordre par glisser, alignement, distribution | livré |
 | 4 | Transformations : déplacement, rotation/échelle à pivot réel, matrices imbriquées | livré |
-| 5 | Apparence SVG : remplissage, opacité, **dégradés (arrêts)**, **contours** | dégradés en cours · contours à faire |
+| 5 | Apparence SVG : remplissage, opacité, **dégradés (couleur, opacité, ajout/suppression d'arrêts)**, **contours** | dégradés livrés (1.1 et 1.4) · contours à faire |
 | 6 | HTML visuel : sélection dans l'aperçu, texte, attributs, classes, presets Flex/Grid, aperçu responsive borné | livré |
 | 7 | CSS : règles, sélecteurs, variables, **une déclaration dans un `@media` simple** | livré |
 | 8 | Sécurité des aperçus (iframe inerte, CSP, sandbox) | livré, mesuré en navigateur |
@@ -60,7 +60,30 @@ indépendante, gates niveau 1/2, puis commit atomique sur `dev`.
 | 1.1 | **Arrêts de dégradé** — livré : couleur et opacité d'un arrêt existant ; `offset` supporté par module/Host mais non exposé ; refus explicites (hérité par `href`, `style=`, feuille de style du document, id encodé, entités, hors bornes, `none`) | — | module + route + specs navigateur ; octets exacts, 1 écriture, Undo exact |
 | 1.2 | **Contours** : `stroke`, `stroke-width`, `stroke-opacity`, `stroke-linecap`, `stroke-linejoin`, `stroke-dasharray` borné ; panneau « Contour » réellement actif ou refusé avec raison | 1.1 | idem |
 | 1.3 | **Opacité de remplissage** distincte de l'opacité globale (`fill-opacity`) | 1.2 | idem |
-| 1.4 | **Arrêts ajoutés/supprimés** (structure du `<defs>`) — seulement si 1.1 est stable | 1.1 | patch réversible, refus si le `<defs>` n'est pas structurable |
+| 1.4 | **Arrêts ajoutés/supprimés** — livré : un `<stop>` complet inséré à l'index demandé ou en fin (style du voisin, offset distinct calculé, indentation observée) et un span exact retiré (indentation de ligne comprise) ; **un patch, un Undo** chacun ; document re-scanné, plafond 32, refus du dernier arrêt et de toutes les raisons 1.1 ; panneau « Ajouter un arrêt » / « Supprimer l'arrêt N » ([ADR-033](../adr/ADR-033-GRADIENT-STOP-EDITING.md)) | 1.1 | patch réversible, refus si le document n'est pas structurable ; octets exacts, 1 écriture, Undo exact |
+
+> **1.4 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Module
+> `svgGradientStopInsertPatch` / `svgGradientStopRemovePatch` (Host :
+> `svg-gradient-stop-add`, `svg-gradient-stop-remove`), un seul span et donc un
+> seul Undo par geste. L'ajout copie couleur/opacité du voisin, calcule un offset
+> distinct dans l'unité du fichier (`50%` ≡ `0.5`, jamais de doublon) et respecte
+> l'indentation ou la ligne unique du contenu ; la suppression retire le span
+> exact de l'arrêt, avec son saut de ligne et son indentation quand il occupe sa
+> ligne seule, et refuse le dernier arrêt. Toute insertion/retrait est re-scanné
+> par `scanSvgDocument` et refusé `invalid-result` si le document ne parse plus
+> ou si le nombre d'arrêts n'a pas bougé d'exactement ±1. Côté client, « Ajouter
+> un arrêt » et « Supprimer l'arrêt N » (N = numéro 1-based affiché) sont
+> désactivés sans requête si le document est occupé/modifié, si le dernier arrêt
+> est visé ou si le plafond de 32 est atteint. Preuves : `npm run check`
+> **613/613 PASS** (10 tests ajoutés : 8 module, 2 routes réelles) ; navigateur
+> Chromium 145 + Firefox 146, `--grep=gradient:` → **12 PASS / 0 FAIL / 0
+> NOT_RUN** (6 specs, **76 vérifications par moteur**, dont 20 pour l'ajout et 14
+> pour la suppression) ; non-régression ciblée `--grep=inspector:` → **4 PASS /
+> 0 FAIL**. Limites : l'ajout respecte la position documentaire, pas l'ordre des
+> offsets (un ajout en fin sur `0, 0.55, 100%` reçoit `77.5%`) ; pas de
+> réordonnancement, pas d'édition d'offset dans l'UI, pas de vérification des
+> références à l'`id` d'un arrêt supprimé, et niveau 3 (`test:dsh`/Desktop)
+> **NOT_RUN**.
 
 Sortie de vague : tout dessin SVG importé peut être retouché (couleur, contour,
 dégradé) sans jamais réécrire les octets voisins.

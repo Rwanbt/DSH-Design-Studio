@@ -2,14 +2,14 @@
 
 **Départ :** `67870f79ef6e2f8f89e64cc3c01e497a1214291a` (`dev` = `main` à l'ouverture)
 **Fin :** `94e0c3c6a47029d46f6eca644c8ce764c5e4f1a1` (`dev`), `main` **inchangée** à `67870f7`
-**Commits sur `dev` :** 51 · **ADRs ajoutés :** 029, 030, 031, 032, 033, 034, 035
+**Commits sur `dev` :** 52 · **ADRs ajoutés :** 029, 030, 031, 032, 033, 034, 035
 
 ## 1. Résultats exacts
 
 | Niveau | Commande | Résultat au dernier commit mesuré |
 |---|---|---|
-| 1 | `npm run check` | **603 PASS / 0 FAIL / 0 SKIP**, code 0, Linux x64, Node v24.19.0 |
-| 2 | `npm run test:browser` | **220 PASS / 0 FAIL / 0 NOT_RUN** — 110 specs × Chromium 145.0.7632.6 + Firefox 146.0.1 |
+| 1 | `npm run check` | **613 PASS / 0 FAIL / 0 SKIP**, code 0, Linux x64, Node v24.19.0 |
+| 2 | `npm run test:browser` | **226 PASS / 0 FAIL / 0 NOT_RUN** — 113 specs × Chromium 145.0.7632.6 + Firefox 146.0.1 |
 | 2 bis | `npm run benchmark` | exécuté, rapport `docs/operations/benchmarks/2026-11-18-engine.json`, aussi en CI |
 | 3 | `npm run test:dsh` (Web, sans IA) | **30 PASS / 0 FAIL / 6 NOT_RUN**, code 0, profil jetable |
 | 3 | Desktop (Electron) | **NOT_RUN** — voir §5 |
@@ -20,7 +20,7 @@ benchmark). Windows : 2 `SKIP` documentés (pas de fsync de répertoire).
 ## 2. Ce qui a été livré
 
 ### Vague 1 — apparence SVG
-- **Arrêts de dégradé** : couleur et opacité par arrêt, un seul patch, refus typés
+- **Arrêts de dégradé** : couleur et opacité par arrêt, **ajout et suppression** d'un arrêt (un span, un Undo), un seul patch, refus typés
   (`document-styles`, `encoded-id`, `none`, `inherited-gradient`, `ambiguous-style`,
   `no-stops`, `index-out-of-range`, `unchanged`).
 - **Contours** : `stroke`, `stroke-width`, `stroke-opacity`, `stroke-linecap`,

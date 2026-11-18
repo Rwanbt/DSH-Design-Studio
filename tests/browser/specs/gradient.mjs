@@ -144,6 +144,138 @@ export const gradientInheritedReadOnlySpec = {
   },
 }
 
+const SOLO_SVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120">
+  <defs>
+    <linearGradient id="solo">
+      <stop offset="0" stop-color="#102030"/>
+    </linearGradient>
+  </defs>
+  <rect id="solo-panel" x="10" y="10" width="80" height="60" fill="url(#solo)"/>
+</svg>
+`
+
+export const gradientAddStopSpec = {
+  name: 'gradient: adding a stop inserts one complete stop line, writes once and Undo restores the bytes',
+  async run({ page, harness, assert }) {
+    const applies = countApplies(page)
+    await harness.write('ajout.svg', GRADIENT_SVG)
+    await openWorkspaceFile(page, 'ajout.svg', { expect: 'svg' })
+
+    await page.getByRole('button', { name: 'Select layer rect #panel', exact: true }).click()
+    const section = await openGradientSection(page, 'sky')
+    assert.ok((await section.innerText()).includes('3 arrêt(s)'), 'the panel starts from the three file stops')
+    const add = page.getByRole('button', { name: 'Ajouter un arrêt', exact: true })
+    assert.equal(await add.isDisabled(), false, 'adding is available on a writable gradient')
+    assert.equal(await harness.read('ajout.svg'), GRADIENT_SVG, 'rendering the section never writes')
+    assert.equal(applies(), 0, 'rendering the section never calls the Host')
+
+    await add.click()
+    const withStop = await waitForDisk(harness, 'ajout.svg',
+      (text) => (text.match(/<stop\b/g) || []).length === 4, { label: 'added stop' })
+
+    // Exactly one new line, every original line preserved in order: one span.
+    const beforeLines = GRADIENT_SVG.split('\n')
+    const afterLines = withStop.split('\n')
+    assert.equal(afterLines.length, beforeLines.length + 1, 'exactly one line was added')
+    const addedAt = afterLines.findIndex((line, index) => line !== beforeLines[index])
+    assert.equal(addedAt > 0, true, 'the added line is found')
+    assert.deepEqual(afterLines.filter((_, index) => index !== addedAt), beforeLines,
+      'every original line is still present, in the same order')
+    assert.match(afterLines[addedAt],
+      /^ {6}<stop offset="[^"]+" stop-color="#8090a0" stop-opacity="0.8"\/>$/,
+      'the inserted span is one complete stop with the neighbouring style and the file indentation')
+    const window = assertSingleDifferingRange(assert, GRADIENT_SVG, withStop, 'added stop')
+    assert.equal(window.before, '', 'adding a stop deletes no byte')
+
+    // The computed offset duplicates no existing one, and the panel count,
+    // colour, offset and delete target all resynchronise from disk.
+    const offsets = [...withStop.matchAll(/offset="([^"]+)"/g)].map((match) => match[1])
+    assert.equal(offsets.length, 4)
+    assert.equal(new Set(offsets).size, 4, 'the new offset duplicates no existing offset')
+    assert.equal(applies(), 1, 'one added stop is exactly one Host write')
+    await page.waitForFunction(() =>
+      document.querySelector('[data-gradient-meta]')?.textContent.includes('4 arrêt(s)'))
+    const newStop = page.locator('[data-gradient-stop="3"]')
+    assert.equal(await newStop.count(), 1, 'the panel lists the new fourth stop')
+    assert.equal(await newStop.locator('[data-gradient-offset]').innerText(),
+      'offset ' + offsets[3], 'the displayed offset is the one written to disk')
+    assert.equal(await page.getByRole('button', { name: 'Supprimer l’arrêt 4', exact: true }).count(), 1,
+      'the delete control targets the new stop by its position')
+
+    // Undo is byte-exact and resynchronises the panel again.
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForDisk(harness, 'ajout.svg', (text) => text === GRADIENT_SVG, { label: 'undo added stop' })
+    assert.equal(await harness.read('ajout.svg'), GRADIENT_SVG, 'Undo restores the original bytes exactly')
+    assert.equal(applies(), 2, 'Undo is exactly one more Host write')
+    await page.waitForFunction(() =>
+      document.querySelector('[data-gradient-meta]')?.textContent.includes('3 arrêt(s)'))
+  },
+}
+
+export const gradientRemoveStopSpec = {
+  name: 'gradient: removing a stop deletes exactly its line span and Undo restores the bytes',
+  async run({ page, harness, assert }) {
+    const applies = countApplies(page)
+    await harness.write('retrait.svg', GRADIENT_SVG)
+    await openWorkspaceFile(page, 'retrait.svg', { expect: 'svg' })
+
+    await page.getByRole('button', { name: 'Select layer rect #panel', exact: true }).click()
+    const section = await openGradientSection(page, 'sky')
+    assert.ok((await section.innerText()).includes('3 arrêt(s)'))
+    assert.equal(await page.getByRole('button', { name: 'Supprimer l’arrêt 3', exact: true }).count(), 1,
+      'the third stop has its own delete control')
+
+    // N is the 1-based number shown in the panel; stop 2 is the 0.55 one.
+    await page.getByRole('button', { name: 'Supprimer l’arrêt 2', exact: true }).click()
+    const withoutStop = await waitForDisk(harness, 'retrait.svg',
+      (text) => !text.includes('stop-color="#405060"'), { label: 'removed stop' })
+    const expected = GRADIENT_SVG.replace('\n      <stop offset="0.55" stop-color="#405060"/>', '')
+    assert.equal(withoutStop, expected, 'exactly the targeted stop line disappeared')
+    const window = assertSingleDifferingRange(assert, GRADIENT_SVG, withoutStop, 'removed stop')
+    assert.equal(window.after, '', 'removing a stop adds no byte')
+    assert.ok(withoutStop.includes('stop-color="#102030"'), 'the first stop is intact')
+    assert.ok(withoutStop.includes('stop-color="#8090a0" stop-opacity="0.8"'), 'the last stop is intact')
+    assert.equal(applies(), 1, 'one removed stop is exactly one Host write')
+
+    // The remaining stops and their delete targets are renumbered correctly.
+    await page.waitForFunction(() =>
+      document.querySelector('[data-gradient-meta]')?.textContent.includes('2 arrêt(s)'))
+    assert.equal(await page.getByRole('button', { name: 'Supprimer l’arrêt 2', exact: true }).count(), 1)
+    assert.equal(await page.getByRole('button', { name: 'Supprimer l’arrêt 3', exact: true }).count(), 0,
+      'no stale delete control survives the reload')
+
+    await page.waitForFunction(() => document.querySelector('[aria-label="Undo saved edit"]')?.disabled === false)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForDisk(harness, 'retrait.svg', (text) => text === GRADIENT_SVG, { label: 'undo removed stop' })
+    assert.equal(await harness.read('retrait.svg'), GRADIENT_SVG, 'Undo restores the removed line exactly')
+    assert.equal(applies(), 2, 'Undo is exactly one more Host write')
+  },
+}
+
+export const gradientLastStopRefusalSpec = {
+  name: 'gradient: the last remaining stop cannot be removed and no request is sent',
+  async run({ page, harness, assert }) {
+    const applies = countApplies(page)
+    await harness.write('dernier.svg', SOLO_SVG)
+    await openWorkspaceFile(page, 'dernier.svg', { expect: 'svg' })
+
+    await page.getByRole('button', { name: 'Select layer rect #solo-panel', exact: true }).click()
+    const section = await openGradientSection(page, 'solo')
+    assert.ok((await section.innerText()).includes('1 arrêt(s)'))
+    const remove = page.getByRole('button', { name: 'Supprimer l’arrêt 1', exact: true })
+    assert.equal(await remove.isDisabled(), true,
+      'the delete control is inactive for the last remaining stop')
+    assert.match(String(await remove.getAttribute('title')), /Dernier arrêt/,
+      'the visible refusal reason names the last stop')
+    assert.equal(await page.getByRole('button', { name: 'Ajouter un arrêt', exact: true }).isDisabled(), false,
+      'adding a second stop stays available')
+    assert.equal(await harness.read('dernier.svg'), SOLO_SVG, 'the refused removal writes nothing')
+    assert.equal(applies(), 0, 'the refused removal sends no Host request')
+  },
+}
+
 export const gradientNotReferencedSpec = {
   name: 'gradient: a fill that is not a resolvable url(#id) shows no gradient section',
   async run({ page, harness, assert }) {

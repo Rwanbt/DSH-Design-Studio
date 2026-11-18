@@ -4,7 +4,7 @@ import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
-import { listSvgGradients, svgGradientStopPatch } from './svg-gradient.mjs'
+import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch } from './svg-gradient.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
@@ -358,6 +358,20 @@ export function createRouteHandler(ctx) {
           // ever inserted or removed by this operation.
           patches=[svgGradientStopPatch(doc.source,{gradientId:params.gradientId,index:params.index,
             attribute:params.attribute,value:params.value})]
+        } else if (params.kind === 'svg-gradient-stop-add') {
+          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          // One complete <stop> inserted as one span inside the addressed
+          // gradient: a single patch, a single inverse, a single Undo step.
+          // An omitted index means "append at the end"; an explicit offset is
+          // accepted only when it does not duplicate an existing position.
+          patches=[svgGradientStopInsertPatch(doc.source,{gradientId:params.gradientId,
+            index:params.index,offset:params.offset}).patch]
+        } else if (params.kind === 'svg-gradient-stop-remove') {
+          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
+          // One stop span removed, including its own line indentation when it
+          // sits alone on its line; no other stop and no other byte moves.
+          patches=[svgGradientStopRemovePatch(doc.source,{gradientId:params.gradientId,
+            index:params.index}).patch]
         } else if (params.kind === 'svg-text') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTextPatch(doc.source,{id:params.id,value:params.value})]

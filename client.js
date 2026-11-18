@@ -3583,6 +3583,28 @@ window.__ModuleLoader__.load({
         // One attribute value, one exact patch, one Undo step.
         void save({kind:'svg-gradient-stop',gradientId:selectedGradient.id,index,attribute,value})
       }
+      // Structure of the gradient: one complete <stop> inserted or removed as a
+      // single exact span, so Undo restores the bytes. Every precondition is
+      // re-checked by the Host; these guards only avoid a request that the Host
+      // would refuse anyway (last stop, 32-stop ceiling, busy/dirty document).
+      const GRADIENT_MAX_STOPS=32
+      function addGradientStop() {
+        if(!selectedGradient||!selectedGradient.usable||!editable)return
+        if(selectedGradient.stops.length>=GRADIENT_MAX_STOPS) {
+          setError('Maximum '+GRADIENT_MAX_STOPS+' arrêts par dégradé : aucun arrêt ajouté.')
+          return
+        }
+        void save({kind:'svg-gradient-stop-add',gradientId:selectedGradient.id,
+          index:selectedGradient.stops.length})
+      }
+      function removeGradientStop(index) {
+        if(!selectedGradient||!selectedGradient.usable||!editable)return
+        if(selectedGradient.stops.length<=1) {
+          setError('Impossible de supprimer le dernier arrêt : un dégradé sans arrêt n’a plus de sens.')
+          return
+        }
+        void save({kind:'svg-gradient-stop-remove',gradientId:selectedGradient.id,index})
+      }
       const gradientInspector=selectedGradient&&h('section',{className:'dsh-studio-ins-block',
         'data-gradient-section':selectedGradient.id,'data-gradient-usable':selectedGradient.usable?'true':'false'},
         h('div',{className:'dsh-studio-ins-head'},'Dégradé',
@@ -3599,7 +3621,7 @@ window.__ModuleLoader__.load({
                 ' · opacité '+(stop.opacity??'1')))))
           :h(React.Fragment,null,
             selectedGradient.stops.map(stop=>h('div',{key:stop.index,'data-gradient-stop':stop.index,
-              style:{display:'grid',gridTemplateColumns:'auto 1fr 64px',gap:6,alignItems:'center',marginTop:4}},
+              style:{display:'grid',gridTemplateColumns:'auto 1fr 64px auto',gap:6,alignItems:'center',marginTop:4}},
               h('span',{style:{display:'flex',flexDirection:'column',minWidth:0}},
                 h('span',{style:{fontSize:11,color:ACCENT}},'Arrêt '+(stop.index+1)),
                 h('small',{style:{fontSize:10,color:'var(--muted)'},'data-gradient-offset':stop.offset??''},
@@ -3638,7 +3660,26 @@ window.__ModuleLoader__.load({
                   title:'Opacité native de l’arrêt (0..1)',
                   disabled:!editable||!stop.opacitySpan,
                   onBlur:e=>commitGradientStop(stop.index,'stop-opacity',e.target.value,stop.opacity),
-                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}))),
+                  onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}}),
+              // N is the 1-based number shown in the panel ("Arrêt N"); the
+              // request carries the 0-based `stop.index` the Host expects.
+              h('button',{type:'button','aria-label':'Supprimer l’arrêt '+(stop.index+1),
+                'data-gradient-remove':stop.index,
+                title:selectedGradient.stops.length<=1
+                  ?'Dernier arrêt : suppression refusée, un dégradé sans arrêt n’a plus de sens'
+                  :'Supprimer cet arrêt (span exact) · 1 écriture, Undo exact',
+                disabled:!editable||selectedGradient.stops.length<=1,
+                style:{...button,width:26,height:30,padding:0,fontSize:12,flex:'0 0 auto'},
+                onClick:()=>void removeGradientStop(stop.index)},'✕'))),
+            h('div',{style:{display:'flex',alignItems:'center',gap:8,marginTop:8}},
+              h('button',{type:'button','aria-label':'Ajouter un arrêt','data-gradient-add':'',
+                disabled:!editable||selectedGradient.stops.length>=GRADIENT_MAX_STOPS,
+                title:selectedGradient.stops.length>=GRADIENT_MAX_STOPS
+                  ?'Maximum '+GRADIENT_MAX_STOPS+' arrêts atteint · aucun ajout possible'
+                  :'Insère un arrêt complet (couleur/opacité de l’arrêt voisin, offset distinct) · 1 écriture, Undo exact',
+                style:{...button,height:30},onClick:()=>void addGradientStop()},
+              '＋ Ajouter un arrêt'),
+              h('small',{className:'dsh-studio-hint',style:{margin:0}},GRADIENT_MAX_STOPS+' max · 1 écriture')),
             selectedGradient.stops.some(stop=>!stop.colorSpan||!stop.opacitySpan)&&
               h('p',{className:'dsh-studio-hint'},'Attribut absent sur un arrêt : cette tranche ne crée pas d’attribut.'),
             h('p',{className:'dsh-studio-hint'},'Une modification = une écriture exacte, annulable (Undo).')))

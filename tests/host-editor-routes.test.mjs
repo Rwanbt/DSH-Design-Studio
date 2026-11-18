@@ -476,6 +476,101 @@ test('svg-gradient-stop refuses unknown, inherited, absent, invalid and unchange
   } finally { await host.close() }
 })
 
+test('svg-gradient-stop-add and svg-gradient-stop-remove write one exact span each and undo exactly', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradient.svg', GRADIENT_SVG)
+    const opened = await host.open('gradient.svg')
+    const added = await host.apply({ ...host.revision(opened), kind: 'svg-gradient-stop-add',
+      gradientId: 'sky' })
+    assert.equal(added.status, 200, JSON.stringify(added.body))
+    assert.equal(added.body.patches.length, 1, 'one added stop is exactly one patch')
+    const withStop = GRADIENT_SVG.replace(
+      '      <stop offset="1" stop-color="#405060"/>\n',
+      '      <stop offset="1" stop-color="#405060"/>\n      <stop offset="0.5" stop-color="#405060"/>\n')
+    assert.equal(await host.read('gradient.svg'), withStop, 'one complete stop line is inserted')
+    const reopened = await host.open('gradient.svg')
+    const sky = reopened.gradients.find((gradient) => gradient.id === 'sky')
+    assert.equal(sky.stops.length, 3, 'the document payload resynchronises the stop count')
+    assert.deepEqual(sky.stops.map((stop) => stop.offset), ['0', '1', '0.5'])
+
+    const undoneAdd = await host.apply({ file: 'gradient.svg', baseHash: added.body.result.hash,
+      baseIdentity: added.body.result.identity, kind: 'patches', patches: added.body.result.inverse })
+    assert.equal(undoneAdd.status, 200, JSON.stringify(undoneAdd.body))
+    assert.equal(await host.read('gradient.svg'), GRADIENT_SVG, 'the insertion inverse restores the bytes')
+
+    const openedAgain = await host.open('gradient.svg')
+    const removed = await host.apply({ ...host.revision(openedAgain), kind: 'svg-gradient-stop-remove',
+      gradientId: 'sky', index: 1 })
+    assert.equal(removed.status, 200, JSON.stringify(removed.body))
+    assert.equal(removed.body.patches.length, 1, 'one removed stop is exactly one patch')
+    assert.equal(await host.read('gradient.svg'),
+      GRADIENT_SVG.replace('\n      <stop offset="1" stop-color="#405060"/>', ''),
+      'the stop line and its indentation disappear, every other byte stays')
+    const afterRemoval = await host.open('gradient.svg')
+    const remaining = afterRemoval.gradients.find((gradient) => gradient.id === 'sky')
+    assert.deepEqual(remaining.stops.map((stop) => stop.offset), ['0'])
+    assert.equal(remaining.usable, true)
+
+    const undoneRemove = await host.apply({ file: 'gradient.svg', baseHash: removed.body.result.hash,
+      baseIdentity: removed.body.result.identity, kind: 'patches', patches: removed.body.result.inverse })
+    assert.equal(undoneRemove.status, 200, JSON.stringify(undoneRemove.body))
+    assert.equal(await host.read('gradient.svg'), GRADIENT_SVG, 'the removal inverse restores the bytes')
+  } finally { await host.close() }
+})
+
+test('the structural gradient routes refuse typed and never write', async () => {
+  const host = await mount()
+  try {
+    await host.write('gradient.svg', GRADIENT_SVG)
+    const opened = await host.open('gradient.svg')
+    const cases = [
+      [{ kind: 'svg-gradient-stop-add', gradientId: 'sky', index: 9 }, 'index-out-of-range'],
+      [{ kind: 'svg-gradient-stop-add', gradientId: 'sky', offset: '1' }, 'offset-collision'],
+      [{ kind: 'svg-gradient-stop-add', gradientId: 'sky', offset: '100%' }, 'offset-collision'],
+      [{ kind: 'svg-gradient-stop-add', gradientId: 'inherited' }, 'inherited-gradient'],
+      [{ kind: 'svg-gradient-stop-add', gradientId: 'nope' }, 'unknown-gradient'],
+      [{ kind: 'svg-gradient-stop-remove', gradientId: 'sky', index: 5 }, 'index-out-of-range'],
+      [{ kind: 'svg-gradient-stop-remove', gradientId: 'inherited', index: 0 }, 'inherited-gradient'],
+    ]
+    for (const [request, code] of cases) {
+      const response = await host.apply({ ...host.revision(opened), ...request })
+      assert.equal(response.status, 400, JSON.stringify(response.body))
+      assert.equal(response.body.error, code, JSON.stringify(request))
+      assert.equal(await host.read('gradient.svg'), GRADIENT_SVG, JSON.stringify(request) + ' writes nothing')
+    }
+
+    // The last remaining stop is refused explicitly, at the real route.
+    await host.write('solo.svg', '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+      '<linearGradient id="solo"><stop offset="0" stop-color="#111111"/></linearGradient></defs></svg>\n')
+    const solo = await host.open('solo.svg')
+    const soloBefore = await host.read('solo.svg')
+    const last = await host.apply({ ...host.revision(solo), kind: 'svg-gradient-stop-remove',
+      gradientId: 'solo', index: 0 })
+    assert.equal(last.status, 400, JSON.stringify(last.body))
+    assert.equal(last.body.error, 'last-stop')
+    assert.match(last.body.message, /without stops/)
+    assert.equal(await host.read('solo.svg'), soloBefore, 'the refused removal writes nothing')
+
+    // Same revision contract as every other write kind.
+    const missing = await host.call('POST', '/design-studio-native/apply',
+      { sessionId: 's1', file: 'gradient.svg', baseHash: opened.document.hash,
+        kind: 'svg-gradient-stop-add', gradientId: 'sky' })
+    assert.equal(missing.status, 428, JSON.stringify(missing.body))
+    assert.equal(missing.body.error, 'missing-revision')
+
+    // A CSS document is not an SVG gradient target, for both new kinds.
+    await host.write('styles.css', 'h1 { color: #202124; }\n')
+    const css = await host.open('styles.css')
+    for (const kind of ['svg-gradient-stop-add', 'svg-gradient-stop-remove']) {
+      const refused = await host.apply({ ...host.revision(css), kind, gradientId: 'sky', index: 0 })
+      assert.equal(refused.status, 400, JSON.stringify(refused.body))
+      assert.equal(refused.body.error, 'unsupported-format')
+      assert.equal(await host.read('styles.css'), 'h1 { color: #202124; }\n')
+    }
+  } finally { await host.close() }
+})
+
 test('svg-gradient-stop keeps the revision contract and refuses non-SVG documents', async () => {
   const host = await mount()
   try {
