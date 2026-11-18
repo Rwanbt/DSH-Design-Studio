@@ -57,22 +57,35 @@ export const refusedWriteSpec = {
 }
 
 export const unsavedSourceGuardSpec = {
-  name: 'safety: unsaved source text blocks opening another file instead of losing it',
+  name: 'safety: unsaved source text survives opening another file, which gets its own tab',
   async run({ page, harness, assert }) {
     await harness.write('a.svg', SVG_DOCUMENT)
     await harness.write('b.svg', SVG_DOCUMENT.replace(/600/g, '640'))
     await openWorkspaceFile(page, 'a.svg', { expect: 'svg' })
     await page.locator('summary').filter({ hasText: 'Code source natif' }).click()
-    await page.locator('textarea').first().fill(SVG_DOCUMENT.replace('Title', 'Edited locally'))
+    const edited = SVG_DOCUMENT.replace('Title', 'Edited locally')
+    await page.locator('textarea').first().fill(edited)
+    const writesBefore = harness.requests.filter((request) => request.path.endsWith('/apply')).length
     await openFileMenu(page)
     await page.getByLabel('Workspace file').fill('b.svg')
     await page.getByRole('button', { name: 'Open', exact: true }).click()
-    await page.waitForTimeout(500)
-    const alertText = await page.getByRole('alert').innerText()
-    assert.match(alertText, /unsaved|save or discard/i,
-      'opening another file with unsaved text must be refused with an explicit message')
-    assert.equal(await page.locator('textarea').first().inputValue(),
-      SVG_DOCUMENT.replace('Title', 'Edited locally'), 'the unsaved text is preserved')
+    await page.waitForFunction(() =>
+      document.querySelector('.dsh-studio-stage-top')?.innerText.includes('b.svg'), null, { timeout: 20000 })
+
+    // ADR-034: the unsaved draft is neither discarded nor silently written. It
+    // stays in its own tab, and the second document opens beside it.
+    assert.equal(harness.requests.filter((request) => request.path.endsWith('/apply')).length, writesBefore,
+      'opening another document in a new tab must not write')
     assert.equal(await harness.read('a.svg'), SVG_DOCUMENT, 'the workspace file is untouched')
+    assert.equal(await page.getByRole('alert').count(), 0,
+      'a draft kept in its own tab is not an error')
+    const tabs = page.getByRole('tablist', { name: 'Documents ouverts' }).getByRole('tab')
+    assert.equal(await tabs.count(), 2, 'both documents stay open')
+    await page.getByRole('tab', { name: /^a\.svg/ }).click()
+    await page.waitForFunction(() =>
+      document.querySelector('.dsh-studio-stage-top')?.innerText.includes('a.svg'), null, { timeout: 20000 })
+    assert.equal(await page.locator('textarea').first().inputValue(), edited,
+      'the unsaved text is preserved in its own tab')
+    assert.equal(await harness.read('a.svg'), SVG_DOCUMENT)
   },
 }

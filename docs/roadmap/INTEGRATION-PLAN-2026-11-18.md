@@ -40,7 +40,9 @@ Le périmètre de release retenu est donc :
 - Composants/symboles et styles d'objet réutilisables ; variables de design.
 - Opérations booléennes, moteur de filtres, masques complexes.
 - Import Figma/Sketch/AI/PSD ; export PNG/PDF/React/Tailwind.
-- Prototypage (liens entre écrans), planches multiples, onglets multiples.
+- Prototypage (liens entre écrans), planches multiples, onglets d'*artboards*
+  dans un même document (les onglets de **documents**, un fichier par onglet,
+  sont la tranche 3.1 et sont livrés).
 - Cascade CSS calculée, `@container`, breakpoints éditables, CSS de frameworks.
 
 Ces éléments ne seront **jamais** annoncés comme disponibles ; toute mention
@@ -79,10 +81,42 @@ et 2.2 ne sont pas faits, le verdict reste **NO-GO**.
 
 | Tranche | Contenu |
 |---|---|
-| 3.1 | Onglets de documents (plusieurs fichiers ouverts, sans perdre les brouillons) |
+| 3.1 | **Onglets de documents** — livré : plusieurs fichiers ouverts, un état complet par onglet (source, sélection, Undo/Redo, brouillon), changement/fermeture sans écriture, limite de 8 onglets ([ADR-034](../adr/ADR-034-DOCUMENT-TABS.md)) |
 | 3.2 | Planche redimensionnable depuis l'UI (`viewBox`/`width`/`height` explicites) |
 | 3.3 | Export PNG du document courant, sans réécrire la source |
 | 3.4 | Historique local de session (journal de patches) pour la récupération après crash |
+
+> **3.1 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** Le workbench
+> garde jusqu'à **8 onglets de documents** ouverts, chacun avec son état complet :
+> `doc`/`source` (y compris la source non enregistrée), `nodes`, surfaces
+> d'inspecteur, sélection, caméra, `undoStack`/`redoStack` et brouillon de texte.
+> Changer d'onglet, en ouvrir un ou en fermer un n'envoie **aucun `/apply`** ;
+> seule une action explicite enregistre, et `save()` vise toujours le fichier de
+> l'onglet **actif**. La fermeture d'un onglet modifié exige une confirmation
+> (`role="alertdialog"`) qui nomme le chemin ; refuser laisse l'onglet et les
+> octets intacts. Les préconditions de sauvegarde existantes sont conservées
+> (révision périmée, conflit externe, `busy`, `reloadRequired`), et
+> `manageFile()` rend un renommage/suppression cohérent même quand le fichier est
+> ouvert dans un onglet en arrière-plan (chemin suivi, révision relue à
+> l'activation, onglet fermé si le fichier est supprimé). Accessibilité réelle :
+> `tablist`/`tab`, `aria-selected`, `aria-controls` vers un `tabpanel`, nom
+> accessible explicite, flèches/`Home`/`End` pour le focus et `Entrée`/`Espace`
+> pour activer. Preuves : `npm run check` (**591/591 PASS**, dont 7 tests
+> `tests/client-tabs.test.mjs`) ; navigateur Chromium 145 + Firefox 146,
+> `--grep=tab:` → **8 PASS / 0 FAIL** (4 specs, 48 vérifications par moteur),
+> plus **86 PASS / 0 FAIL** sur 43 des 93 specs (`tab:`, `html:`, `css:`,
+> `geometry:`, `graphite:`, `responsive:`, `performance:`, `a11y:`, `landing:`,
+> `create:`, `files:`, `conflict:`, `safety:`), 325 vérifications par moteur ;
+> la spec `responsive:` a révélé que la bande réduisait le canevas au point de
+> rendre l'en-tête d'aperçu HTML inatteignable — corrigé (aperçu ancré en haut
+> et défilable), pas contourné dans le test. Limites honnêtes : la borne
+> est un nombre d'onglets, pas un budget mémoire (fichiers ≤ 8 Mio, historique
+> ≤ 2 Mio × 30 par onglet) ; les onglets ne survivent ni au rechargement ni au
+> changement d'espace de travail ; le dédoublonnage se fait sur le chemin exact ;
+> la bande est dans la colonne canevas, donc masquée en disposition compacte
+> quand le dock affiche « Calques »/« Propriétés » ; pas de `Ctrl+Tab`, pas de
+> réordonnancement, pas de « tout enregistrer » ; suite navigateur complète
+> **non réexécutée** et niveau 3 (`npm run test:dsh`/Desktop) **NOT_RUN**.
 
 > **3.2 — implémentée et vérifiée aux niveaux 1 et 2 (2026-11-18).** La section
 > « Planche » de l'inspecteur affiche la taille réellement déclarée dans le

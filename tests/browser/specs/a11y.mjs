@@ -74,10 +74,15 @@ export const panelsAccessibilitySpec = {
     await page.waitForTimeout(400)
     const tablist = page.getByRole('tablist', { name: 'Mobile editor panels' })
     await tablist.waitFor({ state: 'visible', timeout: 10000 })
-    assert.equal(await tablist.count(), 1, 'the compact layout exposes exactly one tablist')
-    assert.equal(await page.getByRole('tab').count(), 3, 'three panels are exposed as tabs')
+    assert.equal(await tablist.count(), 1, 'the compact layout exposes exactly one mobile tablist')
+    // Document tabs (ADR-034) are a second, independent tablist: scope the
+    // panel assertions to the mobile dock instead of counting every tab page-wide.
+    assert.equal(await tablist.getByRole('tab').count(), 3, 'three panels are exposed as tabs')
+    const documents = page.getByRole('tablist', { name: 'Documents ouverts' })
+    assert.equal(await documents.count(), 1, 'open documents expose their own tablist')
+    assert.equal(await documents.getByRole('tab').count(), 1, 'the open document is one tab')
     for (const panel of ['layers', 'canvas', 'inspector']) {
-      const tab = page.getByRole('tab', { name: `Mobile panel ${panel}` })
+      const tab = tablist.getByRole('tab', { name: `Mobile panel ${panel}` })
       await tab.click()
       assert.equal(await tab.getAttribute('aria-selected'), 'true', `${panel} tab reports aria-selected`)
       const visible = await page.locator(`.dsh-studio-mobile-active`).count()

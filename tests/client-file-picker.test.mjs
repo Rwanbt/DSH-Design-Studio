@@ -124,7 +124,7 @@ test('file picker filter limits visible list without mutating files',async()=>{
   find(app.render(),n=>n.props?.['aria-label']==='Filter design files').props.onChange({target:{value:'layout'}})
   assert.deepEqual(findAll(app.render(),n=>n.props?.['aria-label']?.startsWith('Open file ')).map(n=>n.props['aria-label']),['Open file pages/layout.html'])
 })
-test('unsaved source changes prevent switching files through picker',async()=>{
+test('unsaved source changes survive opening another file in a new tab',async()=>{
   const app=await harness()
   const open=find(app.render(),n=>n.type==='button'&&n.children?.includes('Open'))
   await open.props.onClick()
@@ -132,7 +132,26 @@ test('unsaved source changes prevent switching files through picker',async()=>{
   source.props.onChange({target:{value:'<svg id="edited"/>'}})
   await find(app.render(),n=>n.props?.['aria-label']==='Browse workspace design files').props.onClick();await settle()
   await find(app.render(),n=>n.props?.['aria-label']==='Open file pages/layout.html').props.onClick();await settle()
-  assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/document').length,1)
-  assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Workspace file').props.value,'design.svg')
-  assert.ok(find(app.render(),n=>n.props.role==='alert'),'Unsaved source changes need a visible error')
+
+  // Opening a second document no longer refuses (or discards) the unsaved one:
+  // it gets its own tab, and the only reads are /document calls.
+  const docs=app.requests.filter(x=>x.pathname==='/design-studio-native/document')
+  assert.equal(docs.length,2,'each open document is read exactly once')
+  const readFile=(entry)=>new URL('https://x'+entry.search).searchParams.get('file')
+  assert.equal(readFile(docs[0]),'design.svg')
+  assert.equal(readFile(docs[1]),'pages/layout.html')
+  assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/apply').length,0,
+    'opening another file must never write')
+  assert.equal(find(app.render(),n=>n.props?.['aria-label']==='Workspace file').props.value,'pages/layout.html')
+  const tabs=findAll(app.render(),n=>n.props?.role==='tab'&&String(n.props?.id||'').startsWith('doc-tab-'))
+  assert.equal(tabs.length,2,'both documents stay open as tabs')
+  const first=tabs.find(tab=>tab.props['aria-label'].startsWith('design.svg'))
+  assert.ok(first,'the first document keeps its own tab')
+
+  // Returning to it restores the unsaved draft, without reading or writing.
+  await first.props.onClick();await settle()
+  assert.equal(find(app.render(),n=>n.type==='textarea'&&n.props.spellCheck===false).props.value,
+    '<svg id="edited"/>','the unsaved source must survive the round trip')
+  assert.equal(app.requests.filter(x=>x.pathname==='/design-studio-native/document').length,2,
+    'switching tabs is a renderer operation, not a reread')
 })

@@ -36,6 +36,7 @@ import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferen
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
 import { graphiteCreationToolSpec, graphiteDraftSpec, graphiteExportSpec, graphiteOpacitySpec } from './graphite-workflow.mjs'
+import { tabsSwitchSpec, tabsSaveIsolationSpec, tabsCloseConfirmSpec, tabsKeyboardSpec } from './tabs.mjs'
 
 export const specs = [
   mountSpec,
@@ -47,6 +48,10 @@ export const specs = [
   graphiteDraftSpec,
   graphiteExportSpec,
   graphiteOpacitySpec,
+  tabsSwitchSpec,
+  tabsSaveIsolationSpec,
+  tabsCloseConfirmSpec,
+  tabsKeyboardSpec,
   landingSpec,
   landingEmptySpec,
   createSpec,

@@ -6,6 +6,11 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const api = 'design-studio-native'
     const ACCENT='#bda991'
+    // Document tabs (ADR-034). Memory stays bounded on purpose: each open tab
+    // keeps a full native source, its parsed layers and up to 30 undo entries in
+    // the renderer, so past this hard limit the editor refuses a new tab with an
+    // explicit message instead of growing without bound.
+    const MAX_TABS = 8
     const pane = { background:'var(--dsw-alias-bg-base, #202124)', color:'var(--dsw-alias-label-primary, #e8e7e2)', border:'1px solid var(--dsw-alias-border-l1, #37383b)', borderRadius:8, padding:12 }
     const button = { cursor:'pointer', border:'1px solid #44464b', borderRadius:6, padding:'6px 10px', background:'var(--dsw-alias-bg-layer-2, #292b2f)', color:'inherit' }
     const field = { width:'100%', boxSizing:'border-box', borderRadius:6, border:'1px solid #44464b', background:'var(--dsw-alias-bg-layer-2,#27292d)', color:'inherit', padding:'6px 8px' }
@@ -432,6 +437,17 @@ window.__ModuleLoader__.load({
 .dsh-studio-workbench .dsh-studio-footer>span:last-child{margin-left:auto}
 
 .dsh-studio-workbench .dsh-studio-mobile-tabs{display:none}
+/* Document tabs: one row above the canvas, one tab per open document. */
+.dsh-studio-workbench .dsh-studio-doc-tabs{display:flex;align-items:stretch;gap:2px;padding:0 8px;background:#181b20;border-bottom:1px solid var(--line);flex:0 0 auto;min-height:34px;max-height:34px;overflow-x:auto;overflow-y:hidden}
+.dsh-studio-workbench .dsh-studio-doc-tab{display:flex;align-items:center;min-width:0;max-width:240px;border-right:1px solid var(--line);border-top:2px solid transparent;color:var(--muted)}
+.dsh-studio-workbench .dsh-studio-doc-tab.dsh-studio-selected{background:#242830;border-top-color:var(--blue);color:var(--text)}
+.dsh-studio-workbench .dsh-studio-doc-tab>button[role=tab]{display:flex;align-items:center;gap:6px;height:100%;padding:0 8px;font-size:11.5px;color:inherit;min-width:0}
+.dsh-studio-workbench .dsh-studio-doc-tab>button[role=tab] .dsh-studio-doc-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-studio-workbench .dsh-studio-doc-dirty{color:#d8b184;font-size:9px;line-height:1;flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-doc-close{width:20px;height:20px;margin-right:3px;display:grid;place-items:center;border-radius:4px;font-size:14px;line-height:1;color:var(--muted);flex-shrink:0}
+.dsh-studio-workbench .dsh-studio-doc-close:hover:not(:disabled){background:#ffffff14;color:var(--text)}
+.dsh-studio-workbench .dsh-studio-tab-confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:#2a2320;border-bottom:1px solid #6d4a3f;color:#f0e2d6;font-size:11.5px;flex:0 0 auto}
+.dsh-studio-workbench .dsh-studio-tab-confirm code{background:#00000038;padding:1px 5px;border-radius:3px}
 .dsh-studio-workbench .dsh-studio-layout-controls{padding:0!important;border:0!important;background:transparent!important}
 .dsh-studio-workbench .dsh-studio-technical{padding:0 17px 16px}
 .dsh-studio-workbench .dsh-studio-technical>summary{padding:9px 0}
@@ -532,6 +548,19 @@ window.__ModuleLoader__.load({
       const scopeKey = !scope ? '' : (scope.workspaceId?'w:'+scope.workspaceId:'s:'+scope.sessionId)
       const scopeMessage = workspaceId ? 'Sélectionnez un espace de travail' : 'Open a conversation first'
       const [file,setFile] = React.useState('design.svg')
+      // `file` is the path of the ACTIVE document. `pathInput` is only the text
+      // typed in the File menu, kept apart so typing a future path can never
+      // relabel the active tab or be mistaken for an open document.
+      const [pathInput,setPathInput] = React.useState('design.svg')
+      // One entry per open document: {id, file, state, dirty, stale}. `state`
+      // is written when a tab is LEFT (the active tab is always the live React
+      // state), so switching tabs never needs to read a stale async value.
+      const [tabs,setTabs] = React.useState([])
+      const [activeTabId,setActiveTabId] = React.useState(null)
+      // A dirty tab is never closed silently: this holds the pending question.
+      const [tabCloseConfirm,setTabCloseConfirm] = React.useState(null)
+      const tabsRef = React.useRef([])
+      const tabSeqRef = React.useRef(0)
       const [workspaceFiles,setWorkspaceFiles] = React.useState([])
       const [filesTruncated,setFilesTruncated] = React.useState(false)
       const [notice,setNotice] = React.useState('')
@@ -550,6 +579,9 @@ window.__ModuleLoader__.load({
       const layerDragRef = React.useRef(null)
       const layerDragClickRef = React.useRef(false)
       const layerDragListenersRef = React.useRef(null)
+      // A cancelled gesture must never write, even if a pointerup is still
+      // delivered after the listeners were removed.
+      const layerDragCancelRef = React.useRef(false)
       React.useEffect(()=>{
         if(layerMenu) layerMenuRef.current?.querySelector('button[role="menuitem"]:not(:disabled)')?.focus()
       },[layerMenu])
@@ -716,6 +748,236 @@ window.__ModuleLoader__.load({
         setError('Texte non enregistré : enregistrez ou abandonnez le brouillon avant une autre action.')
         return true
       }
+      /**
+       * Canonical tab list + its render mirror, updated together. Anything that
+       * needs the CURRENT tab list (including an async open that resumes after
+       * an await) reads `tabsRef`, never a captured React value.
+       */
+      function commitTabs(next) {
+        tabsRef.current = next
+        setTabs(next)
+      }
+      /**
+       * True when the ACTIVE document differs from its bytes on disk: an edited
+       * source, or a pending text draft. This is the same rule the save guards
+       * and the status line already used, now also driving the tab dot.
+       */
+      function isDirty() {
+        return !!(doc && (source!==doc.source || hasTextDraft()))
+      }
+      /**
+       * Every piece of state that belongs to one document. Missing a field here
+       * would leak one document's inspector or selection into another, so the
+       * list is deliberately exhaustive and mirrored by `emptyTabState()`.
+       */
+      function captureTabState() {
+        return {
+          file, doc, source, nodes, gradients,
+          htmlElements, htmlActive, htmlProperty, htmlValue, htmlText, htmlAttrName, htmlAttrValue,
+          htmlStylesheets, htmlPreviewCss, htmlPreviewCoverage, htmlStyleMatches,
+          cssRules, cssMedia, cssMediaStart, cssMediaProperty, cssMediaValue,
+          cssActive, cssProperty, cssValue,
+          textNodes, editingText, textDraft, active, extraSelection, renaming, attribute, value,
+          geometry, artboardMeta, artboardScaleContent, pathNodes, camera,
+          undoStack, redoStack, reloadRequired, warning, alignNotice,
+          returnHtmlRef, penPathId, penOutgoing,
+        }
+      }
+      /** Neutral state for a new tab or for the landing screen. */
+      function emptyTabState(fileName='design.svg') {
+        return {
+          file:fileName, doc:null, source:'', nodes:[], gradients:[],
+          htmlElements:[], htmlActive:'', htmlProperty:'background-color', htmlValue:'',
+          htmlText:'', htmlAttrName:'class', htmlAttrValue:'',
+          htmlStylesheets:[], htmlPreviewCss:'', htmlPreviewCoverage:null, htmlStyleMatches:[],
+          cssRules:[], cssMedia:[], cssMediaStart:null, cssMediaProperty:'color', cssMediaValue:'',
+          cssActive:'', cssProperty:'color', cssValue:'',
+          textNodes:[], editingText:'', textDraft:'', active:'', extraSelection:[], renaming:null,
+          attribute:'', value:'',
+          geometry:{artboard:null,handles:[]}, artboardMeta:null, artboardScaleContent:false,
+          pathNodes:[], camera:{zoom:1,offsetX:0,offsetY:0},
+          undoStack:[], redoStack:[], reloadRequired:false, warning:'', alignNotice:'',
+          returnHtmlRef:null, penPathId:'', penOutgoing:null,
+        }
+      }
+      /**
+       * Install one tab's captured state as the live document state. This is a
+       * pure renderer operation: no `/document`, no `/apply`, no filesystem
+       * access. A gesture in flight is dropped so it can never continue against
+       * another document's revision.
+       */
+      function applyTabState(state) {
+        const next = state || emptyTabState()
+        disconnectHtmlPreview()
+        setFile(next.file); setPathInput(next.file)
+        setDoc(next.doc); setSource(next.source)
+        setNodes(next.nodes||[]); setGradients(next.gradients||[])
+        setHtmlElements(next.htmlElements||[]); setHtmlActive(next.htmlActive||'')
+        setHtmlProperty(next.htmlProperty||'background-color'); setHtmlValue(next.htmlValue||'')
+        setHtmlText(next.htmlText||''); setHtmlAttrName(next.htmlAttrName||'class')
+        setHtmlAttrValue(next.htmlAttrValue||'')
+        setHtmlStylesheets(next.htmlStylesheets||[]); setHtmlPreviewCss(next.htmlPreviewCss||'')
+        setHtmlPreviewCoverage(next.htmlPreviewCoverage||null)
+        setHtmlStyleMatches(next.htmlStyleMatches||[])
+        setCssRules(next.cssRules||[]); setCssMedia(next.cssMedia||[])
+        setCssMediaStart(next.cssMediaStart===undefined?null:next.cssMediaStart)
+        setCssMediaProperty(next.cssMediaProperty||'color'); setCssMediaValue(next.cssMediaValue||'')
+        setCssActive(next.cssActive||''); setCssProperty(next.cssProperty||'color')
+        setCssValue(next.cssValue||'')
+        setTextNodes(next.textNodes||[]); setEditingText(next.editingText||'')
+        setTextDraft(next.textDraft||''); setActive(next.active||'')
+        setExtraSelection(next.extraSelection||[]); setRenaming(next.renaming||null)
+        setAttribute(next.attribute||''); setValue(next.value||'')
+        setGeometry(next.geometry||{artboard:null,handles:[]})
+        setArtboardMeta(next.artboardMeta||null)
+        setArtboardScaleContent(!!next.artboardScaleContent)
+        setPathNodes(next.pathNodes||[]); setCamera(next.camera||{zoom:1,offsetX:0,offsetY:0})
+        setUndoStack(next.undoStack||[]); setRedoStack(next.redoStack||[])
+        setReloadRequired(!!next.reloadRequired); setWarning(next.warning||'')
+        setAlignNotice(next.alignNotice||'')
+        setReturnHtmlRef(next.returnHtmlRef||null)
+        setPenPathId(next.penPathId||''); setPenOutgoing(next.penOutgoing||null)
+        // Transient gesture state never crosses a tab boundary.
+        setPathDrag(null); pathDragRef.current=null
+        setDragDelta(null); dragRef.current=null
+        setPenPreview(null); penGestureRef.current=null
+        shapePendingRef.current=false; penPendingRef.current=false
+        panRef.current=null
+      }
+      /** Drop every per-document state so the landing state is honest again. */
+      function closeDocument() {
+        applyTabState({...emptyTabState(file), file})
+      }
+      /**
+       * Make one tab active. The state of the tab being left is captured first,
+       * so an unsaved source, a text draft, the selection and Undo/Redo all
+       * survive the switch. No request is issued: `/apply` stays reserved for an
+       * explicit save.
+       */
+      function activateTab(id) {
+        if(busy||creating) return false
+        const list = tabsRef.current
+        const target = list.find(entry=>entry.id===id)
+        if(!target) return false
+        if(id===activeTabId) return true
+        const dirty = isDirty()
+        commitTabs(list.map(entry=>entry.id===activeTabId
+          ? {...entry, state:captureTabState(), dirty}
+          : entry))
+        setActiveTabId(id)
+        applyTabState(target.state)
+        setError(''); setNotice(''); setTabCloseConfirm(null)
+        if(target.stale) {
+          // The file was renamed on disk while this tab was in the background:
+          // refresh its revision before the user can edit through a stale hash.
+          commitTabs(tabsRef.current.map(entry=>entry.id===id?{...entry, stale:false}:entry))
+          void load(true, target.file)
+        }
+        return true
+      }
+      /**
+       * Open a document in its own tab, or activate the tab that already shows
+       * it. Opening never writes: it only reads `/document`. Past `MAX_TABS` the
+       * request is refused with a message naming the limit.
+       */
+      async function openInTab(targetFile) {
+        if(!scopeReady) { setError(scopeMessage); return false }
+        if(busy) return false
+        const list = tabsRef.current
+        const existing = list.find(entry=>entry.file===targetFile)
+        if(existing) return activateTab(existing.id)
+        if(list.length>=MAX_TABS) {
+          setError('Limite de '+MAX_TABS+' onglets ouverts : fermez un onglet avant d’en ouvrir un autre. Aucun fichier n’a été modifié.')
+          return false
+        }
+        const previousActive = activeTabId
+        const previousState = previousActive ? captureTabState() : null
+        const previousDirty = previousActive ? isDirty() : false
+        const id = 'tab-'+(++tabSeqRef.current)
+        const placeholder = {id, file:targetFile, state:{...emptyTabState(targetFile)}, dirty:false, stale:false}
+        commitTabs([...list.map(entry=>entry.id===activeTabId
+          ? {...entry, state:previousState, dirty:previousDirty}
+          : entry), placeholder])
+        setActiveTabId(id)
+        applyTabState(placeholder.state)
+        setError(''); setNotice(''); setTabCloseConfirm(null)
+        const opened = await load(true, targetFile)
+        if(!opened) {
+          // Roll back instead of leaving a dead tab: the previous document is
+          // reinstalled exactly as it was, still unsaved, still editable.
+          commitTabs(tabsRef.current.filter(entry=>entry.id!==id))
+          if(previousActive && previousState) {
+            setActiveTabId(previousActive)
+            applyTabState(previousState)
+          } else {
+            setActiveTabId(null)
+            closeDocument()
+          }
+          return false
+        }
+        return true
+      }
+      /**
+       * Close one tab. A dirty tab is never discarded silently: without an
+       * explicit `discard` this only asks the question, leaving the tab and the
+       * bytes untouched. Closing never writes.
+       */
+      function closeTab(id=activeTabId, {discard=false}={}) {
+        const list = tabsRef.current
+        const index = list.findIndex(entry=>entry.id===id)
+        if(index<0) return false
+        const entry = list[index]
+        const dirty = entry.id===activeTabId ? isDirty() : !!entry.dirty
+        if(dirty && !discard) { setTabCloseConfirm({id, file:entry.file}); return false }
+        setTabCloseConfirm(null)
+        const remaining = list.filter(item=>item.id!==id)
+        commitTabs(remaining)
+        if(entry.id!==activeTabId) return true
+        const next = remaining[index] || remaining[index-1] || null
+        if(next) {
+          setActiveTabId(next.id)
+          applyTabState(next.state)
+          setError(''); setNotice('')
+          if(next.stale) {
+            commitTabs(tabsRef.current.map(item=>item.id===next.id?{...item, stale:false}:item))
+            void load(true, next.file)
+          }
+        } else {
+          setActiveTabId(null)
+          closeDocument()
+        }
+        return true
+      }
+      /**
+       * Roving-tabindex keyboard model for the document strip: arrows move the
+       * focus, Enter/Space activates. Canvas shortcuts are stopped here, so an
+       * arrow key on a tab can never move the selected layer.
+       */
+      function onTabKeyDown(event, entry) {
+        const key = event.key
+        if(key==='Enter' || key===' ') {
+          event.preventDefault(); event.stopPropagation(); activateTab(entry.id); return
+        }
+        if(!['ArrowRight','ArrowLeft','Home','End'].includes(key)) return
+        event.preventDefault(); event.stopPropagation()
+        const root = event.currentTarget?.closest?.('[role="tablist"]')
+        const buttons = root ? Array.from(root.querySelectorAll('[role="tab"]')) : []
+        const index = buttons.indexOf(event.currentTarget)
+        if(!buttons.length || index<0) {
+          const list = tabsRef.current
+          const current = list.findIndex(item=>item.id===entry.id)
+          const delta = key==='ArrowRight' ? 1 : key==='ArrowLeft' ? -1 : 0
+          const target = key==='Home' ? list[0]
+            : key==='End' ? list[list.length-1]
+              : list[(current+delta+list.length)%list.length]
+          if(target) activateTab(target.id)
+          return
+        }
+        const next = key==='Home' ? 0
+          : key==='End' ? buttons.length-1
+            : (index+(key==='ArrowRight'?1:-1)+buttons.length)%buttons.length
+        buttons[next]?.focus?.()
+      }
       async function load(force=false, targetFile=file, retainSelection='', onLoaded=null) {
         if(!force && refuseTextDraft())return false
         if(!force && doc && source!==doc.source) {setError('Unsaved source changes: save or discard them before opening another file');return false}
@@ -738,6 +1000,7 @@ window.__ModuleLoader__.load({
           }
           disconnectHtmlPreview()
           setFile(targetFile)
+          setPathInput(targetFile)
           setDoc(data.document);setSource(data.document.source);setNodes(data.nodes||[]);setGradients(data.gradients||[])
           setHtmlElements(data.htmlElements||[])
           setHtmlStylesheets(data.stylesheets||[])
@@ -814,23 +1077,8 @@ window.__ModuleLoader__.load({
       },[scopeKey])
 
       async function openPickedFile(picked) {
-        const opened=await load(false,picked)
+        const opened=await openInTab(picked)
         if(opened)setShowFiles(false)
-      }
-      /** Drop every per-document state so the landing state is honest again. */
-      function closeDocument() {
-        setDoc(null);setSource('')
-        setNodes([]);setGradients([]);setTextNodes([]);setPathNodes([])
-        setHtmlElements([]);setHtmlStylesheets([]);setHtmlStyleMatches([]);setHtmlPreviewCss('')
-        setHtmlPreviewCoverage(null);setCssRules([]);setCssActive('');setCssValue('')
-        setCssMedia([]);setCssMediaStart(null);setCssMediaValue('')
-        setHtmlActive('');setHtmlValue('')
-        setGeometry({artboard:null,handles:[]});setActive('');setExtraSelection([])
-        setArtboardMeta(null);setArtboardScaleContent(false)
-        setRenaming(null)
-        setUndoStack([]);setRedoStack([]);setReloadRequired(false)
-        setAlignNotice('')
-        setEditingText('');setTextDraft('');setWarning('')
       }
       /**
        * Rename or delete one workspace file through the Host.
@@ -840,19 +1088,26 @@ window.__ModuleLoader__.load({
        * revision and an explicit confirmation naming the exact path. A file that
        * is not open is read first, because acting on unseen bytes is exactly the
        * silent failure mode this editor refuses everywhere else.
+       *
+       * Files open in a BACKGROUND tab are handled too: an unsaved tab refuses
+       * the operation, a renamed one follows the new path (and refreshes its
+       * revision when it is activated), a deleted one is removed with its tab.
        */
       async function manageFile(kind, target, nextPath='') {
         if(busy||creating) return
-        const openTarget=doc && doc.file===target
-        if(openTarget && (source!==doc.source || hasTextDraft())) {
-          setError('Modifications non enregistrées : enregistrez ou abandonnez-les avant de renommer ou supprimer ce fichier.')
+        const openTab=tabsRef.current.find(entry=>entry.file===target)||null
+        const openTarget=!!openTab
+        const openDirty=openTab?(openTab.id===activeTabId?isDirty():!!openTab.dirty):false
+        if(openTarget && openDirty) {
+          setError('Modifications non enregistrées dans '+target+' : enregistrez ou abandonnez-les avant de renommer ou supprimer ce fichier.')
           return
         }
         if(kind==='rename' && !nextPath.trim()) {setError('Indiquez le nouveau nom du fichier.');return}
         setBusy(true);setError('');setNotice('')
         try {
           let baseHash,baseIdentity
-          if(openTarget) {baseHash=doc.hash;baseIdentity=doc.identity}
+          const openDocument=openTab?(openTab.id===activeTabId?doc:openTab.state?.doc):null
+          if(openDocument && openDocument.hash) {baseHash=openDocument.hash;baseIdentity=openDocument.identity}
           else {
             const opened=await request('/document?'+scopeQuery+'&file='+encodeURIComponent(target))
             baseHash=opened.document.hash;baseIdentity=opened.document.identity
@@ -862,14 +1117,28 @@ window.__ModuleLoader__.load({
               body:JSON.stringify({...scopeBody,file:target,next:nextPath.trim(),baseHash,baseIdentity})})
             setFileAction(null)
             await loadWorkspaceFiles()
-            if(openTarget) await load(false,response.document.file)
+            if(openTarget && openTab.id===activeTabId) {
+              await load(false,response.document.file)
+              commitTabs(tabsRef.current.map(entry=>entry.id===activeTabId
+                ?{...entry, file:response.document.file}
+                : entry))
+            } else if(openTarget) {
+              // Bytes are unchanged by a rename, but the identity is not: mark
+              // the tab stale so activating it reloads the real revision.
+              commitTabs(tabsRef.current.map(entry=>entry.id===openTab.id
+                ?{...entry, file:response.document.file, stale:true,
+                  state:{...entry.state, file:response.document.file,
+                    doc:entry.state?.doc?{...entry.state.doc, file:response.document.file}:null}}
+                : entry))
+            }
             setNotice('Fichier renommé : '+response.document.file)
           } else {
             await request('/delete',{method:'POST',headers:{'content-type':'application/json'},
               body:JSON.stringify({...scopeBody,file:target,baseHash,baseIdentity})})
             setFileAction(null)
             await loadWorkspaceFiles()
-            if(openTarget) closeDocument()
+            if(openTarget && openTab.id===activeTabId) closeTab(activeTabId,{discard:true})
+            else if(openTarget) commitTabs(tabsRef.current.filter(entry=>entry.id!==openTab.id))
             setNotice('Fichier supprimé : '+target)
           }
         }catch(e){
@@ -899,13 +1168,19 @@ window.__ModuleLoader__.load({
         if(refuseTextDraft())return
         if(doc && source!==doc.source){setError('Unsaved source changes: save or discard them before creating another file');return}
         const target=creationTarget(format,template)
+        // A written file nobody can open would be worse than a refusal, so the
+        // tab budget is checked before the Host touches the disk.
+        if(tabsRef.current.length>=MAX_TABS && !tabsRef.current.some(entry=>entry.file===target)) {
+          setError('Limite de '+MAX_TABS+' onglets ouverts : fermez un onglet avant de créer un document. Aucun fichier n’a été écrit.')
+          return
+        }
         setCreating(true);setError('');setNotice('')
         try {
           await request('/create',{method:'POST',headers:{'content-type':'application/json'},
             body:JSON.stringify({...scopeBody,file:target,source:template||NEW_TEMPLATES[format]})})
           setNewName('')
           await loadWorkspaceFiles()
-          await load(false,target)
+          await openInTab(target)
           // State the written path explicitly: silent creation was the friction.
           setNotice('Fichier créé : '+target)
         }catch(e){
@@ -1521,6 +1796,7 @@ window.__ModuleLoader__.load({
         // A click (and Ctrl/Cmd/Shift selection) must stay a click until the
         // pointer really moved; nothing is prevented or written here.
         layerDragClickRef.current=false
+        layerDragCancelRef.current=false
         if(event.button!==0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || layerMenu)return
         if(!doc || doc.format!=='svg' || !nodes.some(node=>node.id===id))return
         layerDragRef.current={id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
@@ -1533,10 +1809,23 @@ window.__ModuleLoader__.load({
           const onMove=move=>moveLayerDrag(move)
           const onUp=up=>endLayerDrag(up)
           const onCancel=cancel=>endLayerDrag(cancel,true)
+          // Escape must cancel a gesture even when the focus is not inside the
+          // workbench (opening a document can move it to a tab or the body).
+          const onKey=key=>{
+            if(key.key!=='Escape')return
+            key.preventDefault()
+            if(!layerDragRef.current)return
+            layerDragRef.current=null
+            layerDragCancelRef.current=true
+            layerDragClickRef.current=true
+            setLayerDrag(null)
+            stopLayerDragListeners()
+          }
           window.addEventListener('pointermove',onMove)
           window.addEventListener('pointerup',onUp)
           window.addEventListener('pointercancel',onCancel)
-          layerDragListenersRef.current={onMove,onUp,onCancel}
+          window.addEventListener('keydown',onKey)
+          layerDragListenersRef.current={onMove,onUp,onCancel,onKey}
         }
         try{event.currentTarget?.setPointerCapture?.(event.pointerId)}catch(_){}
       }
@@ -1547,6 +1836,7 @@ window.__ModuleLoader__.load({
         window.removeEventListener('pointermove',listeners.onMove)
         window.removeEventListener('pointerup',listeners.onUp)
         window.removeEventListener('pointercancel',listeners.onCancel)
+        if(listeners.onKey)window.removeEventListener('keydown',listeners.onKey)
       }
       function moveLayerDrag(event) {
         const gesture=layerDragRef.current
@@ -1574,6 +1864,10 @@ window.__ModuleLoader__.load({
         layerDragRef.current=null
         stopLayerDragListeners()
         setLayerDrag(null)
+        if(layerDragCancelRef.current) {
+          layerDragCancelRef.current=false
+          return
+        }
         if(!gesture.started) {
           // A fast flick can deliver the release without any intermediate
           // pointermove. Judge by the real distance instead of dropping the
@@ -1773,6 +2067,7 @@ window.__ModuleLoader__.load({
           event.preventDefault()
           layerDragRef.current=null
           stopLayerDragListeners()
+          layerDragCancelRef.current=true
           setLayerDrag(null)
           layerDragClickRef.current=true
           return
@@ -2920,8 +3215,8 @@ window.__ModuleLoader__.load({
           doc&&h('span',{className:'dsh-studio-tag'},doc.format.toUpperCase()+' natif'),h('span',{className:'dsh-studio-grow'}),
           h('span',{className:'dsh-studio-status',style:{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}},busy?'Enregistrement…':reloadRequired?'À recharger':doc?source!==doc.source||hasTextDraft()?'Modifications non enregistrées':'✓ Enregistré localement':'Mode local · sans IA'),
           h('details',{className:'dsh-studio-menu'},h('summary',null,'Fichier'),h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0}},
-            h('input',{style:field,'aria-label':'Workspace file',value:file,onChange:e=>setFile(e.target.value),placeholder:'relative/path/file.svg'}),
-            h('button',{style:button,onClick:()=>load(false),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
+            h('input',{style:field,'aria-label':'Workspace file',value:pathInput,onChange:e=>setPathInput(e.target.value),placeholder:'relative/path/file.svg'}),
+            h('button',{style:button,onClick:()=>openInTab(pathInput),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
             h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',title:'Créer '+creationTarget(format),onClick:()=>void createDocument(format)},'+ '+format.toUpperCase()))))),
            h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-muted',disabled:!doc,
              'aria-label':'Preview native document','aria-pressed':previewMode,
@@ -3003,7 +3298,7 @@ window.__ModuleLoader__.load({
         h('div',{className:'dsh-studio-alerts'},error&&h('div',{role:'alert',style:{color:'var(--dsw-alias-state-error-primary, #ff8585)',padding:'8px 12px',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
           h('span',null,error),
           reloadRequired&&h('button',{type:'button',style:button,'aria-label':'Reload after save error',
-            disabled:busy,onClick:()=>void load(true,doc?.file||file)},'Recharger le fichier')),
+            disabled:busy,onClick:()=>void load(true,doc?.file||pathInput)},'Recharger le fichier')),
         warning&&h('div',{role:'status',style:{color:'var(--dsw-alias-state-warn-primary, #f5c36a)'}},warning)),
                 h('nav',{className:'dsh-studio-mobile-tabs',role:'tablist',
           'aria-label':'Mobile editor panels'},
@@ -3144,6 +3439,39 @@ window.__ModuleLoader__.load({
                 :layerDrag.plan?.reason||'Déposez sur une ligne sœur pour changer l’ordre de peinture.'),
             h('div',{className:'dsh-studio-panel-note'},'Cliquez un calque pour le sélectionner ; les propriétés apparaissent à droite. Glissez une ligne sur une autre pour changer l’ordre de peinture (Ctrl+] / Ctrl+[ restent disponibles).')),
           h('main',{className:'dsh-studio-canvas'+(mobilePanel==='canvas'?' dsh-studio-mobile-active':''),style:{display:'flex',flexDirection:'column',minWidth:0}},
+            // One tab per open document, above the canvas. A tab keeps its own
+            // source, selection, Undo/Redo and text draft; switching tabs never
+            // writes, and a dirty tab shows a dot until an explicit save.
+            tabs.length>0&&h('div',{className:'dsh-studio-doc-tabs',role:'tablist',
+              'aria-label':'Documents ouverts','aria-orientation':'horizontal'},
+              tabs.map(entry=>{
+                const selected=entry.id===activeTabId
+                const dirty=selected?isDirty():!!entry.dirty
+                const label=entry.file+(dirty?' · modifications non enregistrées':'')
+                return h('div',{key:entry.id,role:'presentation',
+                  className:'dsh-studio-doc-tab'+(selected?' dsh-studio-selected':''),
+                  'data-doc-tab':entry.id,'data-doc-tab-file':entry.file},
+                  h('button',{type:'button',role:'tab',id:'doc-tab-'+entry.id,
+                    'aria-selected':selected,'aria-controls':'doc-tabpanel-canvas',
+                    tabIndex:selected?0:-1,
+                    'aria-label':label,title:label,
+                    onClick:()=>activateTab(entry.id),
+                    onKeyDown:event=>onTabKeyDown(event,entry)},
+                    h('span',{className:'dsh-studio-doc-name'},entry.file),
+                    dirty&&h('span',{className:'dsh-studio-doc-dirty','aria-hidden':'true',
+                      title:'Modifications non enregistrées'},'●')),
+                  h('button',{type:'button',className:'dsh-studio-doc-close',
+                    'aria-label':'Fermer '+entry.file,title:'Fermer '+entry.file,
+                    disabled:busy,onClick:()=>closeTab(entry.id)},'×'))
+              })),
+            tabCloseConfirm&&h('div',{className:'dsh-studio-tab-confirm',role:'alertdialog',
+              'aria-label':'Fermer l’onglet '+tabCloseConfirm.file,'data-tab-close-confirm':tabCloseConfirm.file},
+              h('span',null,'Fermer ',h('code',null,tabCloseConfirm.file),
+                ' ? Des modifications ne sont pas enregistrées : elles seront perdues.'),
+              h('button',{type:'button',style:button,
+                onClick:()=>closeTab(tabCloseConfirm.id,{discard:true})},'Fermer sans enregistrer'),
+              h('button',{type:'button',style:button,
+                onClick:()=>setTabCloseConfirm(null)},'Annuler')),
             h('div',{className:'dsh-studio-stage-top'},
               h('b',{title:doc?.file||'Document'},doc?.file||'Document'),
               h('span',{'aria-hidden':'true'},'›'),
@@ -3154,7 +3482,9 @@ window.__ModuleLoader__.load({
               notice&&h('span',{className:'dsh-studio-tag','data-created':notice,role:'status','aria-live':'polite',
                 title:'Fichier écrit dans l’espace de travail'},notice),
               h('span',{className:'dsh-studio-helper'},doc?'Fichier éditable':'Mode local')),
-            h('div',{className:'dsh-studio-workspace'},!doc?h('div',{className:'dsh-studio-welcome',role:'region',
+            h('div',{className:'dsh-studio-workspace',id:'doc-tabpanel-canvas',
+              role:tabs.length?'tabpanel':undefined,style:{minHeight:0},
+              'aria-labelledby':tabs.length?'doc-tab-'+activeTabId:undefined},!doc?h('div',{className:'dsh-studio-welcome',role:'region',
           'aria-label':'Open a design file',
           style:{...pane,minHeight:340,padding:20,display:'flex',flexDirection:'column',gap:10,
             justifyContent:'flex-start',overflow:'auto'}},
@@ -3427,7 +3757,12 @@ doc?.format==='css'?
                 ):
                   ['html','htm'].includes(doc?.format)?
                     h('div',{className:'dsh-studio-responsive-preview',
-                      style:{width:'100%',display:'grid',gap:8,alignContent:'start'}},
+                      // The tab strip reduces the canvas height: anchor the HTML
+                      // preview to the top and let it scroll, instead of letting
+                      // a centred taller panel slide under the stage header (where
+                      // its own toolbar would stop being clickable).
+                      style:{width:'100%',display:'grid',gap:8,alignContent:'start',
+                        alignSelf:'flex-start',maxHeight:'100%',overflow:'auto'}},
                       h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
                         style:{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}},
                         [['auto','Auto'],['desktop','1280'],['tablet','768'],['mobile','390']].map(([mode,label])=>
