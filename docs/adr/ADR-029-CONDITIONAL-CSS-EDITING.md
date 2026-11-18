@@ -102,6 +102,10 @@ apparaître ni dans le CSS projeté ni via un `@media` émis.
 | — | Régression du crash | Rouvert sans le correctif `closeDocument` : **FAIL** (« the conditional editor must be gone with the deleted document »), puis **PASS** avec le correctif — le test n'est pas vacuous |
 | 3 | `npm run test:dsh` (Web, sans IA) | **PASS** : `31 PASS / 0 FAIL / 6 NOT_RUN`, code 0 — bloc `@media` simple sélectionné par son nom accessible, couleur modifiée puis annulée, octets exacts et règles inconditionnelles intactes ([preuves](../operations/REAL-WEB-2026-11-18.md)) ; Desktop `NOT_RUN` |
 
+CI du commit `ac67a92` : [run 44300395075](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/44300395075)
+**entièrement vert** — Ubuntu core PASS, navigateurs PASS, Windows
+**529 PASS / 0 FAIL / 2 SKIP** (fsync de répertoire non pris en charge).
+
 Revue indépendante : deux passes. La première a trouvé le crash après suppression
 du CSS ouvert et la sélection croisée ; la seconde a trouvé la ligne de calque
 restée sur l'ancien drapeau. Les trois défauts sont corrigés et couverts.
