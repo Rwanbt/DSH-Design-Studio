@@ -3821,6 +3821,13 @@ window.__ModuleLoader__.load({
               disabled:!selected||!editable||!hexFill,style:{...field,height:30},
               onBlur:e=>{if(/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(e.target.value))commitAttributes({fill:e.target.value})},
               onKeyDown:e=>{if(e.key==='Enter')e.currentTarget.blur()}})),
+          h('div',{style:{display:'flex',gap:6,marginTop:8}},
+            [['linear','↗ Dégradé linéaire'],['radial','◎ Dégradé radial']].map(([type,label])=>
+              h('button',{type:'button',key:type,style:{...button,flex:1,minWidth:0,fontSize:11},
+                'aria-label':'Créer un dégradé '+(type==='linear'?'linéaire':'radial'),
+                title:'Créer deux arrêts natifs et relier le remplissage · une écriture, Undo exact',
+                disabled:!selected||!editable,
+                onClick:()=>void save({kind:'svg-gradient-create',id:active,type})},label))),
           h('p',{className:'dsh-studio-hint'},fillValue&&!hexFill?'Valeur native préservée : '+fillValue:'Couleur native · alpha préservé.')),
         gradientInspector)
       const typeLabels={'font-family':'Police','font-size':'Taille','font-weight':'Graisse',
