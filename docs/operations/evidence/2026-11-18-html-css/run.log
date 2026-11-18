@@ -1,0 +1,43 @@
+
+> @rwanbt/dsh-design-studio@0.1.0-alpha.20 test:dsh
+> node tests/e2e/real-dsh.mjs --json=/tmp/dsh-studio-html-css-real-web.json
+
+PASS     resolve DSH installation — /mnt/Stockage/App/DeepSeekHarness/deepseek-harness (228605256 bytes), archive present
+NOT_RUN  reuse caller credentials for a real turn — disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)
+PASS     create disposable profile — /tmp/dsh-g0-hkarKf/dsh-home/profiles/e2e (shipped web template)
+PASS     install plugin into profile — bundles: ["@deepseek-ai/dsh-base","@deepseek-ai/dsh-web-app","@rwanbt/dsh-design-studio"]
+NOT_RUN  model overlay for a real turn — requires explicit credential reuse plus DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL
+PASS     boot real DSH web app — http://127.0.0.1:35709
+PASS     load real DSH Web UI — "Version locale de DSH"
+PASS     credential-free sidebar opens registered workspace SVG — real sidebar → Workspace id → g0-art.svg → visible canvas and box layer; no AI turn
+PASS     ADR-026 local Graphite and unrecoloured real host — {"before":{"root":{"background":"rgba(0, 0, 0, 0)","color":"rgb(0, 0, 0)","base":"","layer":""},"body":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"},"probe":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"}},"background":"rgb(32, 33, 37)","hostAfter":{"root":{"background":"rgba(0, 0, 0, 0)","color":"rgb(0, 0, 0)","base":"","layer":""},"body":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"},"probe":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"}},"light":{"background":"rgb(32, 33, 37)","host":{"root":{"background":"rgba(0, 0, 0, 0)","color":"rgb(0, 0, 0)","base":"","layer":""},"body":{"background":"rgb(250, 250, 248)","color":"rgb(24, 24, 26)","base":"rgb(250, 250, 248)","layer":"rgb(255, 255, 255)"},"probe":{"background":"rgb(250, 250, 248)","color":"rgb(24, 24, 26)","base":"rgb(250, 250, 248)","layer":"rgb(255, 255, 255)"}}},"restored":{"root":{"background":"rgba(0, 0, 0, 0)","color":"rgb(0, 0, 0)","base":"","layer":""},"body":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"},"probe":{"background":"rgb(255, 255, 255)","color":"rgb(15, 17, 21)","base":"#fff","layer":"#fff"}}}
+PASS     sidebar UI save persists exact SVG bytes — Geometry x=25 committed; unrelated bytes unchanged
+PASS     sidebar UI Undo restores exact SVG bytes — Undo restored original file byte-for-byte
+PASS     sidebar UI reopen reads persisted SVG — workspace remount and file reopen read Geometry x=25 from disk
+PASS     sidebar UI creates native HTML — g0-manual.html exact template on disk; heading rendered and selected by real preview click
+PASS     sidebar HTML text save and Undo are byte-exact — only heading text changed; Undo restored complete original HTML and preview
+PASS     sidebar HTML responsive preview widths are measured — {"desktop":{"element":1280,"viewport":1280},"tablet":{"element":768,"viewport":768},"mobile":{"element":390,"viewport":390}}; HTML bytes unchanged
+PASS     sidebar UI creates native CSS — g0-manual.css exact template on disk; native body rule inspector opened
+PASS     sidebar CSS rule save and Undo are byte-exact — only body color changed; Undo restored complete original CSS
+PASS     sidebar external conflict refuses stale CSS save — one real UI apply → HTTP409 stale-revision + visible feedback; external bytes unchanged
+PASS     screenshot of the real DSH workbench — /tmp/dsh-studio-html-css-real-web.png + /tmp/dsh-studio-html-css-real-web-element.png
+PASS     create a real DSH session — session-e8acca92-66a1-4b3f-b727-c319ac48fbeb
+PASS     resolve real session workspace — registry membership 71e57169-ec2a-49cc-b6df-7769e589d5c8; fixture written inside its owned root
+PASS     plugin route /health on the real Host — HTTP 200 {"ok":true,"editor":"native-prototype","version":1}
+PASS     plugin route /files on the real Host — HTTP 200 3 files
+PASS     open a real SVG through the real Host — HTTP 200 nodes=1
+PASS     save a real SVG through the real Host — HTTP 200 "ok" bytes=164
+PASS     stale revision refused on the real Host — HTTP 409
+NOT_RUN  one real assistant turn — needs DSH_E2E_REUSE_CREDENTIALS=1 plus DSH_E2E_MODEL_PROVIDER/DSH_E2E_MODEL (one short message is sent)
+PASS     client bundle served by the real Host — @rwanbt/dsh-design-studio HTTP 200, 192526 bytes, immediately=true, inject=["slots"]
+PASS     client bundle registers the conversation view — bundle declares conversation.view
+NOT_RUN  legacy conversation workbench gate — separate optional conversation path; sidebar manual gate needs neither session nor AI
+NOT_RUN  CSP/account diagnostics not assessed by this gate — CSP excluded=0; account excluded=0 (text filters, counts may overlap); no security/account guarantee. Samples: 
+PASS     classify deliberate conflict resource diagnostic — 1 network diagnostic correlated to the unique verified /apply HTTP409; remaining diagnostics are checked after the declared CSP/account text exclusions
+PASS     no non-excluded errors observed during this run — remaining=0; CSP/account text matches and verified expected409 are excluded, not proven harmless. No remaining diagnostic observed.
+NOT_RUN  boot the real DSH Desktop shell — disabled with DSH_E2E_DESKTOP=0
+PASS     stop disposable DSH server — close observed before directory cleanup
+PASS     cleanup disposable environment — removed owned temporary root after server close
+
+summary: 30 pass, 0 fail, 6 not-run
+report: /tmp/dsh-studio-html-css-real-web.json

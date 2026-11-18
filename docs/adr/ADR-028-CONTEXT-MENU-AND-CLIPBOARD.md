@@ -134,6 +134,27 @@ processing instructions `xml-stylesheet` est également fail-closed : même un
 marqueur dans un commentaire est refusé par précaution. Une déclaration XML seule
 reste admise. Ce choix conservateur est couvert par une régression Host.
 
+## Navigation clavier du menu — 18 novembre 2026
+
+Le menu reçoit le focus sur le premier bouton activable. Haut/Bas circulent en
+ignorant les contrôles désactivés ; Home/End vont aux extrémités. Entrée/Espace
+conservent l'activation native. ContextMenu et Shift+F10 ouvrent le menu depuis
+une ligne de calque. Les événements du menu ne déclenchent pas les raccourcis
+canevas.
+
+Escape restitue le déclencheur ; Tab/Shift+Tab ferment puis laissent continuer
+la navigation native, sans piéger le focus. Si une suppression asynchrone retire
+le déclencheur, un contrôle canevas survivant récupère le focus seulement quand
+celui-ci est perdu sur body ; un déplacement volontaire du focus ne doit pas
+être remplacé par le repli.
+
+Preuves ciblées : régressions Tab et suppression observées rouges dans les deux
+moteurs, puis **10 PASS / 0 FAIL / 0 NOT_RUN**, 61 assertions par moteur Chromium
+145.0.7632.6 et Firefox146.0.1, code0. Revue indépendante favorable après correction
+des deux constats. Commit `c5f284c78b1b1ed12bbf52dc3b39c6e7218b1e23`.
+Pas de typeahead, roving tabindex, lecteur d'écran ni conformité WCAG globale
+revendiqués.
+
 ## Preuves historiques (avant ce durcissement)
 
 | Niveau | Commande | Résultat |
