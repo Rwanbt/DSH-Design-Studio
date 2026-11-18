@@ -100,7 +100,7 @@ apparaître ni dans le CSS projeté ni via un `@media` émis.
 | 1 | `node --test tests/css-media-edit.test.mjs` | 8 PASS : conditions refusées, deux blocs identiques, refus `stale-reference`/`unknown-node`/`inside-at-rule`/`duplicate-property`, non-vacuité de la projection, route Host 200 + inverse exact, 400/428/409/`unsupported-format`, octets inchangés après refus |
 | 2 | `npm run test:browser` | **126 PASS / 0 FAIL / 0 NOT_RUN** (Chromium 145.0.7632.6 + Firefox 146.0.1), dont `css: a conditional declaration is edited at its exact offset…`, `css: a conditional and an unconditional rule never both stay the edit target`, `css: deleting an open stylesheet with a conditional rule selected…` |
 | — | Régression du crash | Rouvert sans le correctif `closeDocument` : **FAIL** (« the conditional editor must be gone with the deleted document »), puis **PASS** avec le correctif — le test n'est pas vacuous |
-| 3 | `npm run test:dsh` | **NOT_RUN** pour cette tranche : le parcours réel HTML/CSS existant ne couvre pas encore l'édition `@media` |
+| 3 | `npm run test:dsh` (Web, sans IA) | **PASS** : `31 PASS / 0 FAIL / 6 NOT_RUN`, code 0 — bloc `@media` simple sélectionné par son nom accessible, couleur modifiée puis annulée, octets exacts et règles inconditionnelles intactes ([preuves](../operations/REAL-WEB-2026-11-18.md)) ; Desktop `NOT_RUN` |
 
 Revue indépendante : deux passes. La première a trouvé le crash après suppression
 du CSS ouvert et la sélection croisée ; la seconde a trouvé la ligne de calque

@@ -201,9 +201,44 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     await waitReady('g0-manual.css', css)
     record('sidebar CSS rule save and Undo are byte-exact', 'PASS', 'only body color changed; Undo restored complete original CSS')
 
+    // Conditional CSS in the real product: the @media row is a separate target
+    // addressed by position, and its edit is a byte-exact native patch.
+    const mediaCss = css + '\n@media (max-width: 600px) {\n  body {\n    color: #654321;\n  }\n}\n'
+    await writeFile(path.join(workspaceDir, 'g0-manual.css'), mediaCss, 'utf8')
+    // Remount the panel so the file is re-read from disk by a real user action.
+    await panel.getByLabel('Workspace', { exact: true }).selectOption(otherWorkspaceId)
+    await panel.getByRole('button', { name: 'Refresh workspace design files', exact: true }).waitFor()
+    await panel.getByLabel('Workspace', { exact: true }).selectOption(workspaceId)
+    await setFileMenu(true)
+    await studio.getByLabel('Workspace file', { exact: true }).fill('g0-manual.css')
+    await studio.getByRole('button', { name: 'Open', exact: true }).click()
+    await waitReady('g0-manual.css', mediaCss)
+    await setFileMenu(false)
+    const conditionalRow = studio.getByRole('button', {
+      name: 'Select conditional CSS rule (max-width: 600px) body block 1', exact: true })
+    await conditionalRow.waitFor({ state: 'visible', timeout: 20000 })
+    await conditionalRow.click()
+    await studio.getByLabel('Conditional CSS rule property', { exact: true }).selectOption('color')
+    await studio.getByLabel('Conditional CSS rule value', { exact: true }).fill('#0f0f0f')
+    await studio.getByRole('button', { name: 'Apply conditional CSS rule style', exact: true }).click()
+    const editedMedia = mediaCss.replace('color: #654321', 'color: #0f0f0f')
+    await expectDisk(editedMedia, 'g0-manual.css')
+    await waitReady('g0-manual.css', editedMedia)
+    if (editedMedia.includes('#123456') === false && !editedMedia.includes('color: #1f2124')) {
+      throw new Error('the unconditional rule must keep its own value')
+    }
+    await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+    await expectDisk(mediaCss, 'g0-manual.css')
+    await waitReady('g0-manual.css', mediaCss)
+    record('sidebar conditional CSS edit is byte-exact in real DSH',
+      'PASS', 'simple @media row edited by position in the real panel; only that value changed; Undo restored exact bytes')
+
     // Deliberate external-writer fixture, confined to the newly created file.
-    const external = css + '/* external writer wins exactly */\n'
+    const external = mediaCss + '/* external writer wins exactly */\n'
     await writeFile(path.join(workspaceDir, 'g0-manual.css'), external, 'utf8')
+    // Back to the unconditional rule: the conflict is proven on the normal path,
+    // so the conditional selection must not linger as the edit target.
+    await studio.getByRole('button', { name: 'Select CSS rule body', exact: true }).click()
     await studio.getByLabel('CSS rule value', { exact: true }).fill('#abcdef')
     Object.assign(refusalEvidence, { active: true, confirmed: false, requestCount: 0,
       url: new URL('/design-studio-native/apply', page.url()).href })
