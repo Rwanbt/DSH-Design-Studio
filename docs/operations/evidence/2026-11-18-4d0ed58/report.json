@@ -1,0 +1,190 @@
+{
+  "results": [
+    {
+      "step": "resolve DSH installation",
+      "status": "PASS",
+      "detail": "/mnt/Stockage/App/DeepSeekHarness/deepseek-harness (228605256 bytes), archive present"
+    },
+    {
+      "step": "reuse caller credentials for a real turn",
+      "status": "NOT_RUN",
+      "detail": "disabled (set DSH_E2E_REUSE_CREDENTIALS=1 to enable)"
+    },
+    {
+      "step": "create disposable profile",
+      "status": "PASS",
+      "detail": "/tmp/dsh-g0-p7Cnr0/dsh-home/profiles/e2e (shipped web template)"
+    },
+    {
+      "step": "install plugin into profile",
+      "status": "PASS",
+      "detail": "bundles: [\"@deepseek-ai/dsh-base\",\"@deepseek-ai/dsh-web-app\",\"@rwanbt/dsh-design-studio\"]"
+    },
+    {
+      "step": "model overlay for a real turn",
+      "status": "NOT_RUN",
+      "detail": "requires explicit credential reuse plus DSH_E2E_MODEL_PROVIDER and DSH_E2E_MODEL"
+    },
+    {
+      "step": "boot real DSH web app",
+      "status": "PASS",
+      "detail": "http://127.0.0.1:46851"
+    },
+    {
+      "step": "load real DSH Web UI",
+      "status": "PASS",
+      "detail": "\"Version locale de DSH\""
+    },
+    {
+      "step": "credential-free sidebar opens registered workspace SVG",
+      "status": "PASS",
+      "detail": "real sidebar → Workspace id → g0-art.svg → visible canvas and box layer; no AI turn"
+    },
+    {
+      "step": "ADR-026 local Graphite and unrecoloured real host",
+      "status": "PASS",
+      "detail": "{\"before\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}},\"background\":\"rgb(32, 33, 37)\",\"hostAfter\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}},\"light\":{\"background\":\"rgb(32, 33, 37)\",\"host\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(250, 250, 248)\",\"color\":\"rgb(24, 24, 26)\",\"base\":\"rgb(250, 250, 248)\",\"layer\":\"rgb(255, 255, 255)\"},\"probe\":{\"background\":\"rgb(250, 250, 248)\",\"color\":\"rgb(24, 24, 26)\",\"base\":\"rgb(250, 250, 248)\",\"layer\":\"rgb(255, 255, 255)\"}}},\"restored\":{\"root\":{\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(0, 0, 0)\",\"base\":\"\",\"layer\":\"\"},\"body\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"},\"probe\":{\"background\":\"rgb(255, 255, 255)\",\"color\":\"rgb(15, 17, 21)\",\"base\":\"#fff\",\"layer\":\"#fff\"}}}"
+    },
+    {
+      "step": "sidebar UI save persists exact SVG bytes",
+      "status": "PASS",
+      "detail": "Geometry x=25 committed; unrelated bytes unchanged"
+    },
+    {
+      "step": "sidebar UI Undo restores exact SVG bytes",
+      "status": "PASS",
+      "detail": "Undo restored original file byte-for-byte"
+    },
+    {
+      "step": "sidebar UI reopen reads persisted SVG",
+      "status": "PASS",
+      "detail": "workspace remount and file reopen read Geometry x=25 from disk"
+    },
+    {
+      "step": "sidebar UI creates native HTML",
+      "status": "PASS",
+      "detail": "g0-manual.html exact template on disk; heading rendered and selected by real preview click"
+    },
+    {
+      "step": "sidebar HTML text save and Undo are byte-exact",
+      "status": "PASS",
+      "detail": "only heading text changed; Undo restored complete original HTML and preview"
+    },
+    {
+      "step": "sidebar HTML responsive preview widths are measured",
+      "status": "PASS",
+      "detail": "{\"desktop\":{\"element\":1280,\"viewport\":1280},\"tablet\":{\"element\":768,\"viewport\":768},\"mobile\":{\"element\":390,\"viewport\":390}}; HTML bytes unchanged"
+    },
+    {
+      "step": "sidebar UI creates native CSS",
+      "status": "PASS",
+      "detail": "g0-manual.css exact template on disk; native body rule inspector opened"
+    },
+    {
+      "step": "sidebar CSS rule save and Undo are byte-exact",
+      "status": "PASS",
+      "detail": "only body color changed; Undo restored complete original CSS"
+    },
+    {
+      "step": "sidebar conditional CSS edit is byte-exact in real DSH",
+      "status": "PASS",
+      "detail": "simple @media row edited by position in the real panel; only that value changed; Undo restored exact bytes"
+    },
+    {
+      "step": "sidebar external conflict refuses stale CSS save",
+      "status": "PASS",
+      "detail": "one real UI apply → HTTP409 stale-revision + visible feedback; external bytes unchanged"
+    },
+    {
+      "step": "create a real DSH session",
+      "status": "PASS",
+      "detail": "session-8e8f330a-3f08-4dd0-8283-34c2832bd2af"
+    },
+    {
+      "step": "resolve real session workspace",
+      "status": "PASS",
+      "detail": "registry membership d54084d4-37ab-447d-9cb1-d1eb7348d764; fixture written inside its owned root"
+    },
+    {
+      "step": "plugin route /health on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"ok\":true,\"editor\":\"native-prototype\",\"version\":1}"
+    },
+    {
+      "step": "plugin route /files on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 1 files"
+    },
+    {
+      "step": "open a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 nodes=1"
+    },
+    {
+      "step": "save a real SVG through the real Host",
+      "status": "PASS",
+      "detail": "HTTP 200 \"ok\" bytes=164"
+    },
+    {
+      "step": "stale revision refused on the real Host",
+      "status": "PASS",
+      "detail": "HTTP 409"
+    },
+    {
+      "step": "one real assistant turn",
+      "status": "NOT_RUN",
+      "detail": "needs DSH_E2E_REUSE_CREDENTIALS=1 plus DSH_E2E_MODEL_PROVIDER/DSH_E2E_MODEL (one short message is sent)"
+    },
+    {
+      "step": "client bundle served by the real Host",
+      "status": "PASS",
+      "detail": "@rwanbt/dsh-design-studio HTTP 200, 287483 bytes, immediately=true, inject=[\"slots\"]"
+    },
+    {
+      "step": "client bundle registers the conversation view",
+      "status": "PASS",
+      "detail": "bundle declares conversation.view"
+    },
+    {
+      "step": "legacy conversation workbench gate",
+      "status": "NOT_RUN",
+      "detail": "separate optional conversation path; sidebar manual gate needs neither session nor AI"
+    },
+    {
+      "step": "CSP/account diagnostics not assessed by this gate",
+      "status": "NOT_RUN",
+      "detail": "CSP excluded=0; account excluded=0 (text filters, counts may overlap); no security/account guarantee. Samples: "
+    },
+    {
+      "step": "classify deliberate conflict resource diagnostic",
+      "status": "PASS",
+      "detail": "1 network diagnostic correlated to the unique verified /apply HTTP409; remaining diagnostics are checked after the declared CSP/account text exclusions"
+    },
+    {
+      "step": "no non-excluded errors observed during this run",
+      "status": "PASS",
+      "detail": "remaining=0; CSP/account text matches and verified expected409 are excluded, not proven harmless. No remaining diagnostic observed."
+    },
+    {
+      "step": "uninstall the bundle from the disposable profile",
+      "status": "PASS",
+      "detail": "dsh plugin remove exited 0; still listed=false"
+    },
+    {
+      "step": "boot the real DSH Desktop shell",
+      "status": "NOT_RUN",
+      "detail": "disabled with DSH_E2E_DESKTOP=0"
+    },
+    {
+      "step": "cleanup disposable environment",
+      "status": "PASS",
+      "detail": "removed owned temporary root after server close"
+    }
+  ],
+  "summary": {
+    "pass": 30,
+    "fail": 0,
+    "notRun": 6
+  },
+  "at": "2026-11-18T19:47:53.540Z"
+}
