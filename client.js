@@ -1831,6 +1831,17 @@ window.__ModuleLoader__.load({
           // the disk now holds those bytes, so nothing is left to recover. The
           // removal is best-effort and never affects the save outcome.
           if(scopeReady && doc?.file) {
+            // A pending debounce/pagehide flush must never resurrect the
+            // pre-save draft after the Host has committed those exact bytes.
+            // The live-source-diverged branch above deliberately keeps its
+            // draft, so this only applies to a fully successful save.
+            cancelRecoveryTimer()
+            if(recoveryRuntimeRef.current?.scope===scopeKey &&
+                recoveryRuntimeRef.current.file===doc.file &&
+                recoveryRuntimeRef.current.source===sentSource) {
+              recoveryRuntimeRef.current.source=sentSource
+            }
+            currentDocRef.current={...doc,source:sentSource}
             recoveryClear(scopeKey, doc.file)
             delete recoveryHandledRef.current[doc.file]
             delete recoverySavedRef.current[doc.file]
