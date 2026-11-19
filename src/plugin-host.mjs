@@ -25,6 +25,8 @@ import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
 import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs'
 
+import { createProposalInbox } from './proposal-inbox.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -124,7 +126,27 @@ async function workspaceCard(workspace) {
     status: status === 'ok' || status === 'missing-dir' ? status : 'unknown' }
 }
 
-export function createRouteHandler(ctx) {
+function proposalSession(ctx, sessionId, workspaceId) {
+  if (workspaceId || !sessionId) throw failure('invalid-target', 'Proposals require a conversation session')
+  const agent = ctx.agents.get(sessionId)
+  if (!agent) throw failure('no-session', 'Session is unavailable')
+  return agent
+}
+
+function approvedProposal(inbox, ctx, request) {
+  const agent = proposalSession(ctx, request.sessionId, request.workspaceId)
+  const proposal = inbox.list(agent, request.file).find(entry => entry.id === request.proposalId)
+  if (!proposal) throw failure('proposal-missing', 'Proposal is unavailable or expired')
+  if (proposal.baseHash !== request.baseHash || proposal.baseIdentity !== request.baseIdentity) {
+    throw failure('stale-revision', 'The proposal was prepared for a different revision')
+  }
+  if (proposal.proposedHash !== request.expectedProposedHash) {
+    throw failure('proposal-changed', 'Review the proposal before applying')
+  }
+  return { agent, proposal }
+}
+
+export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   return async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://dsh.local')
@@ -142,6 +164,11 @@ export function createRouteHandler(ctx) {
         const workspaces = []
         for (const workspace of registry.list()) workspaces.push(await workspaceCard(workspace))
         return reply(res,200,{ok:true,workspaces,available:true})
+      }
+      if (req.method === 'GET' && endpoint === '/proposals') {
+        const agent = proposalSession(ctx,url.searchParams.get('sessionId'),url.searchParams.get('workspaceId'))
+        const file = url.searchParams.get('file')
+        return reply(res,200,{ok:true,proposals:inbox.list(agent,file)})
       }
       if (req.method === 'GET' && endpoint === '/files') {
         const root = await workspaceFor(ctx,{
@@ -288,7 +315,12 @@ export function createRouteHandler(ctx) {
       }
       if (req.method === 'POST' && (endpoint === '/apply' || endpoint === '/preview')) {
         const preview = endpoint === '/preview'
-        const params=await bodyJson(req)
+        let params=await bodyJson(req)
+        const approval = !preview && params.kind === 'agent-proposal' ? approvedProposal(inbox,ctx,params) : null
+        if (approval) {
+          params = { ...approval.proposal.edit, sessionId:params.sessionId, baseHash:params.baseHash,
+            baseIdentity:params.baseIdentity, expectedProposedHash:params.expectedProposedHash }
+        }
         const reviewed = Object.hasOwn(params,'expectedProposedHash')
         if ((preview || reviewed) && !REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           return reply(res,400,{ok:false,error:'unsupported-operation'})
@@ -478,12 +510,14 @@ export function createRouteHandler(ctx) {
           }
         }
         const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
+        if (approval) inbox.remove(approval.agent,approval.proposal.id)
         return reply(res,200,{ok:true,result,patches,createdId})
       }
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
       const code=e.code || 'internal-error'
-      const status=code==='stale-revision'||code==='already-exists'||code==='workspace-missing'?409:
+      const status=['stale-revision','already-exists','workspace-missing','proposal-changed'].includes(code)?409:
+        code==='proposal-missing'?404:
         code==='file-busy'?423:code==='too-large'?413:code==='workspace-unavailable'?503:
         ['internal-error','lock-release-failed','lock-changed'].includes(code)?500:400
       return reply(res,status,{ok:false,error:code,message:code==='internal-error'?'Request failed':String(e.message).slice(0,220)})
@@ -492,6 +526,7 @@ export function createRouteHandler(ctx) {
 }
 
 export function apply(ctx) {
-  ctx.effect(() => ctx.webServer.register({kind:'prefix',path:PREFIX,handler:createRouteHandler(ctx)}), 'dsh-design-studio native edit routes')
-  ctx.inject?.(['tools'], registerAgentProposal)
+  const inbox = createProposalInbox()
+  ctx.effect(() => ctx.webServer.register({kind:'prefix',path:PREFIX,handler:createRouteHandler(ctx,inbox)}), 'dsh-design-studio native edit routes')
+  ctx.inject?.(['tools'], scope => registerAgentProposal(scope,inbox))
 }

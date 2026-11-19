@@ -24,7 +24,7 @@ import { statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createRouteHandler } from '../../../src/plugin-host.mjs'
+import { apply } from '../../../src/plugin-host.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 export const repoRoot = path.resolve(here, '../../..')
@@ -99,16 +99,23 @@ export async function startHarness({ workspace, sessionId = 'e2e-session', works
     status: async () => entry.status || 'ok',
   }))
   const registryById = new Map(registryEntries.map((entry) => [entry.id, entry]))
+  const agent = { id: sessionId }
+  let proposalTool
+  let hostHandler
   const ctx = {
-    agents: { get: (id) => (typeof id === 'string' && id === sessionId ? { id } : undefined) },
+    agents: { get: (id) => (id === sessionId ? agent : undefined) },
     workingDirectory: { ensure: async () => root },
     workspaceRegistry: workspaces === null ? undefined : {
       get: (id) => registryById.get(id),
       list: () => registryEntries.slice(),
     },
-    webServer: { register: () => () => {} },
+    webServer: { register(route) { hostHandler = route.handler } },
+    effect(start) { start() },
+    inject(_services, register) {
+      register({ ...ctx, tools: { register(tool) { proposalTool = tool } } })
+    },
   }
-  const hostHandler = createRouteHandler(ctx)
+  apply(ctx)
 
   const requests = []
   const server = createServer(async (req, res) => {
@@ -153,6 +160,10 @@ export async function startHarness({ workspace, sessionId = 'e2e-session', works
     workspace: root,
     sessionId,
     requests,
+    async propose(edit) {
+      const result = await proposalTool.execute(edit,{ agent, signal: new AbortController().signal, callId: 'browser-fixture' })
+      return JSON.parse(result)
+    },
     /** Absolute path of a workspace file. */
     file: (relative) => path.join(root, relative),
     /** Write a workspace file (creates parent directories). */

@@ -1,3 +1,4 @@
+import { proposalReviewSpec } from './proposal-review.mjs'
 /**
  * Browser gate spec registry.
  *
@@ -185,4 +186,5 @@ export const specs = [
   responsiveSpec,
   performanceSpec,
   largeDocumentSpec,
+  proposalReviewSpec,
 ]

@@ -787,6 +787,42 @@ window.__ModuleLoader__.load({
       return h('svg',{viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.7,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':'true',focusable:'false'},
         (GRAPHITE_ICONS[name]||GRAPHITE_ICONS.rect).map(([tag,attrs],index)=>h(tag,{...attrs,key:index})))
     }
+    function ProposalReview({sessionId, document:active, disabled, save}) {
+      const [state,setState]=React.useState({proposals:[],status:''})
+      const [selection,setSelection]=React.useState(null)
+      async function refresh() {
+        setSelection(null)
+        setState({proposals:[],status:'Chargement…'})
+        try {
+          const query=new URLSearchParams({sessionId,file:active.file})
+          const result=await request('/proposals?'+query)
+          setState({proposals:result.proposals,status:result.proposals.length?'':'Aucune proposition pour ce fichier.'})
+        } catch(error) {
+          setState({proposals:[],status:error.message})
+        }
+      }
+      const matches=selection && selection.baseHash===active.hash && selection.baseIdentity===active.identity
+      return h('details',{className:'dsh-studio-menu',
+        onToggle:event=>{if(event.currentTarget.open)void refresh()}},
+        h('summary',null,'Propositions IA'),
+        h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0,width:'min(420px, 85vw)',maxHeight:'60vh',overflow:'auto'}},
+          h('button',{type:'button',style:button,onClick:()=>void refresh()},'Actualiser les propositions'),
+          state.status&&h('div',{role:'status'},state.status),
+          state.proposals.map((proposal,index)=>h('button',{key:proposal.id,type:'button',style:button,
+            'aria-pressed':selection?.id===proposal.id,onClick:()=>setSelection(proposal)},
+            'Proposition '+(index+1)+' · '+proposal.edit.kind)),
+          selection&&h('section',{'aria-label':'Comparaison de la proposition'},
+            h('p',null,active.file),
+            h('small',null,'Appel DSH '+selection.callId),
+            selection.patches.map(patch=>h('div',{key:patch.start},
+              h('strong',null,'Avant'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.before),
+              h('strong',null,'Après'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.after))),
+            !matches&&h('p',{role:'status'},'Le fichier a changé. Demandez une nouvelle proposition.'),
+            h('button',{type:'button',style:button,disabled:disabled||!matches,
+              onClick:()=>void save({kind:'agent-proposal',proposalId:selection.id,
+                expectedProposedHash:selection.proposedHash})},'Appliquer la proposition'))))
+    }
+
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
       const workspaceId = props && typeof props.workspaceId === 'string' ? props.workspaceId : ''
@@ -4327,6 +4363,8 @@ window.__ModuleLoader__.load({
             h('button',{type:'button',className:'dsh-studio-tool','aria-label':'Redo saved edit',title:'Rétablir · Ctrl+Shift+Z',disabled:busy||reloadRequired||!redoStack.length||source!==doc?.source,onClick:()=>void redo()},glyph('redoBtn'))),
           h('span',{className:'dsh-studio-grow'}),
           h('button',{className:'dsh-studio-tooltext',type:'button','aria-label':'Toggle canvas grid','aria-pressed':gridVisible,onClick:()=>setGridVisible(v=>!v)},glyph('grid'),'Grille'),
+          !panelMode&&scope?.sessionId&&doc&&h(ProposalReview,{key:scopeKey+':'+doc.file+':'+doc.identity,
+            sessionId:scope.sessionId,document:doc,disabled:busy||reloadRequired||source!==doc.source,save}),
           h('span',{className:'dsh-studio-helper'},'Édition manuelle'),h('details',{className:'dsh-studio-menu dsh-studio-settings'},h('summary',null,'Options'),h('div',{className:'dsh-studio-menu-body'},
             h('button',{style:button,'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,onClick:()=>setSnapToGrid(v=>!v)},'Magnétisme'),
             h('select',{style:field,'aria-label':'Grid spacing',value:gridStep,onChange:e=>setGridStep(Number(e.target.value))},[2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),

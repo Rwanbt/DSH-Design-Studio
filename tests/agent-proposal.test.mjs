@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { apply } from '../src/plugin-host.mjs'
 
 test('DSH proposal tool prepares a scoped native diff without saving', async context => {
@@ -14,8 +15,14 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   await writeFile(join(root, 'page.html'), original)
   await writeFile(join(outside, 'page.html'), '<h1 id="hero">Outside</h1>')
   let tool
+  let handler
   apply({
-    effect() {},
+    effect(start) { start() },
+    webServer: { register(route) { handler = route.handler } },
+    agents: { get(sessionId) {
+      return sessionId === agent.id ? agent : sessionId === 'different' ? { id: sessionId } : null
+    } },
+    workingDirectory: { async ensure(caller) { assert.equal(caller, agent); return root } },
     inject(names, install) {
       assert.deepEqual(names, ['tools'])
       install({
@@ -41,4 +48,43 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   assert.equal((await invoke({ ...inputs, file: join(outside, 'page.html') })).ok, false)
   assert.equal((await invoke(inputs, { ...scope, agent: undefined })).error, 'no-session')
   await assert.rejects(tool.execute(inputs, { ...scope, signal: AbortSignal.abort() }), { name: 'AbortError' })
+
+  async function request(method, endpoint, body) {
+    const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
+    req.method = method
+    req.url = '/design-studio-native' + endpoint
+    req.headers = { 'content-type': 'application/json' }
+    let status
+    let payload
+    await handler(req, { writeHead(code) { status = code }, end(value) { payload = JSON.parse(value) } })
+    return { status, payload }
+  }
+
+  const endpoint = '/proposals?file=page.html&sessionId='
+  const list = await request('GET', endpoint + agent.id)
+  assert.equal(list.status, 200)
+  assert.equal(list.payload.proposals.length, 1)
+  const [proposal] = list.payload.proposals
+  assert.equal(proposal.callId, scope.callId)
+  assert.deepEqual((await request('GET', endpoint + 'different')).payload.proposals, [])
+  assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
+  const approval = { kind: 'agent-proposal', proposalId: proposal.id, file: inputs.file, sessionId: agent.id,
+    baseHash: proposal.baseHash, baseIdentity: proposal.baseIdentity, expectedProposedHash: proposal.proposedHash }
+  const wrongSession = await request('POST', '/apply', { ...approval, sessionId: 'different' })
+  assert.equal(wrongSession.status, 404)
+  const wrongHash = await request('POST', '/apply', { ...approval, expectedProposedHash: '0'.repeat(64) })
+  assert.equal(wrongHash.status, 409)
+  assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
+
+  const saved = await request('POST', '/apply', { ...approval, value: 'Injected' })
+  assert.equal(saved.status, 200)
+  const savedRevision = saved.payload.result
+  assert.equal(await readFile(join(root, 'page.html'), 'utf8'), '<h1 id="hero">After</h1>')
+  assert.equal((await request('POST', '/apply', approval)).status, 404)
+  assert.deepEqual((await request('GET', endpoint + agent.id)).payload.proposals, [])
+
+  const undo = await request('POST', '/apply', { kind: 'patches', sessionId: agent.id, file: inputs.file,
+    baseHash: savedRevision.hash, baseIdentity: savedRevision.identity, patches: savedRevision.inverse })
+  assert.equal(undo.status, 200)
+  assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
 })

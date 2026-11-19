@@ -22,7 +22,7 @@ function validatedEdit(args) {
 
 export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 
-export function registerAgentProposal(ctx) {
+export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
     description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. The tool never saves the file.',
@@ -51,10 +51,12 @@ export function registerAgentProposal(ctx) {
         const document = await createNativeFileStore(root).read(edit.file)
         signal.throwIfAborted()
         const preview = previewNativeEdit(document, planReviewableEdit(document, edit))
-        const output = JSON.stringify({ ok: true, proposal: { version: 1, edit, ...preview }, callId })
+        const proposal = { version: 1, edit, ...preview }
+        const output = JSON.stringify({ ok: true, proposal, callId })
         if (Buffer.byteLength(output) > maxProposalBytes) {
           return JSON.stringify({ ok: false, error: 'proposal-too-large' })
         }
+        if (proposal.changed) inbox.add(agent, { ...proposal, callId })
         return output
       } catch (error) {
         signal.throwIfAborted()

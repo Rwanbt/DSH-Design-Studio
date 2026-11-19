@@ -56,3 +56,18 @@ The legacy file routes remain available when the optional tool service
 is absent. The proposal's call ID is useful for display and correlation.
 Authentic provenance and approval still require a review UI linked to the
 DSH conversation and explicit application through the guarded editor.
+
+## Conversation proposal inbox
+
+The Host retains up to eight changed proposals per live conversation for 30
+minutes, in memory. The conversation's runtime agent object owns the inbox;
+a workspace ID, another conversation or a fabricated proposal ID cannot
+retrieve an entry. The inbox is discarded when the plugin restarts.
+
+The workbench can list proposals for the open file with
+`GET /proposals?sessionId=…&file=…`. Approval uses `POST /apply` with
+`kind: "agent-proposal"`, the proposal ID, file, session and the three
+revision/content preconditions shown to the client. The Host plans the
+stored edit and checks its resulting hash before delegating to the existing
+locked write. It removes the proposal after a successful apply and returns
+the regular inverse for Undo. No model input is accepted as approval.
