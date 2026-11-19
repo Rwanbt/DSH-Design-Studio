@@ -1,5 +1,6 @@
 import { listEditableSvgNodes, svgRootAttributes } from './svg-attributes.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
+import { serializeSvgText } from './svg-text.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 
 const TYPES=new Set(['rect','circle','ellipse','text','path','pen'])
@@ -17,8 +18,9 @@ function number(value) {
   const rounded=Math.round(value*1000)/1000
   return String(Object.is(rounded,-0)?0:rounded)
 }
-export function svgShapeInsertPatch(source,kind,position=null) {
+export function svgShapeInsertPatch(source,kind,position=null,text=undefined) {
   if(typeof source!=='string' || !TYPES.has(kind))invalid('unsupported-shape','Only rectangle/circle/ellipse/text/path/pen are supported')
+  if(text!==undefined&&kind!=='text')invalid('invalid-target','Only text shapes accept text content')
   // The existing inspector rejects scripts/DOCTYPE and ambiguous SVG IDs.
   svgRootAttributes(source)
   const ids=new Set(listEditableSvgNodes(source).map(node=>node.id))
@@ -71,6 +73,6 @@ export function svgShapeInsertPatch(source,kind,position=null) {
   if(placed && ['circle','ellipse'].includes(kind)){attr.cx=position.x;attr.cy=position.y}
   const string=ATTRS[kind].map(key=>key+'="'+(typeof attr[key]==='number'?number(attr[key]):attr[key])+'"').join(' ')
   const prefix=(start>0 && source[start-1]==='\n'?'':'\n')
-  const inserted=prefix+'  <'+(kind==='pen'?'path':kind)+' id="'+id+'" '+string+(kind==='text'?'>Double-click to edit</text>':'/>')+'\n'
+  const inserted=prefix+'  <'+(kind==='pen'?'path':kind)+' id="'+id+'" '+string+(kind==='text'?'>'+serializeSvgText(text===undefined?'Double-click to edit':text,number(attr.x))+'</text>':'/>')+'\n'
   return {id,patch:{start,end:start,before:'',after:inserted}}
 }

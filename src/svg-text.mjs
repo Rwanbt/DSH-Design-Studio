@@ -103,6 +103,14 @@ export function listSvgTextNodes(source) {
   return result
 }
 
+export function serializeSvgText(value,x) {
+  const escaped=value.split(/\r?\n/u).map(escapeSvgText)
+  return escaped.length===1?escaped[0]:escaped.map((line,index)=>{
+    if(!x)reject('unsupported-text','Multiline SVG text requires an explicit x coordinate')
+    return '<tspan x="'+x+'" dy="'+(index===0?'0':'1.2em')+'">'+line+'</tspan>'
+  }).join('')
+}
+
 export function svgTextPatch(source,{id,value}) {
   if(typeof id!=='string' || !id || typeof value!=='string')reject('invalid-target','Invalid text edit')
   const nodes=listSvgTextNodes(source)
@@ -110,10 +118,6 @@ export function svgTextPatch(source,{id,value}) {
   if(matches.length!==1)reject('unknown-node','SVG text id not found or ambiguous')
   const node=matches[0]
   if(!node.editable)reject('unsupported-text','Complex SVG text needs source editing')
-  const escaped=value.split(/\r?\n/u).map(escapeSvgText)
-  const after=escaped.length===1?escaped[0]:escaped.map((line,index)=>{
-    if(!node.attributes.x)reject('unsupported-text','Multiline SVG text requires an explicit x coordinate')
-    return '<tspan x="'+node.attributes.x+'" dy="'+(index===0?'0':'1.2em')+'">'+line+'</tspan>'
-  }).join('')
+  const after=serializeSvgText(value,node.attributes.x)
   return {start:node.start,end:node.end,before:node.before,after}
 }

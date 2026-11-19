@@ -123,6 +123,13 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   const add={file:'shapes.svg',kind:'svg-add-shape',shape:'circle',x:31,y:42}
   assert.equal((await invoke({...add,y:undefined})).error,'invalid-edit')
   assert.equal((await invoke({...add,x:'31'})).error,'invalid-edit')
+  const artboard = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>'
+  await writeFile(join(root,'text.svg'),artboard)
+  const label = await invoke({file:'text.svg',kind:'svg-add-shape',shape:'text',x:20,y:30,text:'Titre & <suite>\nLigne 2'})
+  assert.equal(label.ok,true)
+  assert.match(label.proposal.patches[0].after,/<tspan x="20" dy="0">Titre &amp; &lt;suite&gt;<\/tspan><tspan x="20" dy="1.2em">Ligne 2<\/tspan>/)
+  assert.equal((await invoke({...add,text:'Unexpected'})).error,'invalid-edit')
+  assert.equal(await readFile(join(root,'text.svg'),'utf8'),artboard)
   const transform = {file:'shapes.svg',kind:'svg-transform',id:'a',operation:{type:'translate',dx:12,dy:5}}
   const translated = await invoke(transform)
   assert.equal(translated.ok,true)

@@ -26,7 +26,7 @@ function fail(code, message) {
 
 export function planShapeAddition(source,edit) {
   const positioned = Object.hasOwn(edit,'x') || Object.hasOwn(edit,'y')
-  return svgShapeInsertPatch(source,edit.shape,positioned?{x:edit.x,y:edit.y}:null)
+  return svgShapeInsertPatch(source,edit.shape,positioned?{x:edit.x,y:edit.y}:null,edit.text)
 }
 
 export function planReviewableEdit(document, edit) {

@@ -53,18 +53,19 @@ function validTransform(operation) {
 function validatedEdit(args) {
   if (!args || typeof args !== 'object' || !REVIEWABLE_EDIT_KINDS.includes(args.kind)) return null
   const placedShape=args.kind==='svg-add-shape'&&(Object.hasOwn(args,'x')||Object.hasOwn(args,'y'))
-  const fields = [...required, ...editFields[args.kind], ...(placedShape?['x','y']:[])]
+  const hasText=args.kind==='svg-add-shape'&&args.shape==='text'&&Object.hasOwn(args,'text')
+  const fields = [...required, ...editFields[args.kind], ...(placedShape?['x','y']:[]), ...(hasText?['text']:[])]
   if (Object.keys(args).length !== fields.length || fields.some(field =>
     !Object.hasOwn(args, field) || (field==='operation' ? !validTransform(args[field]) :
       field==='x'||field==='y' ? !Number.isFinite(args[field]) :
-      typeof args[field] !== 'string' || args[field].length > 8192 || (field !== 'value' && !args[field].trim())))) return null
+      typeof args[field] !== 'string' || args[field].length > 8192 || (field !== 'value' && field !== 'text' && !args[field].trim())))) return null
   return Object.fromEntries(fields.map(field => [field, args[field]]))
 }
 
 const maxBatchEdits=6
 const editProperties = {
   ...Object.fromEntries(optional.map(field=>[field,field==='operation'?transformSchema:{type:'string'}])),
-  x:{type:'number'},y:{type:'number'},
+  x:{type:'number'},y:{type:'number'},text:{type:'string'},
 }
 
 function validatedProposal(args) {
@@ -87,7 +88,7 @@ export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use svg-add-shape with shape rect, circle, ellipse, text or path to insert a native primitive at the artboard center. Supply numeric x and y together to place a rect or text by its anchor, or a circle or ellipse by its center. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use svg-add-shape with shape rect, circle, ellipse, text or path to insert a native primitive at the artboard center. Supply numeric x and y together to place a rect or text by its anchor, or a circle or ellipse by its center. For text shapes, optional text sets the literal initial content and supports line breaks. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,

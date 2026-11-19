@@ -197,3 +197,24 @@ export const svgShapeProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const svgTextInsertionProposalReviewSpec = {
+  name: 'proposals: insert editable multiline SVG text',
+  async run({ page, harness, assert }) {
+    const file='label.svg'
+    const original='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>'
+    await harness.write(file,original)
+    const proposal=await harness.propose({file,kind:'svg-add-shape',shape:'text',x:50,y:20,text:'A & <B>\nLine two'})
+    assert.equal(proposal.ok,true)
+    await openWorkspaceFile(page,file,{expect:'svg'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*svg-add-shape/}).click()
+    await page.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const lines=page.frameLocator('iframe[title="Isolated SVG preview"]').locator('text#shape-1 > tspan')
+    await lines.nth(1).waitFor()
+    assert.deepEqual(await lines.allTextContents(),['A & <B>','Line two'])
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await lines.first().waitFor({state:'detached'})
+    assert.equal(await harness.read(file),original)
+  },
+}

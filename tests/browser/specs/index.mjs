@@ -1,6 +1,6 @@
 import { pdfOpenSpec, pdfCopySpec, pdfNoteSpec, pdfHighlightSpec } from './pdf-open.mjs'
 import { presentationSpec, presentationPrintSpec, presentationPptxSpec } from './presentation.mjs'
-import { cssMediaProposalReviewSpec, htmlStyleProposalReviewSpec, proposalReviewSpec, slideProposalReviewSpec, svgOrderProposalReviewSpec, svgShapeProposalReviewSpec, svgTransformProposalReviewSpec } from './proposal-review.mjs'
+import { cssMediaProposalReviewSpec, htmlStyleProposalReviewSpec, proposalReviewSpec, slideProposalReviewSpec, svgOrderProposalReviewSpec, svgShapeProposalReviewSpec, svgTextInsertionProposalReviewSpec, svgTransformProposalReviewSpec } from './proposal-review.mjs'
 /**
  * Browser gate spec registry.
  *
@@ -195,6 +195,7 @@ export const specs = [
   svgOrderProposalReviewSpec,
   svgTransformProposalReviewSpec,
   svgShapeProposalReviewSpec,
+  svgTextInsertionProposalReviewSpec,
   presentationSpec,
   presentationPrintSpec,
   presentationPptxSpec,
