@@ -43,3 +43,38 @@ export const marqueeSelectionSpec={
     assert.equal(await harness.read('marquee.svg'),DOCUMENT)
   }
 }
+
+
+export const marqueeModifierSpec={
+  name:'canvas: Shift adds to marquee selection and Alt selects only fully enclosed shapes',
+  async run({page,harness,assert}){
+    await harness.write('marquee-modes.svg',DOCUMENT)
+    await openWorkspaceFile(page,'marquee-modes.svg',{expect:'svg'})
+    const overlay=page.getByLabel('Direct manipulation overlay')
+    const rect=await overlay.boundingBox()
+    assert.ok(rect&&rect.width>100&&rect.height>60)
+    async function marquee(from,to,modifier) {
+      const point=({x,y})=>({x:rect.x+x/200*rect.width,y:rect.y+y/120*rect.height})
+      const a=point(from),b=point(to)
+      await page.mouse.move(a.x,a.y)
+      if(modifier)await page.keyboard.down(modifier)
+      await page.mouse.down()
+      await page.mouse.move(b.x,b.y,{steps:8})
+      const mode=await page.locator('[data-marquee-selection]').getAttribute('data-marquee-mode')
+      await page.mouse.up()
+      if(modifier)await page.keyboard.up(modifier)
+      return mode
+    }
+    assert.equal(await marquee({x:5,y:5},{x:60,y:55}), 'intersect')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #second/}).getAttribute('aria-label'),
+      'Select layer rect #second')
+    assert.equal(await marquee({x:68,y:5},{x:115,y:55},'Shift'),'intersect-add')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #second/}).getAttribute('aria-label'),
+      'Select layer rect #second (in selection)')
+    assert.equal(await marquee({x:18,y:10},{x:95,y:63},'Alt'),'contain')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #second/}).getAttribute('aria-label'),
+      'Select layer rect #second','Alt containment replaces the previous additive selection')
+    assert.equal(await harness.read('marquee-modes.svg'),DOCUMENT,
+      'all three marquee operations remain local, with no Host write')
+  }
+}
