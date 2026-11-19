@@ -322,6 +322,21 @@ async function main() {
           copyVerified ? 'PASS' : copyError === 'pdf-engine-unavailable' && sourcePreserved ? 'NOT_RUN' : 'FAIL',
           `HTTP ${copied.status()}, source preserved=${sourcePreserved}, ${copyError || copyType}`)
 
+        if (copyVerified) {
+          const rotated = await context.request.post(origin + '/design-studio-native/pdf/copy',{
+            data:{sessionId,selections:[{file:'g0-source.pdf',pages:[2],rotation:270}]},
+          })
+          const body = await rotated.body()
+          const unchanged = (await readFile(pdfFile)).equals(pdf)
+          const verified = rotated.ok() && /\/Rotate 270\b/.test(body.toString('latin1')) && unchanged
+          const engineUnavailable = rotated.status()===400 &&
+            rotated.headers()['content-type']?.startsWith('application/json') &&
+            JSON.parse(body).error==='pdf-rotation-unavailable' && unchanged
+          record('rotate a PDF page copy through the real Host',
+            verified ? 'PASS' : engineUnavailable ? 'NOT_RUN' : 'FAIL',
+            `HTTP ${rotated.status()}, rotation=270, source preserved=${unchanged}`)
+        }
+
         const previewQuery = new URLSearchParams({sessionId,file:'g0-source.pdf',page:'2'})
         const pdfPreview = await context.request.get(origin + '/design-studio-native/pdf/preview?' + previewQuery)
         const previewHeaders = pdfPreview.headers()

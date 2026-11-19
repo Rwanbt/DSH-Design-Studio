@@ -1141,7 +1141,7 @@ window.__ModuleLoader__.load({
       const nextId=React.useRef(1)
       const [busy,setBusy]=React.useState(false)
       const [error,setError]=React.useState('')
-      const selections=rows.map(row=>({file:row.file,pages:row.selection.trim().split(/\s*,\s*/)}))
+      const selections=rows.map(row=>({file:row.file,rotation:row.rotation??0,pages:row.selection.trim().split(/\s*,\s*/)}))
       const valid=selections.reduce((total,item)=>total+item.pages.length,0)<=24&&
         selections.every(item=>item.pages.every(page=>/^[1-9]\d{0,4}$/.test(page)&&Number(page)<=10000))
       function update(id,patch) {
@@ -1179,6 +1179,9 @@ window.__ModuleLoader__.load({
           h('label',null,'Pages dans l’ordre souhaité',
             h('input',{style:field,value:row.selection,placeholder:'3, 1, 2',maxLength:160,
               onChange:event=>update(row.id,{selection:event.target.value})})),
+          h('label',null,'Rotation des pages',
+            h('select',{style:field,value:row.rotation??0,onChange:event=>update(row.id,{rotation:Number(event.target.value)})},
+              [0,90,180,270].map(degrees=>h('option',{key:degrees,value:degrees},degrees+'°')))),
           rows.length>1&&h('div',{style:{display:'flex',gap:4}},
             h('button',{type:'button',style:button,disabled:index===0,onClick:()=>move(index,-1)},'Monter'),
             h('button',{type:'button',style:button,disabled:index===rows.length-1,onClick:()=>move(index,1)},'Descendre'),

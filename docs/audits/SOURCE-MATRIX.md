@@ -76,3 +76,7 @@ Le lecteur ouvre une boîte modale dans le panneau DSH et démarre sur la diapos
 ## Propositions IA sur la structure des présentations
 
 L’outil DSH `design_studio_propose` accepte l’ajout, la duplication, le déplacement et la suppression d’une diapositive. Les opérations proposées partagent les mêmes fonctions de validation et de planification que les actions manuelles. La proposition reste dans la session du document et expose les différences avant et après. L’application vérifie à nouveau la révision et l’empreinte présentée, puis enregistre une opération annulable. Les tests invoquent l’outil directement et vérifient le parcours de validation en navigateur. Le test DSH Web sans identifiants ne déclenche aucun appel de modèle.
+
+## Rotation des pages dans un assemblage PDF
+
+Chaque sélection peut ajouter une rotation de 90°, 180° ou 270° aux pages qu’elle place dans la copie. Le Host assemble d’abord les pages avec Poppler et applique les rotations au document de sortie avec le moteur optionnel pypdf. L’assemblage sans rotation utilise toujours les outils Poppler seuls. Les tests navigateur vérifient l’angle par page, l’ordre, le texte sélectionnable et les fichiers sources intacts. Le test Host réel vérifie une copie tournée de 270°.

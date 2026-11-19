@@ -2,9 +2,11 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm, stat, writeFile, copyFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 const runFile = promisify(execFile)
+const rotationScript = fileURLToPath(new URL('./pdf-page-rotate.py',import.meta.url))
 const maxPages = 24
 const maxOutputBytes = 16 * 1024 * 1024
 
@@ -39,11 +41,16 @@ function groupSelections(selections) {
   }
   const groups = new Map()
   const order = []
+  const rotations = []
   for (const selection of selections) {
     if (!selection || typeof selection.file !== 'string' || !selection.file) {
       fail('invalid-pdf-pages','Choose a PDF for each selection')
     }
     validatePages(selection.pages)
+    const rotation = selection.rotation === undefined ? 0 : selection.rotation
+    if (![0,90,180,270].includes(rotation)) {
+      fail('invalid-pdf-rotation','Choose a rotation of 0, 90, 180 or 270 degrees')
+    }
     if (order.length + selection.pages.length > maxPages) {
       fail('invalid-pdf-pages','Choose at most 24 pages across all selections')
     }
@@ -53,10 +60,11 @@ function groupSelections(selections) {
     const group = groups.get(selection.file)
     for (const page of selection.pages) {
       group.pages.add(page)
+      rotations.push(rotation)
       order.push(`source-${group.index}-page-${page}.pdf`)
     }
   }
-  return { groups, order }
+  return { groups, order, rotations }
 }
 
 async function extractPages(folder, signal, group, bytes, recordSize) {
@@ -77,10 +85,25 @@ async function extractPages(folder, signal, group, bytes, recordSize) {
   }
 }
 
-export function createPdfPageCopier() {
+async function rotatePages(python, folder, signal, input, rotations) {
+  try {
+    await runFile(python,['-I',rotationScript,input,JSON.stringify(rotations)],{
+      cwd:folder,signal,timeout:5000,maxBuffer:64*1024,windowsHide:true,
+      env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot},
+    })
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 10) {
+      fail('pdf-rotation-unavailable','Python with pypdf is unavailable on this host')
+    }
+    fail('pdf-copy-failed','The assembled PDF could not be rotated within the processing limit')
+  }
+  return path.join(folder,'rotated.pdf')
+}
+
+export function createPdfPageCopier(python = process.env.DSH_PDF_PYTHON || 'python3') {
   let busy = false
   return async (selections, readSource) => {
-    const { groups, order } = groupSelections(selections)
+    const { groups, order, rotations } = groupSelections(selections)
     if (busy) fail('file-busy','Another PDF copy is being processed')
     busy = true
     let folder
@@ -108,7 +131,9 @@ export function createPdfPageCopier() {
         await run('pdfunite',[...order,output],folder,signal)
       }
       if ((await stat(result)).size > maxOutputBytes) fail('too-large','The output PDF exceeds 16 MiB')
-      return await readFile(result)
+      const final = rotations.some(Boolean) ? await rotatePages(python,folder,signal,output,rotations) : result
+      if (final !== result && (await stat(final)).size > maxOutputBytes) fail('too-large','The rotated PDF exceeds 16 MiB')
+      return await readFile(final)
     } finally {
       try {
         if (folder) await rm(folder,{recursive:true,force:true})

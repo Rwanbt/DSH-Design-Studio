@@ -35,6 +35,9 @@ export const pdfCopySpec = {
     await second.getByLabel('Fichier PDF').selectOption('other.pdf')
     await second.getByLabel('Pages dans l’ordre souhaité').fill('1')
     await second.getByRole('button', { name: 'Monter' }).click()
+    const python = process.env.DSH_PDF_PYTHON || 'python3'
+    const canRotate = spawnSync(python,['-I','-c','import pypdf'],{stdio:'ignore'}).status === 0
+    if (canRotate) await first.getByLabel('Rotation des pages').selectOption('90')
     const button = form.getByRole('button', { name: 'Télécharger la copie PDF' })
     const hasEngine = ['pdfinfo','pdfseparate','pdfunite'].every(tool =>
       spawnSync(tool,['-v'],{stdio:'ignore'}).status === 0)
@@ -42,6 +45,10 @@ export const pdfCopySpec = {
       const [download] = await Promise.all([page.waitForEvent('download'), button.click()])
       assert.equal(download.suggestedFilename(), 'assemblage.pdf')
       assert.equal(await download.failure(), null)
+      if (canRotate) {
+        const info = execFileSync('pdfinfo',['-f','1','-l','4',await download.path()],{encoding:'utf8'})
+        assert.deepEqual([...info.matchAll(/^Page\s+\d+ rot:\s+(\d+)/gm)].map(match=>Number(match[1])),[90,0,0,0])
+      }
       if (spawnSync('pdftotext',['-v'],{stdio:'ignore'}).status === 0) {
         const text = execFileSync('pdftotext',[await download.path(),'-'],{encoding:'utf8'})
         assert.deepEqual(text.match(/(?:First|Second|Third) text/g),['Third text','Second text','First text','Second text'])

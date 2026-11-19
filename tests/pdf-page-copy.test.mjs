@@ -13,6 +13,7 @@ const hasTools = ['pdfinfo','pdfseparate','pdfunite','pdftotext'].every(tool =>
 
 test('PDF page processing rejects invalid page requests and non-PDF input', async () => {
   const copy = createPdfPageCopier()
+  await assert.rejects(copy([{file:'source.pdf',pages:[1],rotation:45}],()=>pdfFixture()), {code:'invalid-pdf-rotation'})
   await assert.rejects(copy([{file:'source.pdf',pages:[0]}],()=>pdfFixture()), { code: 'invalid-pdf-pages' })
   await assert.rejects(copy([{file:'source.pdf',pages:[1]}],()=>Buffer.from('not a PDF')), { code: 'invalid-pdf' })
 })
