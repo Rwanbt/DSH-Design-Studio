@@ -74,7 +74,12 @@ export const marqueeModifierSpec={
     assert.equal(await marquee({x:18,y:10},{x:95,y:63},'Alt'),'contain')
     assert.equal(await page.getByRole('button',{name:/Select layer rect #second/}).getAttribute('aria-label'),
       'Select layer rect #second','Alt containment replaces the previous additive selection')
+    await page.getByRole('button',{name:/Select layer rect #first/}).press('Escape')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #first/}).getAttribute('aria-pressed'),
+      'false','Escape clears the primary selection')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #second/}).getAttribute('aria-pressed'),
+      'false','Escape clears the rest of the selection')
     assert.equal(await harness.read('marquee-modes.svg'),DOCUMENT,
-      'all three marquee operations remain local, with no Host write')
+      'marquee modifiers and Escape remain local, with no Host write')
   }
 }
