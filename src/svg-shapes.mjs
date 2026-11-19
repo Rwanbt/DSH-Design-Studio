@@ -36,9 +36,8 @@ export function svgShapeInsertPatch(source,kind,position=null) {
     }
     // Reuse the native geometry range and precision; off-artboard anchors are valid.
     number(position.x);number(position.y)
-    // Non-layer IDs (gradients/filters/defs) also occupy the SVG ID namespace.
-    if(kind!=='pen')for(const id of scanSvgDocument(source).byId.keys())ids.add(id)
   }
+  if(kind!=='pen')for(const id of scanSvgDocument(source).byId.keys())ids.add(id)
   // Positioned primitives are appended to the root, not to an existing group's
   // coordinate system. Keep the historical conservative mode for other calls.
   const geometry=svgGeometry(source,{transforms:placed && kind!=='pen'})

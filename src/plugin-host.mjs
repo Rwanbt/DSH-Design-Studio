@@ -20,7 +20,7 @@ import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
 import { listCssVisualRules, listCssVisualRuleDetails } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
-import { planReviewableBatch, planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
+import { planShapeAddition, planReviewableBatch, planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
 import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs'
 
 import { createProposalInbox } from './proposal-inbox.mjs'
@@ -443,6 +443,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         let patches; let createdId=null
         if (batch) {
           patches=planReviewableBatch(doc,params.edits)
+        } else if (params.kind==='svg-add-shape' && doc.format==='svg') {
+          const created=planShapeAddition(doc.source,params)
+          patches=[created.patch];createdId=created.id
         } else if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
         } else if (params.kind === 'svg-layer') {
@@ -453,11 +456,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
             nested:params.nested!==false})
           patches=[operation.patch]
           createdId=operation.selectedId
-        } else if (params.kind === 'svg-add-shape') {
-          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
-          const positioned=Object.hasOwn(params,'x') || Object.hasOwn(params,'y')
-          const created=svgShapeInsertPatch(doc.source,params.shape,positioned?{x:params.x,y:params.y}:null)
-          patches=[created.patch];createdId=created.id
         } else if (params.kind === 'svg-paste') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           // The clipboard payload is re-validated here: the renderer is not a

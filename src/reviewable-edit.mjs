@@ -4,6 +4,7 @@ import { cssMediaDeclarationPatch, cssVisualRulePatch } from './css-visual.mjs'
 import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
 import { htmlVisualAttributePatch, htmlVisualStylePatch, htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
+import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgVisibilityPatch } from './svg-visibility.mjs'
@@ -16,11 +17,16 @@ const slidePlanners = Object.freeze({
   'slide-remove': removeHtmlSlide,
 })
 export const REVIEWABLE_EDIT_KINDS = Object.freeze([
-  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'svg-transform', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
+  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'svg-transform', 'svg-add-shape', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
 ])
 
 function fail(code, message) {
   throw Object.assign(new Error(message), { code })
+}
+
+export function planShapeAddition(source,edit) {
+  const positioned = Object.hasOwn(edit,'x') || Object.hasOwn(edit,'y')
+  return svgShapeInsertPatch(source,edit.shape,positioned?{x:edit.x,y:edit.y}:null)
 }
 
 export function planReviewableEdit(document, edit) {
@@ -31,6 +37,7 @@ export function planReviewableEdit(document, edit) {
     return [svgAttributePatch(source, { id, attribute: edit.attribute, value })]
   }
   if (format === 'svg') {
+    if (kind === 'svg-add-shape') return [planShapeAddition(source,edit).patch]
     if (kind === 'svg-transform') return [svgTransformPatch(source,{id,operation:edit.operation}).patch]
     if (kind === 'svg-order') return [svgOrderPatch(source,{id,direction:edit.direction}).patch]
     if (kind === 'svg-visibility') return [svgVisibilityPatch(source,{id,property:edit.property,value:value??null})]

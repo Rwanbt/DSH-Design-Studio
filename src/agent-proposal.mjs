@@ -9,6 +9,7 @@ const editFields = Object.freeze({
   'svg-attribute': ['id', 'attribute', 'value'],
   'svg-order': ['id', 'direction'],
   'svg-transform': ['id', 'operation'],
+  'svg-add-shape': ['shape'],
   'svg-visibility': ['id', 'property', 'value'],
   'css-rule': ['selector', 'property', 'value'],
   'css-media': ['selector', 'condition', 'property', 'value'],
@@ -82,7 +83,7 @@ export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use svg-add-shape with shape rect, circle, ellipse, text or path to insert a native primitive at the artboard center. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,

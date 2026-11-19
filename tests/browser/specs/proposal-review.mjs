@@ -174,3 +174,25 @@ export const svgTransformProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const svgShapeProposalReviewSpec = {
+  name: 'proposals: add a native SVG shape and undo',
+  async run({ page, harness, assert }) {
+    const file='shape.svg'
+    const original='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'+
+      '<defs><linearGradient id="shape-1"/></defs><rect id="base" width="16" height="16"/></svg>'
+    await harness.write(file,original)
+    assert.equal((await harness.propose({file,kind:'svg-add-shape',shape:'circle'})).ok,true)
+    await openWorkspaceFile(page,file,{expect:'svg'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*svg-add-shape/}).click()
+    assert.equal(await harness.read(file),original)
+    await page.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const shape=page.frameLocator('iframe[title="Isolated SVG preview"]').locator('circle#shape-2')
+    await shape.waitFor()
+    assert.equal(await shape.getAttribute('cx'),'50')
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await shape.waitFor({state:'detached'})
+    assert.equal(await harness.read(file),original)
+  },
+}
