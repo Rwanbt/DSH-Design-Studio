@@ -110,3 +110,5 @@ Les propositions CSS peuvent modifier une déclaration dans un bloc `@media` sim
 ## Rendu des conditions de largeur dans l’aperçu HTML
 
 L’aperçu des feuilles locales reconstruit les règles `@media` simples à partir du sélecteur, de la condition validée et des déclarations autorisées. Les déclarations restent dans leur condition, dans l’ordre de la source. Les autres règles conditionnelles, les URL et les sélecteurs complexes restent exclus. Chromium et Firefox ont vérifié la couleur calculée à 390, 768 et 1280 pixels. Le test Node contrôle la présence du bloc conditionnel complet et l’absence d’aplatissement.
+
+L’aperçu accepte aussi les sélecteurs structurels du parseur CSS natif, notamment les types, les composés, les listes et les combinateurs. Il conserve les membres dont le sujet correspond aux types, IDs ou classes relevés dans le document et laisse le navigateur évaluer la structure à l’intérieur de l’iframe. Les pseudo-classes, les sélecteurs d’attributs, les URLs et les valeurs hors liste restent exclus. Le test navigateur mesure une règle de type et une règle enfant dans un bloc de largeur.

@@ -84,10 +84,11 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
     id:element.id,key:element.key,path:element.path,matches:[],
   }))
   const visited=new Set()
-  const permittedSelectors=new Set()
+  const permittedSelectors=new Set(['html','body'])
   const previewParts=[]
   let previewLength=0,previewDeclarations=0,previewOmitted=0,previewTruncated=false
   for(const item of elements) {
+    permittedSelectors.add(item.tag)
     if(!item.editable)continue
     permittedSelectors.add('#'+item.id)
     for(const name of item.classes)permittedSelectors.add('.'+name)

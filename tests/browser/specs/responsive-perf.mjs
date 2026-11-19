@@ -12,7 +12,7 @@ export const responsiveSpec = {
 <link rel="stylesheet" href="r.css"></head>
 <body><h1 id="headline">Responsive</h1><p id="lead">Body copy.</p></body></html>
 `)
-    await harness.write('r.css', '#headline { color: #202124 }\n@media (max-width: 600px) { #headline { color: #123456 } }\n')
+    await harness.write('r.css', 'h1 { color: #202124 }\n@media (max-width: 600px) { body > h1#headline, .missing { color: #123456 } }\n')
     await openWorkspaceFile(page, 'page.html', { expect: 'html' })
 
     const preview = page.locator('iframe[title="Isolated design preview"]')

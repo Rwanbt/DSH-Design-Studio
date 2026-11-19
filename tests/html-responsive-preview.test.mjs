@@ -35,10 +35,10 @@ test('unexpected CSS values, rule names and CSS constructs never pass the allowl
     {editable:false,selector:'.untrusted',declarations:[{property:'color',value:'blue'}]},
   ]
   const projected=buildSafeLinkedPreviewCss(rules,new Set(['#title']))
-  assert.equal(projected.css,'#title{opacity:0.6;display:grid;}\n#title{display:flex;}')
-  assert.equal(projected.included,3)
+  assert.equal(projected.css,'#title{opacity:0.6;display:grid;}\nbody > #title{display:none;}\n#title{display:flex;}')
+  assert.equal(projected.included,4)
   assert.equal(projected.omitted,4)
-  assert.ok(!/[{}]/.test(projected.css.replace(/#[^{]+\{[^}]*\}/g,'')))
+  assert.ok(!/[{}]/.test(projected.css.replace(/[^{}]+\{[^}]*\}/g,'')))
   assert.ok(!projected.css.includes('evil'))
 })
 test('projected stylesheet has a bounded output even with extreme repeated rules',()=>{

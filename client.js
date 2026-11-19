@@ -255,7 +255,7 @@ window.__ModuleLoader__.load({
       // Host, never the original stylesheet bytes. Simple width queries are reconstructed. URLs remain excluded.
       const projected = ['html','htm'].includes(format) &&
         typeof linkedCss==='string' && linkedCss.length<=24576 &&
-        !/[<>&]/.test(linkedCss) ?
+        !/[<&]/.test(linkedCss) ?
           '<style data-dsh-preview-subset="partial">'+linkedCss+'</style>' : ''
       // Defence in depth for the preview copy only (never the file):
       // a `<meta http-equiv="refresh">` or `<base>` can steer navigation and
