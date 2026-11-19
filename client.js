@@ -1023,6 +1023,7 @@ window.__ModuleLoader__.load({
       const [smartGuides,setSmartGuides]=React.useState(true)
       const [gridStep,setGridStep]=React.useState(10)
       const [relativeRotation,setRelativeRotation]=React.useState('15')
+      const [uniformScale,setUniformScale]=React.useState('125')
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
       // Every value the journal needs, mirrored after the whole state list is
@@ -1871,10 +1872,14 @@ window.__ModuleLoader__.load({
         }finally{setBusy(false)}
       }
       /** Rotate or scale the selected layer about its real rendered centre. */
-      function transformSelected(kind,angle=90) {
+      function transformSelected(kind,angle=90,customScale=1.25) {
         if(!selected || busy || reloadRequired || source!==doc?.source) return
         if(kind==='rotate'&&(!Number.isFinite(angle)||Math.abs(angle)>360||angle===0)) {
           setError('Angle de rotation refusé : utilisez un nombre non nul entre -360 et 360 degrés.')
+          return
+        }
+        if(kind==='scaleCustom'&&(!Number.isFinite(customScale)||customScale<0.1||customScale>10||customScale===1)) {
+          setError('Échelle refusée : choisissez un pourcentage de 10 à 1000, différent de 100.')
           return
         }
         const box=handles.find(item=>item.id===selected.id)
@@ -1893,8 +1898,9 @@ window.__ModuleLoader__.load({
            y:rounded(pinv[1]*absolute.x+pinv[3]*absolute.y+pinv[5])}
           :{x:rounded(absolute.x),y:rounded(absolute.y)}
         const operation=kind==='rotate'?{type:'rotate',angle,pivot}
-          :kind==='scaleUp'?{type:'scale',sx:1.1,sy:1.1,pivot}
-            :{type:'scale',sx:1/1.1,sy:1/1.1,pivot}
+          :kind==='scaleCustom'?{type:'scale',sx:customScale,sy:customScale,pivot}
+            :kind==='scaleUp'?{type:'scale',sx:1.1,sy:1.1,pivot}
+              :{type:'scale',sx:1/1.1,sy:1/1.1,pivot}
         return save({kind:'svg-transform',id:selected.id,operation})
       }
       async function layerAction(operation) {
@@ -3653,6 +3659,20 @@ window.__ModuleLoader__.load({
               !Number.isFinite(Number(relativeRotation))||Number(relativeRotation)===0||
               Math.abs(Number(relativeRotation))>360,
             onClick:()=>void transformSelected('rotate',Number(relativeRotation))},'Appliquer')),
+        h('div',{className:'dsh-studio-ins-row',style:{marginTop:6,alignItems:'center'}},
+          h('label',{className:'dsh-studio-prop',style:{flex:1}},
+            h('span',null,'Échelle uniforme (%)'),
+            h('input',{type:'number',min:10,max:1000,step:5,
+              value:uniformScale,onChange:e=>setUniformScale(e.target.value),
+              'aria-label':'Uniform scale percentage',disabled:!selected||!editable,
+              style:{...field,width:82,height:28}})),
+          h('button',{className:'dsh-studio-prop',type:'button',
+            'aria-label':'Apply uniform scale',
+            title:'Mise à l’échelle proportionnelle autour du centre visible · Undo exact',
+            disabled:!selected||!editable||uniformScale.trim()===''||
+              !Number.isFinite(Number(uniformScale))||Number(uniformScale)<10||
+              Number(uniformScale)>1000||Number(uniformScale)===100,
+            onClick:()=>void transformSelected('scaleCustom',90,Number(uniformScale)/100)},'Appliquer')),
         selected?.tag==='text'&&h('p',{className:'dsh-studio-hint'},'X/Y : origine de la ligne de base SVG ; taille dans Typographie.'))
       const fillValue=typeof attr.fill==='string'?attr.fill:''
       const hexFill=/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(fillValue)
