@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseEditablePath, parseEditablePathDetailed, listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from '../src/svg-paths.mjs'
+import { parseEditablePath, parseEditablePathDetailed, listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch, svgPathTangentPatches } from '../src/svg-paths.mjs'
 import { applyNativePatches,sourceHash } from '../src/native-patch.mjs'
 
 const start='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">\n'+
@@ -200,4 +200,28 @@ test('pen refuses malformed, non-finite, repeated, ambiguous and closed edits',(
 test('pen refuses the 129th command and preserves original path data',()=>{
   const base=pathDoc('M0 0 '+'L1 1 '.repeat(127))
   assert.throws(()=>svgPenContinuePatch(base,{id:'p',operation:'append',x:2,y:3}),{code:'unsupported-path'})
+})
+
+
+test('symmetrize cubic tangents changes only the outgoing control and Undo restores the SVG',()=>{
+  const source=pathDoc('M 0 0 C 10 0 20 0 30 0 C 40 10 50 20 60 0')
+  const points=listSvgPathModels(source)[0]
+  assert.deepEqual(points.smoothAnchors.map(a=>a.index),[3])
+  const patches=svgPathTangentPatches(source,{id:'p',index:3,mode:'symmetric'})
+  const result=applied(source,patches)
+  assert.equal(result.ok,true)
+  assert.equal(result.source,pathDoc('M 0 0 C 10 0 20 0 30 0 C 40 0 50 20 60 0'))
+  assert.equal(applied(result.source,result.inverse).source,source)
+})
+test('smooth cubic tangents preserves outgoing length, and refuses unsupported joins',()=>{
+  const source=pathDoc('M 0 0 C 10 0 20 0 30 0 C 40 10 50 20 60 0')
+  const result=applied(source,svgPathTangentPatches(source,{id:'p',index:3,mode:'smooth'}))
+  assert.equal(result.ok,true)
+  assert.equal(result.source,pathDoc('M 0 0 C 10 0 20 0 30 0 C 44.142 0 50 20 60 0'))
+  assert.equal(applied(result.source,result.inverse).source,source)
+  const straight=pathDoc('M 0 0 L 30 0 L 60 0')
+  assert.throws(()=>svgPathTangentPatches(straight,{id:'p',index:1,mode:'smooth'}),
+    e=>e?.code==='unsupported-segment')
+  assert.throws(()=>svgPathTangentPatches(source,{id:'p',index:3,mode:'unknown'}),
+    e=>e?.code==='invalid-target')
 })

@@ -128,6 +128,18 @@ function model(source,id) {
   return {...parseEditablePathDetailed(node.attributes.d),attribute}
 }
 
+/** Identify anchors joining two native cubic segments; only these have paired tangents. */
+function cubicJunctions(commands) {
+  const result=[]
+  for(let i=1;i<commands.length;i++){
+    const previous=commands[i-1],next=commands[i]
+    if(previous.type==='C'&&next.type==='C'&&previous.to?.index===next.from?.index) {
+      result.push({index:previous.to.index,x:previous.to.x,y:previous.to.y})
+    }
+  }
+  return result
+}
+
 /** Shape-list metadata: unsupported paths remain listed but are not changed. */
 export function listSvgPathModels(source) {
   const nodes=listEditableSvgNodes(source).filter(node=>node.tag==='path')
@@ -135,6 +147,7 @@ export function listSvgPathModels(source) {
     try {
       const {points,commands}=model(source,node.id)
       return {id:node.id,editable:true,d:node.attributes.d,
+        smoothAnchors:cubicJunctions(commands),
         penExtendable:commands.filter(item=>item.type==='M').length===1 && !commands.some(item=>item.type==='Z'),
         segments:commands.filter(item=>['L','Q','C'].includes(item.type)).map(item=>({
           commandIndex:item.commandIndex,type:item.type,midpoint:segmentCenter(item),
@@ -250,4 +263,46 @@ export function svgPenContinuePatch(source,{id,operation,x,y,c1,c2}) {
   if(attribute.before.length+after.length>8192)fail('unsupported-path','Pen path has reached the source length limit')
   parseEditablePath(attribute.before+after) // enforce limits before persistence
   return {start:attribute.end,end:attribute.end,before:'',after}
+}
+
+
+/**
+ * Make the outgoing control of the next cubic collinear with the incoming
+ * control of the previous cubic at their shared anchor. "smooth" keeps the
+ * outgoing handle length; "symmetric" also matches the incoming length.
+ * The incoming control and anchor remain byte-identical.
+ */
+export function svgPathTangentPatches(source,{id,index,mode}={}) {
+  if(!Number.isSafeInteger(index)||index<0||index>=256||
+     (mode!=='smooth'&&mode!=='symmetric')) {
+    fail('invalid-target','Expected an anchor index and smooth or symmetric mode')
+  }
+  const {commands}=model(source,id)
+  let previous=null,next=null
+  for(let i=1;i<commands.length;i++){
+    const a=commands[i-1],b=commands[i]
+    if(a.type==='C'&&b.type==='C'&&a.to?.index===index&&b.from?.index===index){
+      previous=a;next=b;break
+    }
+  }
+  if(!previous||!next)fail('unsupported-segment','This anchor has no adjoining cubic tangents')
+  const anchor=previous.to
+  const incoming=previous.controls[1]
+  const outgoing=next.controls[0]
+  const dx=anchor.x-incoming.x,dy=anchor.y-incoming.y
+  const incomingLength=Math.hypot(dx,dy)
+  const outgoingLength=Math.hypot(outgoing.x-anchor.x,outgoing.y-anchor.y)
+  if(incomingLength<1e-9 || (mode==='smooth'&&outgoingLength<1e-9)) {
+    fail('degenerate-tangent','The tangent has no stable direction or length')
+  }
+  const length=mode==='symmetric'?incomingLength:outgoingLength
+  const x=Math.round((anchor.x+dx/incomingLength*length)*1000)/1000
+  const y=Math.round((anchor.y+dy/incomingLength*length)*1000)/1000
+  if(![x,y].every(v=>Number.isFinite(v)&&Math.abs(v)<=LIMIT)) {
+    fail('invalid-target','The resulting tangent is out of bounds')
+  }
+  if(Math.abs(x-outgoing.x)<1e-9 && Math.abs(y-outgoing.y)<1e-9) {
+    fail('unchanged','The cubic tangents already meet the requested constraint')
+  }
+  return svgPathPointPatches(source,{id,index:outgoing.index,x,y})
 }

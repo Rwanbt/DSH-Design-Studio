@@ -4893,6 +4893,22 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
                         ' points · ancres carrées, poignées Bézier rondes. Les boutons + insèrent un point au milieu du segment.'),
                       h('small',{style:{color:'var(--dsw-alias-label-tertiary, #989690)'}},
                         'Insertion sur ligne ou courbe : le segment est subdivisé. Suppression limitée aux points terminant une ligne simple.'),
+                      (selectedPath.smoothAnchors||[]).length>0&&
+                        h('div',{role:'group','aria-label':'Tangentes Bézier',
+                          style:{display:'grid',gap:5}},
+                          h('small',{style:{color:'var(--dsw-alias-label-secondary,#aaa9a5)'}},
+                            'Tangentes des ancres entre deux courbes cubiques'),
+                          selectedPath.smoothAnchors.map(anchor=>
+                            h('div',{key:anchor.index,style:{display:'flex',gap:5,alignItems:'center'}},
+                              h('small',{style:{flex:1}},'Ancre '+anchor.index),
+                              [['smooth','Lisser'],['symmetric','Symétriser']].map(([mode,label])=>
+                                h('button',{key:mode,type:'button',style:{...button,fontSize:11},
+                                  'aria-label':label+' ancre '+anchor.index,
+                                  disabled:busy||reloadRequired||source!==doc.source||selected.locked,
+                                  title:mode==='smooth'?'Tangentes alignées, longueur du bras sortant préservée':
+                                    'Tangentes opposées et de longueur égale',
+                                  onClick:()=>void save({kind:'svg-path-tangent',id:active,index:anchor.index,mode})},
+                                  label))))),
                       selectedPath.penExtendable&&h('button',{style:button,type:'button',
                         'aria-label':'Resume selected path with pen tool',
                         disabled:busy||reloadRequired||source!==doc.source,

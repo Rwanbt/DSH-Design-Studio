@@ -2,7 +2,7 @@ import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
-import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch } from './svg-paths.mjs'
+import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch, svgPathTangentPatches } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
 import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch, svgGradientGeometryPatch, svgGradientStopMovePatches } from './svg-gradient.mjs'
 import { planSvgGradientCreation } from './svg-gradient-create.mjs'
@@ -349,6 +349,9 @@ export function createRouteHandler(ctx) {
           patches=[svgPathTopologyPatch(doc.source,{
             id:params.id,operation:params.operation,commandIndex:params.commandIndex
           })]
+        } else if (params.kind === 'svg-path-tangent') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=svgPathTangentPatches(doc.source,{id:params.id,index:params.index,mode:params.mode})
         } else if (params.kind === 'svg-path-point') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=svgPathPointPatches(doc.source,{id:params.id,index:params.index,x:params.x,y:params.y})
