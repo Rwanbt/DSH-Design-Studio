@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { listHtmlVisualElements, listHtmlStylesheetLinks } from './html-visual.mjs'
+import { listHtmlSelectorNodes, listHtmlVisualElements, listHtmlStylesheetLinks } from './html-visual.mjs'
 import { listCssVisualRuleDetails, parseCssSelectorList } from './css-visual.mjs'
 import { buildSafeLinkedPreviewCss } from './html-responsive-preview.mjs'
 
@@ -38,15 +38,42 @@ export function resolveStylesheetPath(htmlFile,href) {
   return resolved
 }
 
-function memberMatchesElement(member,element) {
-  if(member.hasCombinators||member.universalOnly)return false
-  const compound=member.compounds[0]
-  for(const token of compound.tokens){
-    if(token.kind==='tag'&&token.name!==element.tag)return false
-    if(token.kind==='id'&&token.name!==element.id)return false
-    if(token.kind==='class'&&!element.classes.includes(token.name))return false
+function memberMatchesElement(member,element,nodes) {
+  if(member.universalOnly)return false
+  const leading = member.compounds.length-1
+  let budget = 128
+  function matches(index,node) {
+    if(!node||budget--<=0)return false
+    for(const token of member.compounds[index].tokens){
+      if(token.kind==='tag'&&token.name!==node.tag)return false
+      if(token.kind==='id'&&token.name!==node.id)return false
+      if(token.kind==='class'&&!node.classes.includes(token.name))return false
+    }
+    if(index===0)return true
+    const path=node.path
+    if(!path?.length)return false
+    const parent=path.slice(0,-1)
+    switch(member.combinators[index-1]){
+      case '>': return matches(index-1,nodes.get(parent.join('.')))
+      case ' ': {
+        for(let depth=parent.length;depth>=0&&budget>0;depth--){
+          if(matches(index-1,nodes.get(parent.slice(0,depth).join('.'))))return true
+        }
+        return false
+      }
+      case '+': return matches(index-1,nodes.get([...parent,path.at(-1)-1].join('.')))
+      case '~': {
+        for(let sibling=path.at(-1)-1;sibling>=0&&budget>0;sibling--){
+          const previous=nodes.get([...parent,sibling].join('.'))
+          if(matches(index-1,previous))return true
+          if(!previous)budget--
+        }
+        return false
+      }
+      default:return false
+    }
   }
-  return true
+  return matches(leading,element)
 }
 
 function memberIsApproximate(member) {
@@ -69,8 +96,7 @@ function sheetAmbiguities(details) {
     const parsed=parseCssSelectorList(rule.selector)
     if(!parsed.ok){add(rule.selector,'unsupported-selector');continue}
     for(const member of parsed.members){
-      if(member.hasCombinators)add(member.selector,'combinator-not-evaluated')
-      else if(member.universalOnly)add(member.selector,'universal-selector-not-evaluated')
+      if(member.universalOnly)add(member.selector,'universal-selector-not-evaluated')
     }
   }
   return found
@@ -79,6 +105,7 @@ function sheetAmbiguities(details) {
 export async function collectHtmlCssCandidates(store,htmlDocument) {
   const elements=listHtmlVisualElements(htmlDocument.source)
   const refs=listHtmlStylesheetLinks(htmlDocument.source)
+  const nodes=new Map(refs.length?listHtmlSelectorNodes(htmlDocument.source).map(node=>[node.pathString,node]):[])
   const stylesheets=[]
   const styleMatches=elements.map(element=>({
     id:element.id,key:element.key,path:element.path,matches:[],
@@ -147,7 +174,7 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       if(!element.editable)continue
       for(const {rule,parsed} of parsedRules){
         if(!parsed?.ok)continue
-        const matched=parsed.members.filter(member=>memberMatchesElement(member,element))
+        const matched=parsed.members.filter(member=>memberMatchesElement(member,element,nodes))
         if(!matched.length)continue
         const candidate={
           file,selector:rule.selector,cssIdentity:sheet.identity,
@@ -166,7 +193,7 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
         if(matched.length>1)
           candidate.matchedSelectors=matched.map(member=>member.selector)
         const unresolved=parsed.members.filter(member=>
-          member.hasCombinators||member.universalOnly)
+          member.universalOnly)
         if(unresolved.length)
           candidate.unresolvedSelectors=unresolved.map(member=>member.selector)
         styleMatches[elementIndex].matches.push(candidate)

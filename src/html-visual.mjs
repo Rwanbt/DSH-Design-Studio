@@ -219,6 +219,14 @@ function indexed(source) {
  * `options.includeReadOnlyRegions` additionally exposes id-bearing elements
  * that live inside `<template>` or in malformed markup, always read-only.
  */
+export function listHtmlSelectorNodes(source) {
+  if(typeof source!=='string'||source.length>512*1024)return []
+  return scanHtmlStructure(source).elements.flatMap(element=>
+    element.path&&!elementReadonlyReason(element)
+      ? [{tag:element.tag,id:element.id,classes:elementClassTokens(element),path:element.path,pathString:element.pathString}]
+      : [])
+}
+
 export function listHtmlVisualElements(source, options={}) {
   const structure=typeof source==='string'&&source.length<=512*1024
     ? scanHtmlStructure(source) : null

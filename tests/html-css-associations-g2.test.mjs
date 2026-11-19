@@ -56,7 +56,7 @@ test('simple id/class candidates keep exact historical specificity values',async
   assert.deepEqual(result.styleMatches[0].path,[1])
 })
 
-test('combinators, at-rules and unsupported selectors are refused, not guessed',async()=>{
+test('child selectors and simple media are candidates while pseudo-classes stay excluded',async()=>{
   const css='main > #title { display: none; }\n'+
     '@media (min-width: 600px) { #title { color: blue; } }\n'+
     '#title:hover { color: green; }\n'
@@ -64,13 +64,14 @@ test('combinators, at-rules and unsupported selectors are refused, not guessed',
   const html=htmlWith('styles/site.css','<main id="app"><h1 id="title">Hi</h1></main>')
   const result=await collectHtmlCssCandidates(store,{file:'pages/index.html',source:html})
   const matches=result.styleMatches.find(item=>item.id==='title').matches
-  assert.equal(matches.length,1)
-  assert.equal(matches[0].media.condition,'(min-width: 600px)')
+  assert.equal(matches.length,2)
+  assert.equal(matches[0].selector,'main > #title')
+  assert.equal(matches[1].media.condition,'(min-width: 600px)')
   assert.equal(matches[0].editable,true)
   const refusals=result.stylesheets[0].ambiguousSelectors
   assert.ok(Array.isArray(refusals))
   const bySelector=new Map(refusals.map(entry=>[entry.selector,entry]))
-  assert.equal(bySelector.get('main > #title').reason,'combinator-not-evaluated')
+  assert.equal(bySelector.has('main > #title'),false)
   assert.equal(bySelector.has('#title'),false)
   assert.equal(bySelector.get('#title:hover').reason,'unsupported-selector')
   assert.ok(refusals.every(entry=>typeof entry.reason==='string'))

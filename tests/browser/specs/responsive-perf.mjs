@@ -12,7 +12,7 @@ export const responsiveSpec = {
 <link rel="stylesheet" href="r.css"></head>
 <body><h1 id="headline">Responsive</h1><p id="lead">Body copy.</p></body></html>
 `)
-    await harness.write('r.css', 'h1 { color: #202124 }\n@media (max-width: 600px) { body > h1#headline, #headline { color: #123456 } }\n')
+    await harness.write('r.css', 'h1 { color: #202124 }\n@media (max-width: 600px) { body > h1#headline { color: #123456 } }\n')
     await openWorkspaceFile(page, 'page.html', { expect: 'html' })
 
     const preview = page.locator('iframe[title="Isolated design preview"]')
@@ -31,7 +31,7 @@ export const responsiveSpec = {
 
     await page.setViewportSize({width:1280,height:900})
     await page.getByRole('button',{name:'Select HTML element headline'}).click()
-    await page.getByRole('button',{name:'Open linked CSS body > h1#headline, #headline in r.css · @media (max-width: 600px)'}).click()
+    await page.getByRole('button',{name:'Open linked CSS body > h1#headline in r.css · @media (max-width: 600px)'}).click()
     const conditional=page.getByRole('textbox',{name:'Conditional CSS rule value'})
     await conditional.fill('#abcdef')
     await page.getByRole('button',{name:'Apply conditional CSS rule style'}).click()
