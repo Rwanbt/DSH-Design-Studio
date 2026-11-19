@@ -120,6 +120,9 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   const order = await invoke({file:'shapes.svg',kind:'svg-order',id:'a',direction:'front'})
   assert.equal(order.ok,true)
   assert.match(order.proposal.patches[0].after,/id="b".*id="a"/)
+  const add={file:'shapes.svg',kind:'svg-add-shape',shape:'circle',x:31,y:42}
+  assert.equal((await invoke({...add,y:undefined})).error,'invalid-edit')
+  assert.equal((await invoke({...add,x:'31'})).error,'invalid-edit')
   const transform = {file:'shapes.svg',kind:'svg-transform',id:'a',operation:{type:'translate',dx:12,dy:5}}
   const translated = await invoke(transform)
   assert.equal(translated.ok,true)
