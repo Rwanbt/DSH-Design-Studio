@@ -74,12 +74,14 @@ export async function startHarness({ workspace, sessionId = 'e2e-session', works
   // Resolve test assets before creating the temporary workspace. Missing
   // browser-only dependencies must never leak a workspace on setup failure.
   const umd = await findReactUmd()
-  const root = workspace ? path.resolve(workspace) : await mkdtemp(path.join(os.tmpdir(), 'dsh-design-e2e-'))
-  await mkdir(root, { recursive: true })
+  // Read all assets before allocating any disposable directory. A missing
+  // shell/client/UMD file must fail without leaving temporary workspace data.
   const shell = await readFile(path.join(here, 'shell.html'), 'utf8')
   const clientSource = await readFile(path.join(repoRoot, 'client.js'), 'utf8')
   const reactSource = await readFile(umd.react)
   const reactDomSource = await readFile(umd.reactDom)
+  const root = workspace ? path.resolve(workspace) : await mkdtemp(path.join(os.tmpdir(), 'dsh-design-e2e-'))
+  await mkdir(root, { recursive: true })
 
   // A registry stand-in, so the sidebar panel path (workspace ids, no session)
   // is exercised against the real route handler. `workspaces: []` disables the
