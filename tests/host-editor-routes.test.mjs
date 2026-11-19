@@ -598,3 +598,57 @@ test('svg-gradient-stop keeps the revision contract and refuses non-SVG document
     assert.equal(await host.read('styles.css'), 'h1 { color: #202124; }\n')
   } finally { await host.close() }
 })
+
+test('preview returns the same native patch as apply and never writes', async (context) => {
+  const host = await mount()
+  context.after(host.close)
+  await host.write('scene.svg', SVG)
+  await host.write('page.html', HTML)
+  const textSvg = SVG.replace('</svg>', '<text id="label" x="20">Original</text></svg>')
+  await host.write('text.svg', textSvg)
+  const examples = [
+    { file: 'text.svg', source: textSvg, kind: 'svg-text', id: 'label', value: 'Title < &' },
+    { file: 'scene.svg', source: SVG, kind: 'svg-attribute', id: 'a', attribute: 'fill', value: '#abcdef' },
+    { file: 'page.html', source: HTML, kind: 'html-text', id: 'title', value: 'Nouveau titre' },
+  ]
+  for (const { file, source, ...edit } of examples) {
+    const request = { sessionId: 's1', ...host.revision(await host.open(file)), ...edit }
+    const preview = await host.call('POST', '/design-studio-native/preview', request)
+    assert.equal(preview.status, 200, JSON.stringify(preview.body))
+    assert.equal(preview.body.baseHash, request.baseHash)
+    assert.equal(preview.body.baseIdentity, request.baseIdentity)
+    assert.equal(preview.body.changed, true)
+    assert.equal(await host.read(file), source)
+
+    const applied = await host.apply(request)
+    assert.equal(applied.status, 200, JSON.stringify(applied.body))
+    assert.deepEqual(preview.body.patches, applied.body.patches)
+    assert.equal(preview.body.proposedHash, applied.body.result.hash)
+
+    const stale = await host.call('POST', '/design-studio-native/preview', request)
+    assert.equal(stale.status, 409)
+    assert.equal(stale.body.error, 'stale-revision')
+    const refusedApply = await host.apply(request)
+    assert.equal(refusedApply.status, 409)
+  }
+})
+
+test('preview rejects raw replacement and requires the reopened file identity', async (context) => {
+  const host = await mount()
+  context.after(host.close)
+  await host.write('scene.svg', SVG)
+  const revision = host.revision(await host.open('scene.svg'))
+  const preview = (body) => host.call('POST', '/design-studio-native/preview', { sessionId: 's1', ...revision, ...body })
+  const raw = await preview({ kind: 'replace-source', source: 'replacement' })
+  assert.equal(raw.status, 400)
+  assert.equal(raw.body.error, 'unsupported-operation')
+  const text = { kind: 'svg-text', id: 'a', value: 'Text' }
+  const missing = await preview({ ...text, baseIdentity: undefined })
+  assert.equal(missing.status, 428)
+  const invalid = await preview(text)
+  assert.equal(invalid.status, 400)
+  const wrongIdentity = await preview({ ...text, baseIdentity: '0'.repeat(64) })
+  assert.equal(wrongIdentity.status, 409)
+  assert.equal(wrongIdentity.body.error, 'stale-revision')
+  assert.equal(await host.read('scene.svg'), SVG)
+})

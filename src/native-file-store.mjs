@@ -5,7 +5,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { applyNativePatches, sourceHash } from './native-patch.mjs'
 import { withNativeWriteLock } from './native-write-lock.mjs'
 
-const MAX_BYTES = 8 * 1024 * 1024
+export const MAX_NATIVE_FILE_BYTES = 8 * 1024 * 1024
 const FORMATS = new Set(['svg', 'html', 'htm', 'css'])
 const locks = new Map()
 // New documents are created with ordinary user-file permissions; the process
@@ -325,15 +325,15 @@ async function readChecked(absolute, io) {
   try {
     const info = await handle.stat({bigint:true})
     if (!info.isFile() || info.nlink !== 1n) throw error('invalid-file', 'File must be regular and not hardlinked')
-    if (info.size > BigInt(MAX_BYTES)) throw error('too-large', 'File exceeds 8 MiB')
+    if (info.size > BigInt(MAX_NATIVE_FILE_BYTES)) throw error('too-large', 'File exceeds 8 MiB')
     const chunks = []
-    const buffer = Buffer.alloc(Math.min(64 * 1024, MAX_BYTES + 1))
+    const buffer = Buffer.alloc(Math.min(64 * 1024, MAX_NATIVE_FILE_BYTES + 1))
     let count = 0
     while (true) {
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, null)
       if (bytesRead === 0) break
       count += bytesRead
-      if (count > MAX_BYTES) throw error('too-large', 'File exceeds 8 MiB')
+      if (count > MAX_NATIVE_FILE_BYTES) throw error('too-large', 'File exceeds 8 MiB')
       chunks.push(Buffer.from(buffer.subarray(0, bytesRead)))
     }
     const bytes = Buffer.concat(chunks)
@@ -410,7 +410,7 @@ export function createNativeFileStore(workspace, options = {}) {
     async create(file, { source } = {}) {
       if (typeof source !== 'string') throw error('invalid-source', 'New file content must be a string')
       const bytes = Buffer.from(source, 'utf8')
-      if (bytes.length > MAX_BYTES) throw error('too-large', 'New file exceeds 8 MiB')
+      if (bytes.length > MAX_NATIVE_FILE_BYTES) throw error('too-large', 'New file exceeds 8 MiB')
       const target = await ensureSafeTarget(workspace, file, io)
       return lock(target.absolute, () => withNativeWriteLock(target.absolute, async () => {
         const checked = await ensureSafeTarget(workspace, file, io)
@@ -484,7 +484,7 @@ export function createNativeFileStore(workspace, options = {}) {
         if (!result.changed) return { file, hash: current.rawHash, identity:current.identity,
           changed: false, inverse: result.inverse }
         const output = Buffer.from(result.source, 'utf8')
-        if (output.length > MAX_BYTES) throw error('too-large', 'Edited file exceeds 8 MiB')
+        if (output.length > MAX_NATIVE_FILE_BYTES) throw error('too-large', 'Edited file exceeds 8 MiB')
         const outputHash = createHash('sha256').update(output).digest('hex')
         const directory = path.dirname(target.absolute)
         const temp = path.join(directory, '.' + path.basename(target.absolute) + '.' + randomUUID() + '.tmp')

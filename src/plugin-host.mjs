@@ -1,4 +1,5 @@
-import { createNativeFileStore } from './native-file-store.mjs'
+import { applyNativePatches } from './native-patch.mjs'
+import { createNativeFileStore, MAX_NATIVE_FILE_BYTES } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
@@ -26,6 +27,7 @@ export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
 const MAX_BODY = 9 * 1024 * 1024
+const PREVIEWABLE_EDITS = new Set(['svg-text','svg-attribute','html-text'])
 
 /** Typed route failure: the HTTP status is derived from `code`, never invented. */
 function failure(code, message, cause) {
@@ -279,11 +281,15 @@ export function createRouteHandler(ctx) {
         const result=await store.delete(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity})
         return reply(res,200,{ok:true,result})
       }
-      if (req.method === 'POST' && endpoint === '/apply') {
+      if (req.method === 'POST' && (endpoint === '/apply' || endpoint === '/preview')) {
+        const preview = endpoint === '/preview'
         const params=await bodyJson(req)
+        if (preview && !PREVIEWABLE_EDITS.has(params.kind)) {
+          return reply(res,400,{ok:false,error:'unsupported-operation'})
+        }
         if (typeof params.baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
           return reply(res,428,{ok:false,error:'missing-revision',
-            message:'Reopen document in a current Design Studio client before saving'})
+            message:preview?'Open the document before previewing an edit':'Reopen document in a current Design Studio client before saving'})
         }
         const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const doc=await store.read(params.file)
@@ -465,6 +471,15 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
+        if (preview) {
+          const result=applyNativePatches({source:doc.source,format:doc.format,baseHash:doc.hash,patches})
+          if (!result.ok) throw failure(result.code,result.message)
+          if (Buffer.byteLength(result.source) > MAX_NATIVE_FILE_BYTES) {
+            throw failure('too-large','Edited file exceeds 8 MiB')
+          }
+          return reply(res,200,{ok:true,patches,baseHash:doc.hash,baseIdentity:doc.identity,
+            proposedHash:result.hash,changed:result.changed})
+        }
         const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
         return reply(res,200,{ok:true,result,patches,createdId})
       }

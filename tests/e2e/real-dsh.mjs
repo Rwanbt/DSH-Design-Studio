@@ -308,13 +308,24 @@ async function main() {
           `HTTP ${opened.status()} nodes=${Array.isArray(openedBody?.nodes) ? openedBody.nodes.length : 'n/a'}`)
 
         if (hasHash) {
-          const applied = await context.request.post(origin + '/design-studio-native/apply', {
-            data: { sessionId, file: 'g0-art.svg', baseHash: openedBody.document.hash,
-              baseIdentity: openedBody.document.identity, kind: 'svg-attribute',
-              id: 'box', attribute: 'x', value: '25' },
-          })
+          const data = { sessionId, file: 'g0-art.svg', baseHash: openedBody.document.hash,
+            baseIdentity: openedBody.document.identity, kind: 'svg-attribute',
+            id: 'box', attribute: 'x', value: '25' }
+          const file = path.join(workspace, data.file)
+          const original = await readFile(file)
+          const preview = await context.request.post(origin + '/design-studio-native/preview', { data })
+          const previewBody = await preview.json().catch(() => null)
+          const previewUnchanged = (await readFile(file)).equals(original)
+
+          const applied = await context.request.post(origin + '/design-studio-native/apply', { data })
           const appliedBody = await applied.json().catch(() => null)
-          const onDisk = await readFile(path.join(workspace, 'g0-art.svg'), 'utf8')
+          const onDisk = await readFile(file, 'utf8')
+          const previewMatchesApply = preview.status() === 200 && previewBody?.changed === true &&
+            previewBody.proposedHash === appliedBody?.result?.hash &&
+            JSON.stringify(previewBody.patches) === JSON.stringify(appliedBody?.patches)
+          record('preview a real SVG edit without writing through the real Host',
+            previewUnchanged && previewMatchesApply ? 'PASS' : 'FAIL',
+            `HTTP ${preview.status()} unchanged=${previewUnchanged} matchesApply=${previewMatchesApply}`)
           const patched = applied.status() === 200 && onDisk.includes('x="25"') &&
             onDisk.includes('width="40" height="30"')
           record('save a real SVG through the real Host', patched ? 'PASS' : 'FAIL',
