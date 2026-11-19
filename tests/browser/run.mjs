@@ -129,22 +129,27 @@ async function main() {
       for (const spec of selected) {
         // A spec may need a different registry or session shape; everything
         // else stays identical so no spec can weaken the shared setup.
-        const harness = await startHarness(spec.harness || {})
-        const context = await browser.newContext({ viewport: spec.viewport || { width: 1280, height: 820 },
-          ...(spec.contextOptions || {}) })
-        const page = await context.newPage()
-        // A missing/hidden control should fail within a bounded interval instead
-        // of spending the default 30 seconds per inaccessible control.
-        page.setDefaultTimeout(10000)
+        // Setup is part of the spec result, not a process-level crash. If
+        // newContext/newPage fails, still close the already-created workspace
+        // and retain a FAIL record for this spec and the remaining specs.
+        let harness
+        let context
+        let page
         const consoleErrors = []
-        page.on('pageerror', (error) => consoleErrors.push('pageerror: ' + String(error)))
-        page.on('console', (message) => {
-          if (message.type() === 'error') consoleErrors.push('console: ' + message.text().slice(0, 200))
-        })
         const record = { name: spec.name, checks: 0, failures: [], consoleErrors }
         const assert = createAssert(record)
         let status = 'PASS'
         try {
+          harness = await startHarness(spec.harness || {})
+          context = await browser.newContext({ viewport: spec.viewport || { width: 1280, height: 820 },
+            ...(spec.contextOptions || {}) })
+          page = await context.newPage()
+          // Bound waits on missing controls, rather than waiting 30s each.
+          page.setDefaultTimeout(10000)
+          page.on('pageerror', (error) => consoleErrors.push('pageerror: ' + String(error)))
+          page.on('console', (message) => {
+            if (message.type() === 'error') consoleErrors.push('console: ' + message.text().slice(0, 200))
+          })
           await page.goto(harness.url, { waitUntil: 'load' })
           if (!probe) {
             const shell = await waitForShell(page)
@@ -178,10 +183,14 @@ async function main() {
         // one fails, and retain the complete report rather than aborting the
         // whole browser gate on a single leftover temporary directory.
         const cleanupFailures = []
-        try { await context.close() }
-        catch (error) { cleanupFailures.push('context.close: ' + String(error)) }
-        try { await harness.close({ keepWorkspace: flag('keep-workspace') }) }
-        catch (error) { cleanupFailures.push('harness.close: ' + String(error)) }
+        if (context) {
+          try { await context.close() }
+          catch (error) { cleanupFailures.push('context.close: ' + String(error)) }
+        }
+        if (harness) {
+          try { await harness.close({ keepWorkspace: flag('keep-workspace') }) }
+          catch (error) { cleanupFailures.push('harness.close: ' + String(error)) }
+        }
         if (cleanupFailures.length) record.failures.push(...cleanupFailures)
         if (record.failures.length > 0) status = 'FAIL'
         browserRecord.specs.push({ ...record, status })
