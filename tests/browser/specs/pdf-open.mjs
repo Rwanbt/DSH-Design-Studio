@@ -69,6 +69,17 @@ export const pdfNoteSpec = {
     await page.getByRole('button', { name: 'Ajouter une note', exact: true }).click()
     const form = page.getByRole('form', { name: 'Ajouter une note PDF' })
     await form.getByRole('spinbutton', { name: 'Page', exact: true }).fill('2')
+    if (spawnSync('pdftoppm',['-v'],{stdio:'ignore'}).status===0) {
+      await form.getByRole('button', { name: 'Afficher la page' }).click()
+      const image = form.getByRole('img', { name: 'Aperçu de la page PDF' })
+      await image.waitFor()
+      const box = await image.boundingBox()
+      await image.click({position:{x:box.width/4,y:box.height/2}})
+      const x = Number(await form.getByLabel('Depuis la gauche (%)').inputValue())
+      const y = Number(await form.getByLabel('Depuis le haut (%)').inputValue())
+      assert.ok(Math.abs(x-25)<1)
+      assert.ok(Math.abs(y-50)<1)
+    }
     await form.getByLabel('Texte de la note').fill('Note de révision')
     const submit = form.getByRole('button', { name: 'Télécharger la copie annotée' })
     if (spawnSync(python,['-I','-c','from pypdf.annotations import Text'],{stdio:'ignore'}).status===0) {

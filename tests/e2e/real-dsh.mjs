@@ -322,6 +322,35 @@ async function main() {
           copyVerified ? 'PASS' : copyError === 'pdf-engine-unavailable' && sourcePreserved ? 'NOT_RUN' : 'FAIL',
           `HTTP ${copied.status()}, source preserved=${sourcePreserved}, ${copyError || copyType}`)
 
+        const previewQuery = new URLSearchParams({sessionId,file:'g0-source.pdf',page:'2'})
+        const pdfPreview = await context.request.get(origin + '/design-studio-native/pdf/preview?' + previewQuery)
+        const previewHeaders = pdfPreview.headers()
+        const previewBytes = await pdfPreview.body()
+        const previewRevision = {hash:previewHeaders['x-dsh-pdf-hash'],identity:previewHeaders['x-dsh-pdf-identity']}
+        const previewOk = pdfPreview.ok() && previewHeaders['content-type'] === 'image/png' &&
+          previewBytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) &&
+          /^[a-f0-9]{64}$/.test(previewRevision.hash) && /^[a-f0-9]{64}$/.test(previewRevision.identity)
+        const previewUnavailable = pdfPreview.status() === 400 &&
+          previewHeaders['content-type']?.startsWith('application/json') &&
+          JSON.parse(previewBytes.toString()).error === 'pdf-preview-unavailable'
+        record('render a scoped PDF page through the real Host',
+          previewOk ? 'PASS' : previewUnavailable ? 'NOT_RUN' : 'FAIL',
+          `HTTP ${pdfPreview.status()}, ${previewHeaders['content-type']}`)
+        if (previewOk) {
+          const changedPdf = pdfFixture(['Updated first','Updated second'])
+          await writeFile(pdfFile,changedPdf)
+          try {
+            const stale = await context.request.post(origin + '/design-studio-native/pdf/annotate', {
+              data: {sessionId,file:'g0-source.pdf',page:2,x:0.25,y:0.5,text:'Stale note',previewRevision},
+            })
+            const staleOk = stale.status() === 409 && (await stale.json()).error === 'stale-revision' &&
+              (await readFile(pdfFile)).equals(changedPdf)
+            record('refuse a visual PDF note after the source changes', staleOk ? 'PASS' : 'FAIL',
+              `HTTP ${stale.status()}`)
+          } finally {
+            await writeFile(pdfFile,pdf)
+          }
+        }
         const annotated = await context.request.post(origin + '/design-studio-native/pdf/annotate', {
           data: { sessionId, file:'g0-source.pdf', page:2, x:0.25, y:0.5, text:'Real DSH note' },
         })

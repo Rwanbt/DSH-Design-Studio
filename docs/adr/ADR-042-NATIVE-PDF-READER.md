@@ -42,3 +42,11 @@ path. The Python package is neither bundled nor installed automatically.
 The fixture qualifies a Unicode text note and preservation of page text.
 Other markup types, interactive placement and complex document fidelity
 require separate qualification.
+
+The note form can display a page rendered with Poppler's `pdftoppm` and place
+the note by click. The preview is a PNG bounded to 800 pixels and uses the
+page crop box. Click placements carry the content hash and file identity
+returned with the preview. If the PDF changed, the Host refuses the
+annotation and asks the user to refresh the image. Manual percentage
+fields remain available for keyboard entry and environments without the
+preview renderer.

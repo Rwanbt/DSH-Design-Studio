@@ -38,3 +38,23 @@ print(json.dumps([len(r.pages),r.pages[0].get('/Annots'),a['/Subtype'],a['/Conte
   assert.deepEqual(await readFile(file),bytes)
   await assert.rejects(annotate({...note,page:3},source),{code:'invalid-pdf-pages'})
 })
+
+test('a visible anchor follows the crop box and a rotated page', { skip:!available }, async context => {
+  const root = await mkdtemp(path.join(tmpdir(),'dsh-test-rotated-pdf-'))
+  context.after(()=>rm(root,{recursive:true,force:true}))
+  const input = path.join(root,'input.pdf'), rotated = path.join(root,'rotated.pdf')
+  await writeFile(input,pdfFixture())
+  const rotate = `import sys
+from pypdf import PdfWriter
+w=PdfWriter(clone_from=sys.argv[1])
+page=w.pages[1]
+page.cropbox.lower_left=(10,20)
+page.cropbox.upper_right=(310,160)
+page.rotate(90)
+w.write(sys.argv[2])`
+  execFileSync(python,['-I','-c',rotate,input,rotated])
+  const output = path.join(root,'result.pdf')
+  await writeFile(output,await createPdfAnnotator(python)(note,()=>readFile(rotated)))
+  const inspect = 'import json,sys; from pypdf import PdfReader; print(json.dumps(list(PdfReader(sys.argv[1]).pages[1]["/Annots"][0].get_object()["/Rect"])))'
+  assert.deepEqual(JSON.parse(execFileSync(python,['-I','-c',inspect,output],{encoding:'utf8'})),[160,55,178,73])
+})

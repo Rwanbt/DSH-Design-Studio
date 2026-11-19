@@ -33,6 +33,8 @@ import { createPdfPageCopier } from './pdf-page-copy.mjs'
 
 import { createPdfAnnotator } from './pdf-annotation.mjs'
 
+import { createPdfPagePreview } from './pdf-page-preview.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -155,6 +157,7 @@ function approvedProposal(inbox, ctx, request) {
 export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   const copyPdfPages = createPdfPageCopier()
   const annotatePdf = createPdfAnnotator()
+  const previewPdf = createPdfPagePreview()
   return async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://dsh.local')
@@ -188,13 +191,30 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         })
         return reply(res,200,{ok:true,...result})
       }
+      if (req.method === 'GET' && endpoint === '/pdf/preview') {
+        const store = await storeFor(ctx,{sessionId:url.searchParams.get('sessionId'),
+          workspaceId:url.searchParams.get('workspaceId')})
+        const page = Number(url.searchParams.get('page'))
+        const {png,hash,identity} = await previewPdf(page,()=>store.readPdf(url.searchParams.get('file')))
+        res.writeHead(200,{'content-type':'image/png','content-length':png.length,
+          'x-dsh-pdf-hash':hash,'x-dsh-pdf-identity':identity,
+          'cache-control':'no-store','x-content-type-options':'nosniff'})
+        return res.end(png)
+      }
       if (req.method === 'POST' && (endpoint === '/pdf/copy' || endpoint === '/pdf/annotate')) {
         const params = await bodyJson(req)
         const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const selections = params.selections ?? [{file:params.file,pages:params.pages}]
         const readSource = async file=>(await store.readPdf(file)).source
         const bytes = endpoint === '/pdf/annotate'
-          ? await annotatePdf(params,()=>readSource(params.file))
+          ? await annotatePdf(params,async ()=>{
+              const pdf = await store.readPdf(params.file)
+              if (params.previewRevision !== undefined &&
+                  (params.previewRevision?.hash !== pdf.hash || params.previewRevision?.identity !== pdf.identity)) {
+                throw failure('stale-revision','The PDF changed after preview; refresh the page image')
+              }
+              return pdf.source
+            })
           : await copyPdfPages(selections,readSource)
         res.writeHead(200,{'content-type':'application/pdf','content-length':bytes.length,
           'content-disposition':'attachment; filename="design-studio.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'})

@@ -925,15 +925,49 @@ window.__ModuleLoader__.load({
       const [position,setPosition]=React.useState({page:'1',x:'10',y:'10'})
       const [busy,setBusy]=React.useState(false)
       const [error,setError]=React.useState('')
+      const [preview,setPreview]=React.useState(null)
+      const [previewImage,setPreviewImage]=React.useState(null)
+      const [previewBusy,setPreviewBusy]=React.useState(false)
+      const [visualRevision,setVisualRevision]=React.useState(null)
+      React.useEffect(()=>{
+        if(!preview)return undefined
+        const image=URL.createObjectURL(preview.blob)
+        setPreviewImage({preview,url:image})
+        return ()=>URL.revokeObjectURL(image)
+      },[preview])
       const page=Number(position.page),x=Number(position.x),y=Number(position.y)
-      const valid=Number.isInteger(page)&&page>=1&&page<=10000&&text.trim()&&
-        position.x!==''&&position.y!==''&&[x,y].every(value=>value>=0&&value<=100)
+      const validPosition=(left,top)=>position.x!==''&&position.y!==''&&[left,top].every(value=>value>=0&&value<=100)
+      const valid=Number.isInteger(page)&&page>=1&&page<=10000&&text.trim()&&validPosition(x,y)
+      async function loadPreview() {
+        if(previewBusy)return
+        setPreviewBusy(true);setError('')
+        try {
+          const query=new URLSearchParams({...scopeBody,file,page:String(page)})
+          const response=await fetch(new URL('/'+api+'/pdf/preview?'+query,document.baseURI),{credentials:'same-origin'})
+          if(!response.ok)throw new Error((await response.json()).message)
+          const hash=response.headers.get('x-dsh-pdf-hash'),identity=response.headers.get('x-dsh-pdf-identity')
+          if(!hash||!identity)throw new Error('Révision de l’aperçu indisponible')
+          setPreview({page,hash,identity,blob:await response.blob()})
+        } catch(error) {
+          setPreview(null);setError(String(error.message))
+        } finally {
+          setPreviewBusy(false)
+        }
+      }
+      function choosePosition(event) {
+        const rect=event.currentTarget.getBoundingClientRect()
+        if(!rect.width||!rect.height)return
+        const percent=(point,start,size)=>String(Math.round(Math.min(1,Math.max(0,(point-start)/size))*10000)/100)
+        setPosition({...position,x:percent(event.clientX,rect.left,rect.width),y:percent(event.clientY,rect.top,rect.height)})
+        setVisualRevision({hash:preview.hash,identity:preview.identity})
+      }
       async function annotate(event) {
         event.preventDefault()
         if(!valid||busy)return
         setBusy(true);setError('')
         try {
-          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text},
+          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,
+            ...(visualRevision?{previewRevision:visualRevision}:{})},
             file.split('/').at(-1).replace(/\.pdf$/i,'')+'-annote.pdf')
           close()
         } catch(error) {
@@ -948,7 +982,20 @@ window.__ModuleLoader__.load({
           [['page','Page',1,10000],['x','Depuis la gauche (%)',0,100],['y','Depuis le haut (%)',0,100]]
             .map(([key,label,min,max])=>h('label',{key,style:{minWidth:0}},label,
               h('input',{type:'number',style:field,min,max,step:key==='page'?1:'any',required:true,disabled:busy,
-                value:position[key],onChange:event=>setPosition({...position,[key]:event.target.value})})))),
+                value:position[key],onChange:event=>{
+                  setPosition({...position,[key]:event.target.value})
+                  if(key==='page')setVisualRevision(null)
+                }})))),
+        h('button',{type:'button',style:button,disabled:busy||previewBusy||!Number.isInteger(page)||page<1||page>10000,
+          onClick:()=>void loadPreview()},previewBusy?'Chargement…':'Afficher la page'),
+        preview?.page===page&&previewImage?.preview===preview&&h('div',null,
+          h('p',null,'Cliquez sur la page pour placer la note.'),
+          h('div',{style:{position:'relative',width:'fit-content',maxWidth:'100%'}},
+            h('img',{alt:'Aperçu de la page PDF',src:previewImage.url,onClick:choosePosition,
+              style:{display:'block',maxWidth:'100%',maxHeight:340,cursor:'crosshair'}}),
+            validPosition(x,y)&&h('span',{'aria-hidden':'true',style:{position:'absolute',top:y+'%',left:x+'%',
+              width:12,height:12,transform:'translate(-50%,-50%)',border:'2px solid #8b4500',
+              background:'#ffc446',borderRadius:'50%',pointerEvents:'none'}}))),
         h('label',null,'Texte de la note',
           h('textarea',{style:field,value:text,maxLength:2000,required:true,disabled:busy,
             onChange:event=>setText(event.target.value)})),

@@ -16,17 +16,24 @@ def annotation_rectangle(page, x, y):
     width, height = right - left, top - bottom
     if not all(map(math.isfinite, (left, bottom, right, top))) or min(width, height) <= 0:
         raise ValueError("invalid page box")
-    positions = {
-        0: (x, 1 - y),
-        90: (y, x),
-        180: (1 - x, y),
-        270: (1 - y, 1 - x),
+    rotation = page.rotation % 360
+    display_width, display_height = (height, width) if rotation in (90, 270) else (width, height)
+    size = min(18, display_width, display_height)
+    x0 = min(display_width - size, x * display_width) / display_width
+    y0 = min(display_height - size, y * display_height) / display_height
+    x1, y1 = x0 + size / display_width, y0 + size / display_height
+    directions = {
+        0: lambda u, v: (u, 1 - v),
+        90: lambda u, v: (v, u),
+        180: lambda u, v: (1 - u, v),
+        270: lambda u, v: (1 - v, 1 - u),
     }
-    u, v = positions[page.rotation % 360]
-    size = min(18, width, height)
-    start_x = min(right - size, left + u * width)
-    start_y = max(bottom, bottom + v * height - size)
-    return start_x, start_y, start_x + size, start_y + size
+    first = directions[rotation](x0, y0)
+    second = directions[rotation](x1, y1)
+    low_x, high_x = sorted((first[0], second[0]))
+    low_y, high_y = sorted((first[1], second[1]))
+    return (left + low_x * width, bottom + low_y * height,
+            left + high_x * width, bottom + high_y * height)
 
 
 def main():
