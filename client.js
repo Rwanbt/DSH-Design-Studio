@@ -2860,6 +2860,25 @@ window.__ModuleLoader__.load({
             type:'translate',dx:Math.round(localX*1000)/1000,dy:Math.round(localY*1000)/1000}})
           return
         }
+        const inverse=item.move.inverse
+        if(Array.isArray(inverse)&&inverse.length===6) {
+          // Numeric SVG x/y attributes live in the element's local space.
+          // Keyboard arrows describe visible movement; inverse-transform the
+          // vector so rotated or scaled elements move in the intended direction.
+          const dx=axis==='x'?amount:0,dy=axis==='y'?amount:0
+          const localX=inverse[0]*dx+inverse[2]*dy
+          const localY=inverse[1]*dx+inverse[3]*dy
+          const edits=[['x',localX],['y',localY]]
+            .filter(([,delta])=>Number.isFinite(delta)&&Math.abs(delta)>0.000000001)
+            .map(([key,delta])=>({
+              id:item.id,attribute:item.move[key],
+              value:String(Math.round((item.move[key==='x'?'initialX':'initialY']+delta)*1000)/1000)}))
+            .filter(edit=>typeof edit.attribute==='string'&&edit.value!=='NaN')
+          if(edits.length===0)return
+          event.preventDefault()
+          void save({kind:'svg-attributes',edits})
+          return
+        }
         const property=item.move[axis]
         const previous=item.move[axis==='x'?'initialX':'initialY']
         if(typeof property!=='string'||!Number.isFinite(previous))return
