@@ -2814,6 +2814,24 @@ window.__ModuleLoader__.load({
           return
         }
         if(command && !event.altKey) {
+          if(event.key?.toLowerCase()==='a' && doc?.format==='svg' && canvasTool==='select') {
+            // Select all directly addressable artboard objects, not both a
+            // group and its descendants (which would translate twice).
+            // Keep the existing 16-object transaction limit visible.
+            event.preventDefault()
+            const handlesById=new Set(geometry.handles.map(handle=>handle.id))
+            const selectable=nodes.filter(node=>node.parentTag==='svg' &&
+              !node.readOnly && !node.hidden && !node.locked && handlesById.has(node.id))
+            if(selectable.length>16) {
+              setNotice('Sélection globale limitée à 16 objets pour les opérations transactionnelles.')
+            } else if(selectable.length>0) {
+              setActive(selectable[0].id)
+              setExtraSelection(selectable.slice(1).map(node=>node.id))
+              setNotice(selectable.length+' objet(s) sélectionné(s).')
+              setError('')
+            } else setNotice('Aucun objet SVG éditable directement sur la planche.')
+            return
+          }
           if(event.key?.toLowerCase()==='z') {
             event.preventDefault()
             if(event.shiftKey)void redo();else void undo()
