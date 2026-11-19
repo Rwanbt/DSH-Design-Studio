@@ -76,6 +76,13 @@ export const presentationPrintSpec = {
       .some(button => button.textContent === 'Imprimer la présentation' && !button.disabled))
     assert.equal(await embedded.getAttribute('sandbox'), 'allow-same-origin allow-modals')
     assert.match(await embedded.getAttribute('srcdoc'), /320mm 180mm/)
+    await page.getByLabel('Format de page').selectOption('standard')
+    assert.match(await embedded.getAttribute('srcdoc'),/240mm 180mm/)
+    await page.getByLabel('Format de page').selectOption('a4')
+    assert.match(await embedded.getAttribute('srcdoc'),/297mm 210mm/)
+    await print.waitFor()
+    await page.waitForFunction(() => [...document.querySelectorAll('button')]
+      .some(button => button.textContent === 'Imprimer la présentation' && !button.disabled))
     const headings = printable.getByRole('heading', { includeHidden: true })
     assert.deepEqual(await headings.allTextContents(), ['First page', 'Second page'])
     const frame = await (await embedded.elementHandle()).contentFrame()
@@ -88,6 +95,8 @@ export const presentationPrintSpec = {
         await printPage.setContent(await embedded.getAttribute('srcdoc'))
         const pdf = await printPage.pdf({ preferCSSPageSize: true, printBackground: true })
         assert.match(pdf.toString('latin1'), /^%PDF-/)
+        const size=/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(pdf.toString('latin1'))
+        assert.ok(size && Math.abs(Number(size[1])-842)<3 && Math.abs(Number(size[2])-595)<3)
         assert.match(pdf.toString('latin1'), /\/Type \/Pages[\s\S]{0,150}\/Count 2\b/)
       } finally {
         await printPage.close()

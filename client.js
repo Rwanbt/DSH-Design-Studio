@@ -869,16 +869,21 @@ window.__ModuleLoader__.load({
               'Écarter la proposition'))))
     }
 
-    const presentationPrintCss = `
-@page { size: 320mm 180mm; margin: 0 }
+    const presentationPrintFormats = {
+      wide:{label:'16:9 · 320 × 180 mm',width:320,height:180},
+      standard:{label:'4:3 · 240 × 180 mm',width:240,height:180},
+      a4:{label:'A4 paysage · 297 × 210 mm',width:297,height:210},
+    }
+    const presentationPrintCss = ({width,height}) => `
+@page { size: ${width}mm ${height}mm; margin: 0 }
 @media print {
   html, body { margin: 0 !important; padding: 0 !important }
   #dsh-deck { display: block !important; margin: 0 !important; padding: 0 !important }
   #dsh-deck > section {
     display: block !important;
     box-sizing: border-box !important;
-    width: 320mm !important;
-    height: 180mm !important;
+    width: ${width}mm !important;
+    height: ${height}mm !important;
     margin: 0 !important;
     overflow: hidden !important;
     break-after: page !important;
@@ -968,6 +973,8 @@ window.__ModuleLoader__.load({
       const [open,setOpen]=React.useState(false)
       const [ready,setReady]=React.useState(false)
       const [error,setError]=React.useState('')
+      const [format,setFormat]=React.useState('wide')
+      const dimensions=presentationPrintFormats[format]
       const frame=React.useRef(null)
       function print() {
         try {
@@ -983,12 +990,17 @@ window.__ModuleLoader__.load({
           setReady(false);setError('');setOpen(value=>!value)
         }},open?'Fermer l’export PDF':'Export PDF'),
         open&&h('div',null,
-          h('iframe',{ref:frame,title:'Document imprimable de la présentation',
+          h('label',null,'Format de page',
+            h('select',{style:field,value:format,onChange:event=>{
+              setReady(false);setError('');setFormat(event.target.value)
+            }},Object.entries(presentationPrintFormats).map(([id,item])=>
+              h('option',{key:id,value:id},item.label)))),
+          h('iframe',{key:format,ref:frame,title:'Document imprimable de la présentation',
             sandbox:'allow-same-origin allow-modals',referrerPolicy:'no-referrer',
-            style:{position:'fixed',left:-10000,top:0,width:'320mm',height:'180mm',border:0,pointerEvents:'none'},
+            style:{position:'fixed',left:-10000,top:0,width:dimensions.width+'mm',height:dimensions.height+'mm',border:0,pointerEvents:'none'},
             tabIndex:-1,'aria-hidden':'true',onLoad:()=>setReady(true),
-            srcDoc:safePreview(source,'html','',linkedCss).replace('</head>','<style>'+presentationPrintCss+'</style></head>')}),
-          h('p',null,'Choisissez « Enregistrer au format PDF » dans la boîte d’impression. Les diapositives sont imprimées en 16:9.'),
+            srcDoc:safePreview(source,'html','',linkedCss).replace('</head>','<style>'+presentationPrintCss(dimensions)+'</style></head>')}),
+          h('p',null,'Choisissez « Enregistrer au format PDF » dans la boîte d’impression.'),
           h('button',{type:'button',style:button,disabled:disabled||!ready,onClick:print},'Imprimer la présentation'),
           error&&h('p',{role:'alert'},error)))
     }
