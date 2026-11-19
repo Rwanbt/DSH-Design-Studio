@@ -87,6 +87,16 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
     baseHash: savedRevision.hash, baseIdentity: savedRevision.identity, patches: savedRevision.inverse })
   assert.equal(undo.status, 200)
   assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
+  assert.equal((await invoke(inputs)).ok,true)
+  const [discarded]=(await request('GET',endpoint+agent.id)).payload.proposals
+  const discard={sessionId:agent.id,file:inputs.file,proposalId:discarded.id}
+  assert.equal((await request('POST','/proposals/discard',{...discard,sessionId:'different'})).status,404)
+  assert.equal((await request('POST','/proposals/discard',{...discard,file:'other.html'})).status,404)
+  assert.equal((await request('POST','/proposals/discard',discard)).status,200)
+  assert.equal((await request('POST','/apply',{...approval,proposalId:discarded.id})).status,404)
+  assert.deepEqual((await request('GET',endpoint+agent.id)).payload.proposals,[])
+  assert.equal(await readFile(join(root,inputs.file),'utf8'),original)
+
   const style = await invoke({file:inputs.file,kind:'html-style',id:'hero',property:'color',value:'#123456'})
   assert.equal(style.ok,true)
   assert.match(style.proposal.patches[0].after,/color: #123456/)

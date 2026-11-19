@@ -805,6 +805,22 @@ window.__ModuleLoader__.load({
           setState({proposals:[],status:error.message})
         }
       }
+      const [discarding,setDiscarding]=React.useState(false)
+      async function discard() {
+        if(!selection||discarding)return
+        setDiscarding(true)
+        try {
+          await request('/proposals/discard',{method:'POST',headers:{'content-type':'application/json'},
+            body:JSON.stringify({sessionId,file:active.file,proposalId:selection.id})})
+          setSelection(null)
+          setShowPreview(false)
+          setState(previous=>({proposals:previous.proposals.filter(item=>item.id!==selection.id),status:'Proposition écartée.'}))
+        } catch(error) {
+          setState(previous=>({...previous,status:error.message}))
+        } finally {
+          setDiscarding(false)
+        }
+      }
       const matches=selection && selection.baseHash===active.hash && selection.baseIdentity===active.identity
       const visual=matches&&['svg','html','htm'].includes(active.format)&&active.source.length<=512*1024
       const proposed=visual&&showPreview?sourceAfterPatches(active.source,selection.patches):null
@@ -817,10 +833,10 @@ window.__ModuleLoader__.load({
         onToggle:event=>{if(event.currentTarget.open)void refresh()}},
         h('summary',null,'Propositions IA'),
         h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0,width:'min(420px, 85vw)',maxHeight:'60vh',overflow:'auto'}},
-          h('button',{type:'button',style:button,onClick:()=>void refresh()},'Actualiser les propositions'),
+          h('button',{type:'button',style:button,disabled:discarding,onClick:()=>void refresh()},'Actualiser les propositions'),
           state.status&&h('div',{role:'status'},state.status),
           state.proposals.map((proposal,index)=>h('button',{key:proposal.id,type:'button',style:button,
-            'aria-pressed':selection?.id===proposal.id,onClick:()=>{setSelection(proposal);setShowPreview(false)}},
+            'aria-pressed':selection?.id===proposal.id,disabled:discarding,onClick:()=>{setSelection(proposal);setShowPreview(false)}},
             'Proposition '+(index+1)+' · '+proposal.edit.kind)),
           selection&&h('section',{'aria-label':'Comparaison de la proposition'},
             h('p',null,active.file),
@@ -833,9 +849,11 @@ window.__ModuleLoader__.load({
             proposed!==null&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:8}},
               renderPreview('Aperçu avant',active.source),renderPreview('Aperçu après',proposed)),
             !matches&&h('p',{role:'status'},'Le fichier a changé. Demandez une nouvelle proposition.'),
-            h('button',{type:'button',style:button,disabled:disabled||!matches,
+            h('button',{type:'button',style:button,disabled:disabled||discarding||!matches,
               onClick:()=>void save({kind:'agent-proposal',proposalId:selection.id,
-                expectedProposedHash:selection.proposedHash})},'Appliquer la proposition'))))
+                expectedProposedHash:selection.proposedHash})},'Appliquer la proposition'),
+            h('button',{type:'button',style:button,disabled:discarding,onClick:()=>void discard()},
+              'Écarter la proposition'))))
     }
 
     const presentationPrintCss = `

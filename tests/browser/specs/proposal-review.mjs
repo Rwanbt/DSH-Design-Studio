@@ -31,6 +31,17 @@ export const proposalReviewSpec = {
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
     await waitForEditorSource(page, original)
     assert.equal(await harness.read(file), original)
+    const discarded = await harness.propose({file,kind:'html-text',id:'head',value:'Discard this'})
+    assert.equal(discarded.ok,true)
+    const menu=page.locator('details').filter({has:page.getByText('Propositions IA',{exact:true})})
+    if(await menu.getAttribute('open')===null) await menu.locator('summary').click()
+    else await menu.getByRole('button',{name:'Actualiser les propositions'}).click()
+    await menu.getByRole('button',{name:/Proposition 1/}).click()
+    await menu.getByRole('button',{name:'Écarter la proposition'}).click()
+    await menu.getByText('Proposition écartée.',{exact:true}).waitFor()
+    await menu.getByRole('button',{name:'Actualiser les propositions'}).click()
+    await menu.getByText('Aucune proposition pour ce fichier.',{exact:true}).waitFor()
+    assert.equal(await harness.read(file),original)
   },
 }
 

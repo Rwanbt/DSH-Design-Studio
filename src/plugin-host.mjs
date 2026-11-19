@@ -156,6 +156,7 @@ function approvedProposal(inbox, ctx, request) {
 }
 
 export function createRouteHandler(ctx, inbox = createProposalInbox()) {
+  const applyingProposals = new Set()
   const copyPdfPages = createPdfPageCopier()
   const annotatePdf = createPdfAnnotator()
   const exportPptx = createPptxExporter()
@@ -184,6 +185,16 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         const agent = proposalSession(ctx,url.searchParams.get('sessionId'),url.searchParams.get('workspaceId'))
         const file = url.searchParams.get('file')
         return reply(res,200,{ok:true,proposals:inbox.list(agent,file)})
+      }
+      if (req.method === 'POST' && endpoint === '/proposals/discard') {
+        const {sessionId,workspaceId,file,proposalId} = await bodyJson(req)
+        const agent = proposalSession(ctx,sessionId,workspaceId)
+        if (!inbox.list(agent,file).some(entry=>entry.id===proposalId)) {
+          throw failure('proposal-missing','Proposal is unavailable or expired')
+        }
+        if (applyingProposals.has(proposalId)) throw failure('file-busy','Proposal is being applied')
+        inbox.remove(agent,proposalId)
+        return reply(res,200,{ok:true})
       }
       if (req.method === 'GET' && endpoint === '/files') {
         const root = await workspaceFor(ctx,{
@@ -570,9 +581,21 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
               message:'The edit no longer matches the preview; review it again before applying'})
           }
         }
-        const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
-        if (approval) inbox.remove(approval.agent,approval.proposal.id)
-        return reply(res,200,{ok:true,result,patches,createdId})
+        const proposalId=approval?.proposal.id
+        if (approval) {
+          if (!inbox.list(approval.agent,params.file).some(entry=>entry.id===proposalId)) {
+            throw failure('proposal-missing','Proposal is unavailable or expired')
+          }
+          if (applyingProposals.has(proposalId)) throw failure('file-busy','Proposal is being applied')
+          applyingProposals.add(proposalId)
+        }
+        try {
+          const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
+          if (approval) inbox.remove(approval.agent,proposalId)
+          return reply(res,200,{ok:true,result,patches,createdId})
+        } finally {
+          if (approval) applyingProposals.delete(proposalId)
+        }
       }
       return reply(res,404,{ok:false,error:'not-found'})
     } catch (e) {
