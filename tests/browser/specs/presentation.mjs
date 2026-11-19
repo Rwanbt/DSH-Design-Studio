@@ -1,4 +1,4 @@
-import { openFileMenu, openWorkspaceFile, waitForEditorSource } from './helpers.mjs'
+import { openFileMenu, openWorkspaceFile, waitForDisk, waitForEditorSource } from './helpers.mjs'
 
 export const presentationSpec = {
   name: 'presentations: create native deck, add, navigate, reorder and undo slides',
@@ -93,21 +93,37 @@ export const presentationPptxSpec = {
       const inspect='import sys; from pptx import Presentation; print(Presentation(sys.argv[1]).slides[0].shapes[0].text)'
       const downloaded = await download.path()
       assert.equal((await promisify(execFile)(python,['-I','-c',inspect,downloaded])).stdout.trim(),'Titre éditable')
+      const addTable = `
+import sys
+from pptx import Presentation
+deck = Presentation(sys.argv[1])
+table = deck.slides[0].shapes.add_table(2, 2, 0, 0, 1000000, 700000).table
+table.cell(0, 0).text = "Libellé"
+table.cell(1, 0).text = "Montant initial"
+deck.save(sys.argv[1])
+`
+      await promisify(execFile)(python,['-I','-c',addTable,downloaded])
       const bytes = await readFile(downloaded)
       await harness.write('incoming.pptx',bytes)
       await openFileMenu(page)
       await page.getByRole('button',{name:'Browse workspace design files'}).click()
-      await page.getByRole('button',{name:'Importer le texte PowerPoint de incoming.pptx'}).click()
+      await page.getByRole('button',{name:'Importer le PowerPoint de incoming.pptx'}).click()
       await page.getByRole('button',{name:'Diapositive 1',exact:true}).waitFor()
-      await page.getByText('Texte PowerPoint importé dans incoming.imported.html').waitFor()
+      await page.getByText('Présentation PowerPoint importée dans incoming.imported.html').waitFor()
       const imported = await harness.read('incoming.imported.html')
       assert.match(imported, /<p id="slide-page-1-text-1">Titre éditable<\/p>/)
       assert.deepEqual(await readFile(harness.file('incoming.pptx')),bytes)
+      const frame = page.frameLocator('iframe[title="Isolated design preview"]')
+      await frame.getByText('Montant initial',{exact:true}).click()
+      await page.getByRole('textbox',{name:'HTML element text'}).fill('Montant corrigé')
+      await page.getByRole('button',{name:'Apply HTML element text'}).click()
+      const edited = await waitForDisk(harness,'incoming.imported.html',source=>source.includes('Montant corrigé'))
+      assert.equal(edited, imported.replace('Montant initial','Montant corrigé'))
       await openFileMenu(page)
       await page.getByRole('button',{name:'Browse workspace design files'}).click()
-      await page.getByRole('button',{name:'Importer le texte PowerPoint de incoming.pptx'}).click()
+      await page.getByRole('button',{name:'Importer le PowerPoint de incoming.pptx'}).click()
       await page.getByRole('alert').waitFor()
-      assert.equal(await harness.read('incoming.imported.html'),imported)
+      assert.equal(await harness.read('incoming.imported.html'),edited)
     } else {
       await button.click()
       await page.getByRole('alert').waitFor()

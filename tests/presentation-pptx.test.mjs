@@ -45,7 +45,12 @@ deck = Presentation()
 slide = deck.slides.add_slide(deck.slide_layouts[1])
 slide.shapes.title.text = 'Résumé <script>'
 slide.placeholders[1].text = 'Une & deux'
-slide.shapes.add_table(1, 1, 0, 0, 100, 100)
+table = slide.shapes.add_table(2, 2, 0, 0, 100, 100).table
+table.first_row = True
+table.cell(0, 0).merge(table.cell(0, 1))
+table.cell(0, 0).text = 'En-tête & détail'
+table.cell(1, 0).text = '<Valeur>\\nDeux'
+slide.shapes.add_group_shape()
 slide = deck.slides.add_slide(deck.slide_layouts[1])
 slide.shapes.title.text = 'Conclusion'
 deck.save(sys.argv[1])
@@ -55,6 +60,10 @@ deck.save(sys.argv[1])
   assert.deepEqual(readHtmlPresentation(source).slides.map(slide=>slide.id),['slide-page-1','slide-page-2'])
   assert.match(source,/<h1 id="slide-page-1-text-1">Résumé &lt;script&gt;<\/h1>/)
   assert.match(source,/<p id="slide-page-1-text-2">Une &amp; deux<\/p>/)
+  assert.match(source,/<th id="slide-page-1-table-1-r1-c1" scope="colgroup" colspan="2">/)
+  assert.doesNotMatch(source,/id="slide-page-1-table-1-r1-c2"/)
+  assert.match(source,/id="slide-page-1-table-1-r2-c1-p1">&lt;Valeur&gt;/)
+  assert.match(source,/id="slide-page-1-table-1-r2-c1-p2">Deux/)
   assert.match(source,/Conclusion/)
   assert.equal(omitted,1)
   await assert.rejects(createPptxImporter(python)(Buffer.from('Invalid input')),{code:'unsupported-presentation'})

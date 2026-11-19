@@ -89,6 +89,37 @@ def export_deck():
     deck.save("output.pptx")
 
 
+def table_markup(table, block_id):
+    if len(table.rows) * len(table.columns) > 400:
+        sys.exit(11)
+    rows = []
+    for row_index, row in enumerate(table.rows, 1):
+        cells = []
+        for column_index, cell in enumerate(row.cells, 1):
+            if cell.is_spanned:
+                continue
+            cell_id = f"{block_id}-r{row_index}-c{column_index}"
+            is_header = row_index == 1 and table.first_row
+            tag = "th" if is_header else "td"
+            attributes = f' id="{cell_id}"'
+            if is_header:
+                scope = "colgroup" if cell.span_width > 1 else "col"
+                attributes += f' scope="{scope}"'
+            if cell.span_height > 1:
+                attributes += f' rowspan="{cell.span_height}"'
+            if cell.span_width > 1:
+                attributes += f' colspan="{cell.span_width}"'
+            paragraphs = [" ".join(paragraph.text.split()) for paragraph in cell.text_frame.paragraphs]
+            if len(paragraphs) > 32:
+                sys.exit(11)
+            content = "".join(
+                f'<p id="{cell_id}-p{index}">{escape(value)}</p>'
+                for index, value in enumerate(paragraphs, 1))
+            cells.append(f"<{tag}{attributes}>{content}</{tag}>")
+        rows.append(f'<tr id="{block_id}-r{row_index}">' + "".join(cells) + "</tr>")
+    return f'<table id="{block_id}"><tbody>' + "\n".join(rows) + "</tbody></table>"
+
+
 def import_deck():
     try:
         with ZipFile("input.pptx") as archive:
@@ -111,7 +142,15 @@ def import_deck():
             shapes = list(slide.shapes)
             ordered = ([title] if title is not None else []) + [
                 shape for shape in shapes if title is None or shape.shape_id != title.shape_id]
+            table_count = 0
+            text_count = 0
             for shape in ordered:
+                if shape.has_table:
+                    table_count += 1
+                    if table_count > 8:
+                        sys.exit(11)
+                    blocks.append(table_markup(shape.table, f"{slide_id}-table-{table_count}"))
+                    continue
                 if not shape.has_text_frame:
                     omitted += 1
                     continue
@@ -120,7 +159,8 @@ def import_deck():
                     if not value:
                         continue
                     tag = "h1" if shape is title and not blocks else "p"
-                    block_id = f"{slide_id}-text-{len(blocks) + 1}"
+                    text_count += 1
+                    block_id = f"{slide_id}-text-{text_count}"
                     blocks.append(f'<{tag} id="{block_id}">{escape(value)}</{tag}>')
                     if len(blocks) > 200:
                         sys.exit(11)
