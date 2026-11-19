@@ -232,11 +232,12 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const selections = params.selections ?? [{file:params.file,pages:params.pages}]
         const readSource = async file=>(await store.readPdf(file)).source
+        const annotations = params.annotations === undefined ? [params] : params.annotations
         const bytes = endpoint === '/pdf/annotate'
-          ? await annotatePdf(params,async ()=>{
+          ? await annotatePdf(annotations,async ()=>{
               const pdf = await store.readPdf(params.file)
-              if (params.previewRevision !== undefined &&
-                  (params.previewRevision?.hash !== pdf.hash || params.previewRevision?.identity !== pdf.identity)) {
+              if (annotations.some(({previewRevision})=>previewRevision !== undefined &&
+                  (previewRevision?.hash !== pdf.hash || previewRevision?.identity !== pdf.identity))) {
                 throw failure('stale-revision','The PDF changed after preview; refresh the page image')
               }
               return pdf.source

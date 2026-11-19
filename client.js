@@ -1005,6 +1005,8 @@ window.__ModuleLoader__.load({
 
     function PdfNote({file,scopeBody,close}) {
       const [text,setText]=React.useState('')
+      const [queued,setQueued]=React.useState([])
+      const nextAnnotation=React.useRef(0)
       const [position,setPosition]=React.useState({page:'1',x:'10',y:'10',width:'20',height:'5'})
       const [kind,setKind]=React.useState('note')
       const drag=React.useRef(null)
@@ -1088,14 +1090,25 @@ window.__ModuleLoader__.load({
         moveHighlight(event)
         drag.current=null
       }
+      function currentAnnotation(revision) {
+        return {page,x:x/100,y:y/100,text,kind,...(highlight?{width:width/100,height:height/100}:{}),
+          ...(revision?{previewRevision:{hash:revision.hash,identity:revision.identity}}:{})}
+      }
+      const canQueue=valid&&preview?.page===page&&!busy&&!previewBusy&&queued.length<12
+      function queueAnnotation() {
+        if(!canQueue)return
+        const id=nextAnnotation.current++
+        const annotation=currentAnnotation(visualRevision??preview)
+        setQueued(previous=>[...previous,{id,annotation}])
+        setText('')
+      }
       async function annotate(event) {
         event.preventDefault()
-        if(!valid||busy||previewBusy)return
+        if((!valid&&!queued.length)||busy||previewBusy)return
         setBusy(true);setError('')
         try {
-          await requestBinaryDownload('/pdf/annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,kind,
-            ...(highlight?{width:width/100,height:height/100}:{}),
-            ...(visualRevision?{previewRevision:visualRevision}:{})},
+          const annotations=queued.length?queued.map(entry=>entry.annotation):[currentAnnotation(visualRevision)]
+          await requestBinaryDownload('/pdf/annotate',{...scopeBody,file,annotations},
             file.split('/').at(-1).replace(/\.pdf$/i,'')+'-annote.pdf')
           close()
         } catch(error) {
@@ -1139,10 +1152,19 @@ window.__ModuleLoader__.load({
               width:12,height:12,transform:'translate(-50%,-50%)',border:'2px solid #8b4500',
               background:'#ffc446',borderRadius:'50%',pointerEvents:'none'}}))),
         h('label',null,highlight?'Commentaire facultatif':'Texte de la note',
-          h('textarea',{style:field,value:text,maxLength:2000,required:!highlight,disabled:busy,
+          h('textarea',{style:field,value:text,maxLength:2000,required:!highlight&&!queued.length,disabled:busy,
             onChange:event=>setText(event.target.value)})),
+        h('button',{type:'button',style:button,disabled:!canQueue,onClick:queueAnnotation,
+          title:'Affichez la page pour ajouter une annotation à la liste.'},'Ajouter à la liste'),
+        queued.length>0&&h('ol',{'aria-label':'Annotations à exporter'},
+          queued.map(({id,annotation},index)=>h('li',{key:id},
+            (annotation.kind==='highlight'?'Surlignage':'Note')+' · Page '+annotation.page+
+              (annotation.text?' · '+annotation.text.slice(0,70):''),
+            h('button',{type:'button',style:button,disabled:busy,'aria-label':'Retirer l’annotation '+(index+1),
+              onClick:()=>setQueued(previous=>previous.filter(entry=>entry.id!==id))},'Retirer')))),
         h('div',{style:{display:'flex',gap:8}},
-          h('button',{type:'submit',style:button,disabled:busy||previewBusy||!valid},'Télécharger la copie annotée'),
+          h('button',{type:'submit',style:button,disabled:busy||previewBusy||(!valid&&!queued.length)},
+            queued.length?'Télécharger les annotations de la liste ('+queued.length+')':'Télécharger la copie annotée'),
           h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),
         error&&h('p',{role:'alert'},error))
     }

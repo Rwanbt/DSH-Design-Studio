@@ -14,6 +14,7 @@ const note = { page:2,x:0.25,y:0.5,text:'Révision – texte conservé' }
 
 test('invalid PDF note parameters fail before reading the source', async () => {
   const annotate = createPdfAnnotator()
+  await assert.rejects(annotate(Array(13).fill(note),()=>assert.fail('Unexpected read')),{code:'invalid-pdf-note'})
   await assert.rejects(annotate({...note,x:1.1},()=>assert.fail('Unexpected read')),{code:'invalid-pdf-note'})
 })
 

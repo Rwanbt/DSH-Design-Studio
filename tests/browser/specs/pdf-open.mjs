@@ -101,12 +101,24 @@ export const pdfNoteSpec = {
       assert.ok(Math.abs(y-50)<1)
     }
     await form.getByLabel('Texte de la note').fill('Note de révision')
-    const submit = form.getByRole('button', { name: 'Télécharger la copie annotée' })
+    const queue = form.getByRole('button',{name:'Ajouter à la liste'})
+    const hasPreview = await queue.isEnabled()
+    if (hasPreview) {
+      await queue.click()
+      const navigation=form.getByRole('navigation',{name:'Navigation du PDF'})
+      await navigation.getByRole('button',{name:'Page précédente'}).click()
+      await navigation.getByText('1 / 2',{exact:true}).waitFor()
+      await form.getByLabel('Texte de la note').fill('Note sur la première page')
+      await queue.click()
+      assert.equal(await form.getByRole('list',{name:'Annotations à exporter'}).getByRole('listitem').count(),2)
+    }
+    const submit = form.getByRole('button', { name: hasPreview?'Télécharger les annotations de la liste (2)':'Télécharger la copie annotée' })
     if (spawnSync(python,['-I','-c','from pypdf.annotations import Text'],{stdio:'ignore'}).status===0) {
       const [download] = await Promise.all([page.waitForEvent('download'),submit.click()])
       assert.equal(download.suggestedFilename(),'source-annote.pdf')
-      const inspect = 'import json,sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); print(json.dumps(str(r.pages[1]["/Annots"][0].get_object()["/Contents"])))'
-      assert.equal(JSON.parse(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'})), 'Note de révision')
+      const inspect = 'import json,sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); print(json.dumps([[str(a.get_object()["/Contents"]) for a in p.get("/Annots",[])] for p in r.pages]))'
+      assert.deepEqual(JSON.parse(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'})),
+        [hasPreview?['Note sur la première page']:[],['Note de révision']])
     } else {
       await submit.click()
       await form.getByRole('alert').waitFor()

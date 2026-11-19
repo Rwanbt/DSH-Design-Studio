@@ -1,4 +1,4 @@
-"""Write one text annotation to a private working copy using pypdf."""
+"""Write annotations to a private working copy using pypdf."""
 import json
 import math
 import sys
@@ -54,19 +54,20 @@ def create_annotation(page, note):
 
 def main():
     with open("annotation.json", encoding="utf-8") as request:
-        note = json.load(request)
+        notes = json.load(request)
     reader = PdfReader("input.pdf")
     if reader.is_encrypted:
         return 11
     if any(field.get("/FT") == "/Sig" and field.get("/V")
            for field in (reader.get_fields() or {}).values()):
         return 11
-    index = note["page"] - 1
-    if not 0 <= index < len(reader.pages):
-        return 12
-    annotation = create_annotation(reader.pages[index], note)
     writer = PdfWriter(clone_from=reader)
-    writer.add_annotation(index, annotation)
+    for note in notes:
+        index = note["page"] - 1
+        if not 0 <= index < len(reader.pages):
+            return 12
+        annotation = create_annotation(reader.pages[index], note)
+        writer.add_annotation(index, annotation)
     writer.write("output.pdf")
     return 0
 

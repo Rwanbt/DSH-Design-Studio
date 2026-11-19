@@ -13,20 +13,28 @@ function fail(code, message) {
   throw Object.assign(new Error(message), { code })
 }
 
+function normalizeAnnotation(note) {
+  if (!note || typeof note !== 'object' || Array.isArray(note)) fail('invalid-pdf-note','Invalid annotation')
+  const { page, text = '', x, y, width, height, kind = 'note' } = note
+  const validText = typeof text==='string' && text.length<=2000 && !text.includes('\0')
+  const end = coordinate => Number.isFinite(coordinate) && coordinate>=0 && coordinate<=1+Number.EPSILON
+  const validKind = kind==='note' ? validText && Boolean(text.trim()) :
+    kind==='highlight' && validText && Number.isFinite(width) && Number.isFinite(height) &&
+    width>0 && height>0 && end(x+width) && end(y+height)
+  if (!Number.isSafeInteger(page) || page<1 || page>10_000 ||
+      !validKind ||
+      ![x,y].every(value=>Number.isFinite(value)&&value>=0&&value<=1)) {
+    fail('invalid-pdf-note','Choose a page, valid annotation coordinates, and text of up to 2000 characters')
+  }
+  return {page,text,x,y,kind,width,height}
+}
+
 export function createPdfAnnotator(python = process.env.DSH_PDF_PYTHON || 'python3') {
   let busy = false
   return async (note, readSource) => {
-    const { page, text = '', x, y, width, height, kind = 'note' } = note
-    const validText = typeof text==='string' && text.length<=2000 && !text.includes('\0')
-    const end = coordinate => Number.isFinite(coordinate) && coordinate>=0 && coordinate<=1+Number.EPSILON
-    const validKind = kind==='note' ? validText && Boolean(text.trim()) :
-      kind==='highlight' && validText && Number.isFinite(width) && Number.isFinite(height) &&
-      width>0 && height>0 && end(x+width) && end(y+height)
-    if (!Number.isSafeInteger(page) || page<1 || page>10_000 ||
-        !validKind ||
-        ![x,y].every(value=>Number.isFinite(value)&&value>=0&&value<=1)) {
-      fail('invalid-pdf-note','Choose a page, valid annotation coordinates, and text of up to 2000 characters')
-    }
+    const entries = Array.isArray(note) ? note : [note]
+    if (entries.length<1 || entries.length>12) fail('invalid-pdf-note','Choose one to 12 annotations')
+    const annotations = entries.map(normalizeAnnotation)
     if (busy) fail('file-busy','Another PDF annotation is being processed')
     busy = true
     let folder
@@ -35,7 +43,7 @@ export function createPdfAnnotator(python = process.env.DSH_PDF_PYTHON || 'pytho
       if (!bytes.subarray(0,5).equals(Buffer.from('%PDF-'))) fail('invalid-pdf','The source is not a PDF')
       folder = await mkdtemp(path.join(tmpdir(),'dsh-pdf-note-'))
       await writeFile(path.join(folder,'input.pdf'),bytes,{mode:0o600})
-      await writeFile(path.join(folder,'annotation.json'),JSON.stringify({page,text,x,y,kind,width,height}),{mode:0o600})
+      await writeFile(path.join(folder,'annotation.json'),JSON.stringify(annotations),{mode:0o600})
       try {
         await run(python,['-I',script],{cwd:folder,timeout:10_000,maxBuffer:64*1024,windowsHide:true,
           env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot}})

@@ -391,6 +391,26 @@ async function main() {
           record('highlight an area in a PDF copy through the real Host',
             highlightOk ? 'PASS' : 'FAIL', `HTTP ${highlight.status()}`)
         }
+        if (annotationVerified && previewOk) {
+          const endpoint = origin + '/design-studio-native/pdf/annotate'
+          const current = await context.request.get(origin + '/design-studio-native/pdf/preview?' + previewQuery)
+          const headers = current.headers()
+          const revision = {hash:headers['x-dsh-pdf-hash'],identity:headers['x-dsh-pdf-identity']}
+          const data = {sessionId,file:'g0-source.pdf',annotations:[
+            {page:1,x:0.1,y:0.1,text:'Batch note',previewRevision:revision},
+            {page:2,x:0.2,y:0.2,width:0.2,height:0.1,kind:'highlight',previewRevision:revision},
+          ]}
+          const batch = await context.request.post(endpoint,{data})
+          const contents = (await batch.body()).toString('latin1')
+          const stale = await context.request.post(endpoint,{data:{...data,annotations:[
+            data.annotations[0],{...data.annotations[1],previewRevision:{...revision,hash:'0'.repeat(64)}},
+          ]}})
+          const unchanged = (await readFile(pdfFile)).equals(pdf)
+          record('apply a revision-bound PDF annotation batch through the real Host',
+            current.ok() && batch.ok() && /\/Subtype \/Text\b/.test(contents) && /\/Subtype \/Highlight\b/.test(contents)
+              && stale.status()===409 && unchanged ? 'PASS' : 'FAIL',
+            `HTTP ${batch.status()}, stale batch ${stale.status()}, source preserved=${unchanged}`)
+        }
         const deckFile = 'g0-pptx.html'
         const deckSource = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Real DSH</h1><table><tr><th colspan="2">Total</th></tr><tr><td>41</td><td>42</td></tr></table></section></main>'
         await writeFile(path.join(workspace,deckFile),deckSource,'utf8')
