@@ -114,6 +114,28 @@ async function dismissOnboarding(page) {
   }
 }
 
+async function checkDesktopSidebar(page, workspaceId, fixture, record) {
+  const file = path.basename(fixture)
+  const original = await readFile(fixture, 'utf8')
+  await page.getByRole('button', { name: 'Design Studio', exact: true }).click({ timeout: 20000 })
+  const panel = page.locator('[aria-label="Design Studio panel"]')
+  await panel.getByLabel('Workspace', { exact: true }).selectOption(workspaceId, { timeout: 15000 })
+  await panel.getByRole('button', { name: 'Open file ' + file, exact: true }).click()
+  await panel.getByRole('button', { name: 'Select layer rect #probe', exact: true }).click()
+  const x = panel.getByLabel('Geometry x', { exact: true })
+  await x.fill('25')
+  await x.press('Enter')
+  const preview = panel.frameLocator('iframe[title="Isolated SVG preview"]')
+  await preview.locator('rect#probe[x="25"]').waitFor()
+  const saved = await readFile(fixture, 'utf8')
+  if (saved !== original.replace('x="10"', 'x="25"')) throw new Error('Desktop save changed unexpected bytes')
+  await panel.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+  await preview.locator('rect#probe[x="10"]').waitFor()
+  if (await readFile(fixture, 'utf8') !== original) throw new Error('Desktop Undo did not restore exact bytes')
+  record('credential-free Desktop sidebar saves and undoes an SVG', 'PASS',
+    'real renderer and Host, exact saved bytes, Undo restored the original')
+}
+
 /**
  * Verify the plugin inside the real DSH Desktop renderer.
  * @param {object} options
@@ -217,12 +239,14 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
     const store = JSON.parse(body)
     const table = store?.tables?.workspaces ?? {}
     const id = (store?.global?.workspaceIds ?? []).find((candidate) => table[candidate] && existsSync(table[candidate].path))
-    return id ? table[id].path : workspaceDir
-  }).catch(() => workspaceDir)
+    if (!id) throw new Error('No registered Desktop test workspace')
+    return { id, directory: table[id].path }
+  })
   const probeName = 'desktop-probe.svg'
-  await writeFile(path.join(activeWorkspace, probeName),
+  const probePath = path.join(activeWorkspace.directory, probeName)
+  await writeFile(probePath,
     '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">\n  <rect id="probe" x="10" y="10" width="40" height="30" fill="#bda991"/>\n</svg>\n',
-    'utf8').catch(() => {})
+    'utf8')
 
   // Phase 3 — second launch: the real renderer, with the bundle registered.
   shell = null
@@ -243,11 +267,13 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
         'no dsh-app:// page among ' + JSON.stringify(pages.map((candidate) => candidate.url())))
       return
     }
-    // The shell can open a separate "welcome" window when no account is
-    // configured; it is not the product window and would keep the workspace in
-    // a first-run state, so it is closed before the workspace is driven.
-    const welcome = pages.find((candidate) => candidate.url().includes('welcome.html'))
-    if (welcome) await welcome.close().catch(() => {})
+    // Closing the welcome window before entering the workspace quits Electron.
+    // The API key screen offers an explicit skip without credentials.
+    const welcome = pages.find((candidate) => candidate.url().endsWith('/welcome.html'))
+    if (welcome) {
+      await welcome.locator('#api-key').click({ timeout: 15000 })
+      await welcome.locator('#skip-key').click({ timeout: 15000, noWaitAfter: true })
+    }
     const pageErrors = []
     page.on('pageerror', (error) => pageErrors.push(String(error).slice(0, 200)))
     await page.waitForFunction(() => (window.__DSH_BOOT__?.entries || []).length > 0, null, { timeout: 45000 })
@@ -302,6 +328,7 @@ export async function checkDesktopShell({ root, binary, cli, repoRoot, record, p
 
     // A conversation is required for DSH to render the conversation.view area.
     await dismissOnboarding(page)
+    await checkDesktopSidebar(page, activeWorkspace.id, probePath, record)
     let workbench = 0
     if (process.env.DSH_E2E_DESKTOP_TURN === '0') {
       record('the workbench renders in DSH Desktop', 'NOT_RUN', 'disabled with DSH_E2E_DESKTOP_TURN=0')
