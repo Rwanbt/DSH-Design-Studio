@@ -2845,6 +2845,15 @@ window.__ModuleLoader__.load({
         if(refuseTextDraft())return
         const [axis,sign]=direction
         const amount=sign*(event.shiftKey?10:1)
+        const allSelected=selectionIds()
+        if(allSelected.length>1) {
+          // One revision and one Undo for a multi-object nudge. Reject
+          // ancestor/child overlap in the Host rather than moving it twice.
+          event.preventDefault()
+          void save({kind:'svg-multi-nudge',ids:allSelected,
+            dx:axis==='x'?amount:0,dy:axis==='y'?amount:0})
+          return
+        }
         if(item.move.kind==='translate') {
           // Group positions have no x/y attributes. Express a keyboard nudge
           // in screen/artboard coordinates, then map it through the *parent*

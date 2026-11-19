@@ -18,6 +18,7 @@ import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
 import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
+import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
 import { listCssVisualRules, listCssVisualRuleDetails, cssVisualRulePatch, cssMediaDeclarationPatch } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
@@ -441,6 +442,10 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'svg-lock') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgLockPatch(doc.source,{id:params.id,locked:params.locked===true})]
+        } else if (params.kind === 'svg-multi-nudge') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=planSvgMultiNudge(doc.source,{
+            ids:params.ids,dx:params.dx,dy:params.dy})
         } else if (params.kind === 'svg-transform') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTransformPatch(doc.source,{id:params.id,operation:params.operation}).patch]
