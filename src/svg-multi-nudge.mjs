@@ -45,7 +45,7 @@ export function planSvgMultiNudge(source,{ids,dx,dy}={}) {
     // A leaf's pivotInverse maps the artboard delta into its parent's space;
     // group move.inverse is the same parent-space inverse.
     const inverse=handle.group?handle.move.inverse:handle.pivotInverse
-    if(!Array.isArray(inverse)||inverse.length!==6) {
+    if(!Array.isArray(inverse)||inverse.length<4) {
       fail('unsupported-transform','Parent transform cannot be inverted safely')
     }
     const x=inverse[0]*dx+inverse[2]*dy

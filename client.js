@@ -2859,7 +2859,7 @@ window.__ModuleLoader__.load({
           // in screen/artboard coordinates, then map it through the *parent*
           // transform inverse before composing the native SVG matrix.
           const inverse=item.move.inverse
-          if(!Array.isArray(inverse)||inverse.length!==6)return
+          if(!Array.isArray(inverse)||inverse.length<4)return
           const dx=axis==='x'?amount:0,dy=axis==='y'?amount:0
           const localX=inverse[0]*dx+inverse[2]*dy
           const localY=inverse[1]*dx+inverse[3]*dy
@@ -2870,7 +2870,7 @@ window.__ModuleLoader__.load({
           return
         }
         const inverse=item.move.inverse
-        if(Array.isArray(inverse)&&inverse.length===6) {
+        if(Array.isArray(inverse)&&inverse.length>=4) {
           // Numeric SVG x/y attributes live in the element's local space.
           // Keyboard arrows describe visible movement; inverse-transform the
           // vector so rotated or scaled elements move in the intended direction.
