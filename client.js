@@ -1909,13 +1909,13 @@ window.__ModuleLoader__.load({
           setError('Ce calque ne porte aucun attribut d’apparence natif explicite à copier.')
           return
         }
-        setAppearanceClipboard({file:doc.file,id:target})
+        setAppearanceClipboard({scope:scopeKey,file:doc.file,id:target})
         setNotice('Apparence native copiée depuis '+node.tag+' #'+target)
         setError('')
       }
       function pasteAppearance(id) {
         const target=id||active
-        if(!appearanceClipboard||appearanceClipboard.file!==doc?.file) {
+        if(!appearanceClipboard||appearanceClipboard.scope!==scopeKey||appearanceClipboard.file!==doc?.file) {
           setError('Copiez une apparence depuis un calque du même document SVG.')
           return
         }
@@ -3941,7 +3941,7 @@ window.__ModuleLoader__.load({
              h('button',{type:'button',style:{...button,flex:1},
                'aria-label':'Appliquer apparence SVG',
                disabled:!selected||!editable||!appearanceClipboard||
-                 appearanceClipboard.file!==doc?.file||appearanceClipboard.id===active,
+                 appearanceClipboard.scope!==scopeKey||appearanceClipboard.file!==doc?.file||appearanceClipboard.id===active,
                title:'Appliquer les seuls attributs SVG explicites du calque source ; Undo exact',
                onClick:()=>pasteAppearance(active)},'Appliquer apparence')),
            h('div',{className:'dsh-studio-rowspace'}),
@@ -4031,7 +4031,7 @@ window.__ModuleLoader__.load({
             layerMenuItem('Coller l’élément copié','Ctrl+V',()=>pasteLayer(),menuBlocked||!clipboard),
             layerMenuItem('Copier l’apparence native','',()=>copyAppearance(layerMenu.id),menuBlocked),
             layerMenuItem('Appliquer l’apparence copiée','',()=>pasteAppearance(layerMenu.id),
-              menuBlocked||!appearanceClipboard||appearanceClipboard.file!==doc?.file||
+              menuBlocked||!appearanceClipboard||appearanceClipboard.scope!==scopeKey||appearanceClipboard.file!==doc?.file||
               appearanceClipboard.id===layerMenu.id),
             h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
             layerMenuItem('Avancer d’un plan','Ctrl+]',()=>reorderLayer('forward',layerMenu.id),menuBlocked),
