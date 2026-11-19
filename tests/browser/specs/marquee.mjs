@@ -83,3 +83,28 @@ export const marqueeModifierSpec={
       'marquee modifiers and Escape remain local, with no Host write')
   }
 }
+
+
+export const canvasModifierClickSpec={
+  name:'canvas: Shift-clicking a shape extends artboard selection without writing or starting a drag',
+  async run({page,harness,assert}){
+    await harness.write('click-select.svg',DOCUMENT)
+    await openWorkspaceFile(page,'click-select.svg',{expect:'svg'})
+    await page.getByRole('button',{name:'Drag rect first'}).click()
+    await page.getByRole('button',{name:'Drag rect second'}).click({modifiers:['Shift']})
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #first/}).getAttribute('aria-label'),
+      'Select layer rect #first (in selection)')
+    assert.equal(await page.getByRole('button',{name:/Select layer rect #outside/}).getAttribute('aria-label'),
+      'Select layer rect #outside')
+    assert.equal(await harness.read('click-select.svg'),DOCUMENT,'modifier clicks never write')
+    await page.getByRole('button',{name:/Select layer rect #second/}).press('Shift+ArrowRight')
+    const changed=await waitForDisk(harness,'click-select.svg',
+      t=>(t.match(/transform="matrix\\(1,0,0,1,10,0\\)"/g)||[]).length===2,
+      {label:'modifier click selection nudge'})
+    assert.equal((changed.match(/transform="matrix\\(1,0,0,1,10,0\\)"/g)||[]).length,2)
+    await page.waitForFunction(()=>document.querySelector('[aria-label="Undo saved edit"]')?.disabled===false)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await waitForDisk(harness,'click-select.svg',t=>t===DOCUMENT,{label:'modifier select Undo'})
+    assert.equal(await harness.read('click-select.svg'),DOCUMENT)
+  }
+}
