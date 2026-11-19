@@ -3550,6 +3550,15 @@ window.__ModuleLoader__.load({
       function startDrag(event,handle,mode='move') {
         if(event.button!==0 || busy || reloadRequired || canvasTool!=='select' || spaceHeld) return
         if(refuseTextDraft())return
+        if(mode==='move'&&(event.shiftKey||event.ctrlKey||event.metaKey)) {
+          // Modifier-click extends the selected artboard shapes without
+          // starting a movement gesture or writing anything to the Host.
+          // This mirrors Ctrl/Cmd-click in the layer list.
+          event.preventDefault()
+          event.stopPropagation()
+          select(handle.id,true)
+          return
+        }
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
