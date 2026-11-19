@@ -36,6 +36,7 @@ import { pathTangentSpec } from './path-tangent.mjs'
 import { appearanceTransferSpec } from './appearance.mjs'
 import { customRotationSpec } from './custom-rotation.mjs'
 import { customScaleSpec } from './custom-scale.mjs'
+import { groupKeyboardNudgeSpec } from './group-keyboard.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec, gradientCreateSpec, gradientGeometrySpec, gradientStopMoveSpec, gradientSharedWarningSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -115,6 +116,7 @@ export const specs = [
   appearanceTransferSpec,
   customRotationSpec,
   customScaleSpec,
+  groupKeyboardNudgeSpec,
   gradientStopEditSpec,
   gradientOffsetInspectorSpec,
   gradientCreateSpec,
