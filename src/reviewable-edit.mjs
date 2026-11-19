@@ -2,7 +2,7 @@ import { applyNativePatches } from './native-patch.mjs'
 import { MAX_NATIVE_FILE_BYTES } from './native-file-store.mjs'
 import { cssVisualRulePatch } from './css-visual.mjs'
 import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
-import { htmlVisualTextPatch } from './html-visual.mjs'
+import { htmlVisualAttributePatch, htmlVisualStylePatch, htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
 import { svgTextPatch } from './svg-text.mjs'
 
@@ -13,7 +13,7 @@ const slidePlanners = Object.freeze({
   'slide-remove': removeHtmlSlide,
 })
 export const REVIEWABLE_EDIT_KINDS = Object.freeze([
-  'svg-text', 'svg-attribute', 'html-text', 'css-rule', ...Object.keys(slidePlanners),
+  'svg-text', 'svg-attribute', 'html-text', 'html-style', 'html-attribute', 'css-rule', ...Object.keys(slidePlanners),
 ])
 
 function fail(code, message) {
@@ -30,8 +30,13 @@ export function planReviewableEdit(document, edit) {
   if (Object.hasOwn(slidePlanners,kind) && (format === 'html' || format === 'htm')) {
     return [slidePlanners[kind](source, edit)]
   }
-  if (kind === 'html-text' && (format === 'html' || format === 'htm')) {
-    return [htmlVisualTextPatch(source, { id, key: edit.key, path: edit.path, text: value })]
+  if (format === 'html' || format === 'htm') {
+    const target = {id,key:edit.key,path:edit.path}
+    if (kind === 'html-text') return [htmlVisualTextPatch(source,{...target,text:value})]
+    if (kind === 'html-style') return [htmlVisualStylePatch(source,{id,property:edit.property,value})]
+    if (kind === 'html-attribute') {
+      return [htmlVisualAttributePatch(source,{...target,name:edit.attribute,value:value??null})]
+    }
   }
   if (kind === 'css-rule' && format === 'css') {
     return [cssVisualRulePatch(source, { selector: edit.selector, property: edit.property, value })]

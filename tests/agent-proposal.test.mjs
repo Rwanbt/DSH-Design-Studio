@@ -87,6 +87,16 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
     baseHash: savedRevision.hash, baseIdentity: savedRevision.identity, patches: savedRevision.inverse })
   assert.equal(undo.status, 200)
   assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
+  const style = await invoke({file:inputs.file,kind:'html-style',id:'hero',property:'color',value:'#123456'})
+  assert.equal(style.ok,true)
+  assert.match(style.proposal.patches[0].after,/color: #123456/)
+  const attribute = await invoke({file:inputs.file,kind:'html-attribute',id:'hero',attribute:'title',value:'Review'})
+  assert.equal(attribute.ok,true)
+  assert.match(attribute.proposal.patches[0].after,/title="Review"/)
+  assert.equal((await invoke({file:inputs.file,kind:'html-style',id:'hero',property:'background-image',value:'url(remote.png)'})).ok,false)
+  assert.equal((await invoke({file:inputs.file,kind:'html-attribute',id:'hero',attribute:'onclick',value:'run()'})).ok,false)
+  assert.equal(await readFile(join(root,inputs.file),'utf8'),original)
+
   const deck = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>First</h1></section>\n'+
     '<section id="slide-second"><h1>Second</h1></section></main>'
   await writeFile(join(root,'deck.html'),deck)

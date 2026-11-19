@@ -3,6 +3,8 @@ import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './
 
 const editFields = Object.freeze({
   'html-text': ['id', 'value'],
+  'html-style': ['id', 'property', 'value'],
+  'html-attribute': ['id', 'attribute', 'value'],
   'svg-text': ['id', 'value'],
   'svg-attribute': ['id', 'attribute', 'value'],
   'css-rule': ['selector', 'property', 'value'],
@@ -29,7 +31,7 @@ export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,

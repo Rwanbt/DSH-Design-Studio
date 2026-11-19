@@ -12,7 +12,7 @@ import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
-import { listHtmlVisualElements, htmlVisualStylePatch, htmlVisualAttributePatch } from './html-visual.mjs'
+import { listHtmlVisualElements } from './html-visual.mjs'
 import { svgGroupingPatch } from './svg-groups.mjs'
 import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
 import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
@@ -440,9 +440,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[cssMediaDeclarationPatch(doc.source,{start:params.start,condition:params.condition,
             property:params.property,value:params.value})]
-        } else if (params.kind === 'html-style') {
-          if(!['html','htm'].includes(doc.format))return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[htmlVisualStylePatch(doc.source,{id:params.id,property:params.property,value:params.value})]
         } else if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           // Nested/grouped layers are the normal case now: default to the nested
@@ -582,12 +579,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         } else if (params.kind === 'svg-transform') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTransformPatch(doc.source,{id:params.id,operation:params.operation}).patch]
-        } else if (params.kind === 'html-attribute') {
-          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[htmlVisualAttributePatch(doc.source,{
-            id:params.id,key:params.key,path:params.path,name:params.attribute,
-            value:params.value===undefined?null:params.value,
-          })]
         } else if (params.kind === 'replace-source' && typeof params.source==='string') {
           patches=[{start:0,end:doc.source.length,before:doc.source,after:params.source}]
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {

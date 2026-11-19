@@ -58,3 +58,27 @@ export const slideProposalReviewSpec = {
     assert.equal(await harness.read(file),deck)
   },
 }
+
+export const htmlStyleProposalReviewSpec = {
+  name: 'proposals: apply and undo an inline style with a visible preview',
+  async run({ page, harness, assert }) {
+    const file = 'styled.html'
+    const original = '<h1 id="hero" style="color: #222222">Title</h1>'
+    await harness.write(file,original)
+    const result = await harness.propose({file,kind:'html-style',id:'hero',property:'color',value:'#123456'})
+    assert.equal(result.ok,true)
+    await openWorkspaceFile(page,file,{expect:'html'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*html-style/}).click()
+    const review = page.getByRole('region',{name:'Comparaison de la proposition'})
+    await review.getByText(/#123456/).waitFor()
+    assert.equal(await harness.read(file),original)
+    await review.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const heading=page.frameLocator('iframe[title="Isolated design preview"]').getByText('Title',{exact:true})
+    await heading.locator('xpath=self::*[@style="color: #123456"]').waitFor()
+    assert.equal(await heading.evaluate(element=>getComputedStyle(element).color),'rgb(18, 52, 86)')
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await heading.locator('xpath=self::*[@style="color: #222222"]').waitFor()
+    assert.equal(await harness.read(file),original)
+  },
+}
