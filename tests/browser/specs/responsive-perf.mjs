@@ -90,10 +90,19 @@ export const largeDocumentSpec = {
     // Generous ceiling: this is a smoke test for scale, not a frame budget.
     assert.ok(openMs < 60000, `opening 5000 nodes must stay under 60 s (measured ${openMs} ms)`)
 
-    // The layer list really holds every layer, not a truncated prefix.
+    // The navigation window is intentionally bounded for Firefox. Every
+    // source node remains searchable; no source-layer data is truncated.
     const listed = await page.evaluate(() =>
       document.querySelectorAll('[aria-label^="Select layer rect #n"]').length)
-    assert.equal(listed, 5000, 'every layer must be listed, not silently truncated')
+    assert.ok(listed>0 && listed<=250, 'the layer DOM is bounded (got '+listed+')')
+    const more=page.getByRole('button',{name:'Afficher plus de calques'})
+    assert.equal(await more.count(),1,'the user can progressively reveal layers')
+    const search=page.getByRole('textbox',{name:'Filter layers'})
+    await search.fill('#n4999')
+    await page.getByRole('button',{name:'Select layer rect #n4999'}).waitFor({state:'visible'})
+    assert.equal(await more.count(),0,'a matching deep layer is available without pagination')
+    await search.fill('')
+    await page.getByRole('button',{name:'Select layer rect #n0'}).waitFor({state:'visible'})
 
     // One edit still goes through the exact-patch path and stays reversible.
     const editStarted = Date.now()
