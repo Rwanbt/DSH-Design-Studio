@@ -19,7 +19,7 @@ import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
 import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
-import { listCssVisualRules, listCssVisualRuleDetails, cssMediaDeclarationPatch } from './css-visual.mjs'
+import { listCssVisualRules, listCssVisualRuleDetails } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
 import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
@@ -433,13 +433,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         let patches; let createdId=null
         if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
-        } else if (params.kind === 'css-media') {
-          // Conditional editing is addressed by the rule's exact offset and the
-          // condition the user was shown, so two identical selectors can never be
-          // confused. It is never a cascade or a computed-value edit.
-          if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[cssMediaDeclarationPatch(doc.source,{start:params.start,condition:params.condition,
-            property:params.property,value:params.value})]
         } else if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           // Nested/grouped layers are the normal case now: default to the nested

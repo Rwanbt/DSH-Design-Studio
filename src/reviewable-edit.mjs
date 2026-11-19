@@ -1,6 +1,6 @@
 import { applyNativePatches } from './native-patch.mjs'
 import { MAX_NATIVE_FILE_BYTES } from './native-file-store.mjs'
-import { cssVisualRulePatch } from './css-visual.mjs'
+import { cssMediaDeclarationPatch, cssVisualRulePatch } from './css-visual.mjs'
 import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
 import { htmlVisualAttributePatch, htmlVisualStylePatch, htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
@@ -13,7 +13,7 @@ const slidePlanners = Object.freeze({
   'slide-remove': removeHtmlSlide,
 })
 export const REVIEWABLE_EDIT_KINDS = Object.freeze([
-  'svg-text', 'svg-attribute', 'html-text', 'html-style', 'html-attribute', 'css-rule', ...Object.keys(slidePlanners),
+  'svg-text', 'svg-attribute', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
 ])
 
 function fail(code, message) {
@@ -38,6 +38,7 @@ export function planReviewableEdit(document, edit) {
       return [htmlVisualAttributePatch(source,{...target,name:edit.attribute,value:value??null})]
     }
   }
+  if (kind === 'css-media' && format === 'css') return [cssMediaDeclarationPatch(source,edit)]
   if (kind === 'css-rule' && format === 'css') {
     return [cssVisualRulePatch(source, { selector: edit.selector, property: edit.property, value })]
   }

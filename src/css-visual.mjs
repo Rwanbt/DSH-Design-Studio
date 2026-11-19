@@ -665,24 +665,32 @@ export function cssVisualDeclarationPatch(source,{selector,property,value}={}) {
 /**
  * Patches one declaration of a rule inside a single simple `@media` block.
  *
- * The rule is addressed by its exact `start` offset — never by selector, since
- * the same selector may legitimately appear in several media blocks — and the
- * caller must echo the `condition` it was shown. Both are re-validated against
- * the current source, so a stale or falsified reference is refused instead of
- * editing a different block. Only the declaration bytes change; the inverse is
- * exact. No cascade, computed value or media evaluation is performed.
+ * The inspector uses an exact start offset and its displayed condition.
+ * Proposals can use the condition and an exact selector when the pair is unique.
+ * Only declaration bytes change, with no cascade or media evaluation.
  */
-export function cssMediaDeclarationPatch(source,{start,condition,property,value}={}) {
-  if(!Number.isInteger(start)||start<0)
-    fail('invalid-target','A CSS rule start offset is required')
+export function cssMediaDeclarationPatch(source,{start,selector,condition,property,value}={}) {
+  const bySelector=start===undefined&&typeof selector==='string'&&Boolean(selector.trim())
+  if(!bySelector&&(!Number.isInteger(start)||start<0))
+    fail('invalid-target','A CSS rule start offset or exact selector is required')
   if(typeof condition!=='string'||!condition.trim())
     fail('invalid-target','The media condition shown to the user is required')
   if(typeof property!=='string'||typeof value!=='string'||
      !validCssPropertyValue(property,value)){
     fail('invalid-value','Unsupported CSS property or value')
   }
-  const rule=listCssVisualRuleDetails(source).find(entry=>entry.start===start)
-  if(!rule)fail('unknown-node','No CSS rule starts at the given offset')
+  const normalized=simpleMediaCondition([{name:'media',prelude:condition}])
+  const rules=listCssVisualRuleDetails(source)
+  let rule
+  if(bySelector){
+    if(!normalized)fail('inside-at-rule','Only simple width media conditions can be edited')
+    const matches=rules.filter(entry=>entry.mediaCondition===normalized&&entry.selector===selector.trim())
+    if(matches.length>1)fail('ambiguous-selector','Multiple CSS rules match this selector and media condition')
+    rule=matches[0]
+  }else{
+    rule=rules.find(entry=>entry.start===start)
+  }
+  if(!rule)fail('unknown-node','No CSS rule matches the target')
   if(rule.scope!=='inside-at-rule'||!rule.mediaCondition){
     fail('inside-at-rule',
       'Only a rule inside one simple (min|max)-width @media block can be edited this way',{
@@ -690,7 +698,7 @@ export function cssMediaDeclarationPatch(source,{start,condition,property,value}
         reason:'the addressed rule is not inside a single simple @media block',
       })
   }
-  if(rule.mediaCondition!==simpleMediaCondition([{name:'media',prelude:condition}])){
+  if(rule.mediaCondition!==normalized){
     fail('stale-reference',
       'The media condition no longer matches the addressed rule; reload before editing',{
         reasonCode:'stale-reference',reason:'media condition mismatch',

@@ -259,3 +259,12 @@ test('the Host refuses a falsified condition, a stale revision and a non-CSS tar
     assert.equal(await readFile(path.join(root, 'media.css'), 'utf8'), ROUTE_CSS,
       'every refusal leaves the stylesheet byte-identical')
   }))
+
+test('a proposal targets an exact selector and unique width condition',()=>{
+  const edit={selector:'.card',condition:'( max-width : 600px )',property:'color',value:'#abcdef'}
+  assert.throws(()=>cssMediaDeclarationPatch(TWO_MEDIAS,edit),{code:'ambiguous-selector'})
+  const distinct=TWO_MEDIAS.replace('(max-width: 600px)','(min-width: 601px)')
+  const result=applies(distinct,cssMediaDeclarationPatch(distinct,edit))
+  assert.equal(result,distinct.replace('#222222','#abcdef'))
+  assert.throws(()=>cssMediaDeclarationPatch(distinct,{...edit,selector:'.other'}),{code:'unknown-node'})
+})

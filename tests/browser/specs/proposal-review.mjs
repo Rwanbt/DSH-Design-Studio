@@ -82,3 +82,28 @@ export const htmlStyleProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const cssMediaProposalReviewSpec = {
+  name: 'proposals: apply and undo a responsive CSS declaration',
+  async run({ page, harness, assert }) {
+    const file = 'responsive.css'
+    const original = 'h1 { color: #111111; }\n@media (max-width: 600px) { h1 { color: #222222; } }'
+    const expected = original.replace('#222222','#abcdef')
+    await harness.write(file,original)
+    const result = await harness.propose({file,kind:'css-media',selector:'h1',condition:'(max-width: 600px)',
+      property:'color',value:'#abcdef'})
+    assert.equal(result.ok,true)
+    await openWorkspaceFile(page,file,{expect:'css'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*css-media/}).click()
+    const review = page.getByRole('region',{name:'Comparaison de la proposition'})
+    await review.getByText('#abcdef',{exact:true}).waitFor()
+    assert.equal(await harness.read(file),original)
+    await review.getByRole('button',{name:'Appliquer la proposition'}).click()
+    await waitForEditorSource(page,expected)
+    assert.equal(await harness.read(file),expected)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await waitForEditorSource(page,original)
+    assert.equal(await harness.read(file),original)
+  },
+}
