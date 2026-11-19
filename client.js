@@ -908,6 +908,43 @@ window.__ModuleLoader__.load({
           h('button',{type:'submit',style:button,disabled:disabled||!title.trim()||slides.length>=32},'Ajouter une diapositive')))
     }
 
+    function PdfCopy({file, scopeBody, close}) {
+      const [selection,setSelection]=React.useState('')
+      const [busy,setBusy]=React.useState(false)
+      const [error,setError]=React.useState('')
+      const numbers=selection.trim().split(/\s*,\s*/)
+      const valid=numbers.length<=24&&numbers.every(number=>/^[1-9]\d{0,4}$/.test(number)&&Number(number)<=10000)
+      async function exportCopy(event) {
+        event.preventDefault()
+        if(!valid||busy)return
+        setBusy(true);setError('')
+        try {
+          const response=await fetch(new URL('/'+api+'/pdf/copy',document.baseURI),{
+            method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+            body:JSON.stringify({...scopeBody,file,pages:numbers.map(Number)}),
+          })
+          if(!response.ok) throw new Error((await response.json()).message || 'Copie PDF indisponible')
+          downloadBlob(await response.blob(),file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf')
+          close()
+        } catch(error) {
+          setError(String(error.message))
+        } finally {
+          setBusy(false)
+        }
+      }
+      return h('form',{onSubmit:exportCopy,'aria-label':'Assembler des pages PDF',
+        style:{position:'absolute',top:98,right:12,width:'min(420px, calc(100% - 24px))',boxSizing:'border-box',
+          display:'grid',gap:8,padding:12,background:'var(--panel)',border:'1px solid var(--line)',
+          borderRadius:8,zIndex:45}},
+        h('strong',null,file),
+        h('label',null,'Pages dans l’ordre souhaité',
+          h('input',{style:field,value:selection,placeholder:'3, 1, 2',maxLength:160,onChange:event=>setSelection(event.target.value)})),
+        h('div',{style:{display:'flex',gap:8}},
+          h('button',{type:'submit',style:button,disabled:!valid||busy},busy?'Assemblage…':'Télécharger la copie PDF'),
+          h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),
+        error&&h('p',{role:'alert'},error))
+    }
+
     let getSidebarRight=()=>null
 
     function Studio(props) {
@@ -987,6 +1024,7 @@ window.__ModuleLoader__.load({
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
+      const [pdfCopyFile,setPdfCopyFile] = React.useState('')
       const [slideSelection,setSlideSelection] = React.useState(null)
       const [fileAction,setFileAction] = React.useState(null)
       const [layerMenu,setLayerMenu] = React.useState(null)
@@ -4495,6 +4533,7 @@ window.__ModuleLoader__.load({
             ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
+        canOpenPdf&&pdfCopyFile&&h(PdfCopy,{key:scopeKey+pdfCopyFile,file:pdfCopyFile,scopeBody,close:()=>setPdfCopyFile('')}),
                 showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
           padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
           maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
@@ -4515,6 +4554,7 @@ window.__ModuleLoader__.load({
                   onClick:()=>void openPickedFile(item.path)},
                   h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
                   item.path),
+                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfCopyFile(item.path)},'Assembler les pages'),
                 item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
@@ -4829,10 +4869,17 @@ window.__ModuleLoader__.load({
                 style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:6,marginTop:4}},
                 ...workspaceFiles.filter(item=>item.path.toLocaleLowerCase().includes(fileSearch.toLocaleLowerCase()))
                   .slice(0,60)
-                  .map(item=>h('button',{key:item.path,type:'button',
-                    style:{...button,textAlign:'left',overflowWrap:'anywhere'},
-                    'aria-label':'Open file '+item.path,disabled:busy,
-                    onClick:()=>void openPickedFile(item.path)},item.path)))
+                  .map(item=>{
+                    const open=h('button',{key:item.path,type:'button',
+                      style:{...button,textAlign:'left',overflowWrap:'anywhere'},
+                      'aria-label':'Open file '+item.path,disabled:busy,
+                      onClick:()=>void openPickedFile(item.path)},item.path)
+                    return item.format==='pdf'
+                      ?h('div',{key:item.path,style:{display:'grid',gap:4}},open,
+                        h('button',{type:'button',style:button,
+                          onClick:()=>setPdfCopyFile(item.path)},'Assembler les pages'))
+                      :open
+                  }))
             : h('div',{role:'status',style:{...pane,padding:12,marginTop:4,background:'var(--dsw-alias-bg-layer-1, #232529)'}},
                 h('span',null,'Aucun fichier SVG, HTML ou CSS dans cet espace de travail.'),
                 h('small',{style:{opacity:0.7,display:'block',marginTop:4}},

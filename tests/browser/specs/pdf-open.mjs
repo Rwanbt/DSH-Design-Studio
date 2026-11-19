@@ -13,3 +13,35 @@ export const pdfOpenSpec = {
     assert.equal(await harness.read(file), original)
   },
 }
+
+export const pdfCopySpec = {
+  name: 'pdf: page selection downloads a separate ordered PDF copy',
+  async run({ page, harness, assert }) {
+    const { pdfFixture } = await import('../../fixtures/pdf-fixture.mjs')
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const file = 'source.pdf'
+    const original = pdfFixture().toString('utf8')
+    await harness.write(file, original)
+    await page.getByRole('button', { name: 'Refresh workspace design files' }).click()
+    await page.getByRole('button', { name: 'Assembler les pages', exact: true }).click()
+    const form = page.getByRole('form', { name: 'Assembler des pages PDF' })
+    await form.getByLabel('Pages dans l’ordre souhaité').fill('2, 1, 2')
+    const button = form.getByRole('button', { name: 'Télécharger la copie PDF' })
+    const hasEngine = ['pdfinfo','pdfseparate','pdfunite'].every(tool =>
+      spawnSync(tool,['-v'],{stdio:'ignore'}).status === 0)
+    if (hasEngine) {
+      const [download] = await Promise.all([page.waitForEvent('download'), button.click()])
+      assert.equal(download.suggestedFilename(), 'source-pages.pdf')
+      assert.equal(await download.failure(), null)
+      if (spawnSync('pdftotext',['-v'],{stdio:'ignore'}).status === 0) {
+        const text = execFileSync('pdftotext',[await download.path(),'-'],{encoding:'utf8'})
+        assert.deepEqual(text.match(/(?:First|Second) text/g),['Second text','First text','Second text'])
+      }
+    } else {
+      await button.click()
+      await form.getByRole('alert').waitFor()
+      assert.match(await form.getByRole('alert').textContent(), /unavailable/)
+    }
+    assert.equal(await harness.read(file), original)
+  },
+}

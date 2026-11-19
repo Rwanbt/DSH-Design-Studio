@@ -149,7 +149,7 @@ function lock(key, action) {
   return current
 }
 
-function validateRelativePath(file) {
+function validateRelativePath(file, pdf = false) {
   if (typeof file !== 'string' || !file || file.includes('\\') || file.includes('\0') ||
       path.posix.isAbsolute(file) || path.win32.isAbsolute(file) || /^[A-Za-z]:/.test(file)) {
     throw error('invalid-path', 'Path must be a relative workspace file path')
@@ -166,7 +166,7 @@ function validateRelativePath(file) {
     throw error('invalid-path', 'Ambiguous or OS-reserved path component')
   }
   const format = path.posix.extname(file).slice(1).toLowerCase()
-  if (!FORMATS.has(format)) throw error('unsupported-format', 'Only SVG, HTML and CSS can be opened')
+  if (pdf ? format !== 'pdf' : !FORMATS.has(format)) throw error('unsupported-format', 'Only SVG, HTML and CSS can be opened')
   return { parts, format }
 }
 
@@ -187,8 +187,8 @@ function assertSameTree(before, after) {
   }
 }
 
-async function walkSafe(workspace, file, io, { allowMissingLeaf = false } = {}) {
-  const { parts, format } = validateRelativePath(file)
+async function walkSafe(workspace, file, io, { allowMissingLeaf = false, pdf = false } = {}) {
+  const { parts, format } = validateRelativePath(file,pdf)
   let root, rootInfo
   try {
     root = await io.realpath(workspace)
@@ -315,7 +315,7 @@ function decodeUtf8(bytes) {
   catch { throw error('invalid-encoding', 'File must contain valid UTF-8') }
 }
 
-async function readChecked(absolute, io) {
+async function readChecked(absolute, io, pdf = false) {
   let handle
   try {
     handle = await io.open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
@@ -342,7 +342,7 @@ async function readChecked(absolute, io) {
       throw error('stale-revision','File was modified while being read; retry')
     }
     const rawHash = createHash('sha256').update(bytes).digest('hex')
-    return { source: decodeUtf8(bytes), rawHash,
+    return { source: pdf ? bytes : decodeUtf8(bytes), rawHash,
       identity: revisionIdentity(info,rawHash), key: nodeKey(info),
       mode: Number(info.mode & 0o777n) }
   } finally { await handle.close() }
@@ -395,6 +395,17 @@ export function createNativeFileStore(workspace, options = {}) {
         typeof baseHash !== 'string' || !/^[a-f0-9]{64}$/.test(baseHash)) {
       throw error('missing-revision', 'Open the document in this editor before renaming or deleting it')
     }
+  }
+  async function read(file, pdf = false) {
+    const target = await walkSafe(workspace,file,io,{pdf})
+    const current = await readChecked(target.absolute,io,pdf)
+    const verified = await walkSafe(workspace,file,io,{pdf})
+    assertSameTree(target,verified)
+    if (current.key !== verified.entries.at(-1).key) {
+      throw error('stale-revision','Workspace file changed during read')
+    }
+    return { file, format: target.format, source: current.source, hash: current.rawHash,
+      identity: current.identity }
   }
   return {
     /**
@@ -454,17 +465,8 @@ export function createNativeFileStore(workspace, options = {}) {
         }
       }, lockOptions))
     },
-    async read(file) {
-      const target = await ensureSafeFile(workspace, file, io)
-      const current = await readChecked(target.absolute, io)
-      const verified = await ensureSafeFile(workspace,file,io)
-      assertSameTree(target,verified)
-      if (current.key !== verified.entries.at(-1).key) {
-        throw error('stale-revision','Workspace file changed during read')
-      }
-      return { file, format: target.format, source: current.source, hash: current.rawHash,
-        identity: current.identity }
-    },
+    read(file) { return read(file) },
+    readPdf(file) { return read(file,true) },
     async apply(file, { baseHash, baseIdentity, patches }) {
       if (typeof baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(baseIdentity)) {
         throw error('missing-revision','Open document in the current editor before saving')

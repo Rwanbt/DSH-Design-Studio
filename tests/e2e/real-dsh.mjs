@@ -14,6 +14,7 @@
  *                      `resources/app.asar` (default: /mnt/Stockage/App/DeepSeekHarness)
  *   DSH_E2E_PLAYWRIGHT Playwright package directory (devDependency fallback)
  */
+import { pdfFixture } from '../fixtures/pdf-fixture.mjs'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm, mkdir, readdir, stat, writeFile, readFile, copyFile, chmod } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -300,6 +301,23 @@ async function main() {
           files.status() === 200 && Array.isArray(filesBody?.files) &&
             filesBody.files.some(file => file.path === 'g0-art.svg') ? 'PASS' : 'FAIL',
           `HTTP ${files.status()} ${workspaceLabel}`)
+
+        const pdfFile = path.join(workspace, 'g0-source.pdf')
+        const pdf = pdfFixture()
+        await writeFile(pdfFile, pdf)
+        const copied = await context.request.post(origin + '/design-studio-native/pdf/copy', {
+          data: { sessionId, file: 'g0-source.pdf', pages: [2,1,2] },
+        })
+        const copyType = copied.headers()['content-type']
+        const sourcePreserved = (await readFile(pdfFile)).equals(pdf)
+        const copyBytes = await copied.body()
+        const copyError = copied.status() === 400 && copyType?.startsWith('application/json')
+          ? JSON.parse(copyBytes.toString()).error : null
+        const copyVerified = copied.ok() && copyType === 'application/pdf' &&
+          copyBytes.subarray(0,5).toString() === '%PDF-' && sourcePreserved
+        record('copy selected PDF pages through the real Host',
+          copyVerified ? 'PASS' : copyError === 'pdf-engine-unavailable' && sourcePreserved ? 'NOT_RUN' : 'FAIL',
+          `HTTP ${copied.status()}, source preserved=${sourcePreserved}, ${copyError || copyType}`)
 
         // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +

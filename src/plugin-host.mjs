@@ -29,6 +29,8 @@ import { createProposalInbox } from './proposal-inbox.mjs'
 
 import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, reorderHtmlSlide } from './html-presentation.mjs'
 
+import { createPdfPageCopier } from './pdf-page-copy.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -149,6 +151,7 @@ function approvedProposal(inbox, ctx, request) {
 }
 
 export function createRouteHandler(ctx, inbox = createProposalInbox()) {
+  const copyPdfPages = createPdfPageCopier()
   return async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://dsh.local')
@@ -181,6 +184,15 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           includePdf:Boolean(url.searchParams.get('sessionId')) && url.searchParams.get('includePdf')==='1',
         })
         return reply(res,200,{ok:true,...result})
+      }
+      if (req.method === 'POST' && endpoint === '/pdf/copy') {
+        const params = await bodyJson(req)
+        const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const pdf = await store.readPdf(params.file)
+        const bytes = await copyPdfPages(pdf.source,params.pages)
+        res.writeHead(200,{'content-type':'application/pdf','content-length':bytes.length,
+          'content-disposition':'attachment; filename="pages.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'})
+        return res.end(bytes)
       }
       if (req.method === 'GET' && endpoint === '/document') {
         const file=url.searchParams.get('file') || ''

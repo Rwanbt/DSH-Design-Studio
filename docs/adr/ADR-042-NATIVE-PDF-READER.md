@@ -8,3 +8,15 @@ The DSH service owns PDF reading and page rendering.
 The native source store continues to edit SVG, HTML and CSS. PDF rows do
 not offer source-file rename or deletion. A global workspace panel with
 no conversation keeps its existing picker.
+
+## Download an ordered page copy
+
+The conversation picker accepts up to 24 page positions from one PDF. The
+Host takes a checked binary snapshot under the existing workspace path
+rules. Optional system Poppler utilities run without a shell on private
+temporary files. The application downloads the result and preserves the
+source bytes. Missing tools, protected files, out-of-range pages and
+processing limits are reported before any download.
+The current copy preserves tested page content and selectable text.
+Document outlines, forms, signatures and annotation fidelity need
+separate qualification.
