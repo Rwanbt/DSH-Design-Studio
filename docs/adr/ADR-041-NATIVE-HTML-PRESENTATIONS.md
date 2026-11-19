@@ -37,3 +37,16 @@ and rewrites local fragment links, ARIA references and supported SVG
 slide stay intact. Text and unrelated bytes are preserved. Ambiguous or
 inert markup inside a slide can be copied manually in the source editor.
 Stylesheets that select by ID may need a shared class to style both slides.
+
+## Editable text export to PPTX
+
+The saved presentation can also export to PPTX. Each HTML slide becomes a
+PowerPoint slide containing editable text with headings and list items.
+The exporter uses a standard 16:9 layout. It rebuilds text layout, so CSS
+design, SVG, images, embedded media and animation need separate export
+support. HTML remains the source of truth and the PDF path retains the
+existing visual rendering flow.
+
+This option uses Python with python-pptx installed on the Host. The
+administrator can select an interpreter with `DSH_PPTX_PYTHON`. No Python
+packages are bundled or installed automatically.

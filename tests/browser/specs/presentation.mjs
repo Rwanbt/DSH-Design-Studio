@@ -74,3 +74,26 @@ export const presentationPrintSpec = {
     assert.equal(await harness.read(file), original)
   },
 }
+
+export const presentationPptxSpec = {
+  name: 'presentations: download a PPTX with editable text from the saved deck',
+  async run({ page, harness, assert }) {
+    const { spawnSync, execFileSync } = await import('node:child_process')
+    const python = process.env.DSH_PPTX_PYTHON || 'python3'
+    const original = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Titre éditable</h1></section></main>'
+    await harness.write('deck.html',original)
+    await openWorkspaceFile(page,'deck.html',{expect:'html'})
+    const button=page.getByRole('button',{name:'PPTX (texte éditable)',exact:true})
+    if (spawnSync(python,['-I','-c','import pptx'],{stdio:'ignore'}).status===0) {
+      const [download]=await Promise.all([page.waitForEvent('download'),button.click()])
+      assert.equal(download.suggestedFilename(),'deck.pptx')
+      const inspect='import sys; from pptx import Presentation; print(Presentation(sys.argv[1]).slides[0].shapes[0].text)'
+      assert.equal(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'}).trim(),'Titre éditable')
+    } else {
+      await button.click()
+      await page.getByRole('alert').waitFor()
+      assert.match(await page.getByRole('alert').textContent(),/unavailable/)
+    }
+    assert.equal(await harness.read('deck.html'),original)
+  },
+}

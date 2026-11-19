@@ -375,6 +375,25 @@ async function main() {
           record('highlight an area in a PDF copy through the real Host',
             highlightOk ? 'PASS' : 'FAIL', `HTTP ${highlight.status()}`)
         }
+        const deckFile = 'g0-pptx.html'
+        const deckSource = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Real DSH</h1></section></main>'
+        await writeFile(path.join(workspace,deckFile),deckSource,'utf8')
+        const deckQuery = new URLSearchParams({sessionId,file:deckFile})
+        const deck = await context.request.get(origin + '/design-studio-native/document?' + deckQuery)
+        const deckBody = (await deck.json()).document
+        const pptx = await context.request.post(origin + '/design-studio-native/presentation/pptx', {
+          data: {sessionId,file:deckFile,baseHash:deckBody?.hash,baseIdentity:deckBody?.identity},
+        })
+        const pptxType = pptx.headers()['content-type']
+        const pptxBytes = await pptx.body()
+        const pptxPreserved = (await readFile(path.join(workspace,deckFile),'utf8')) === deckSource
+        const pptxOk = pptx.ok() && pptxType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' &&
+          pptxBytes.subarray(0,4).equals(Buffer.from([80,75,3,4])) && pptxPreserved
+        const pptxUnavailable = pptx.status() === 400 && pptxType?.startsWith('application/json') &&
+          JSON.parse(pptxBytes.toString()).error === 'pptx-engine-unavailable' && pptxPreserved
+        record('export editable presentation text through the real Host',
+          pptxOk ? 'PASS' : pptxUnavailable ? 'NOT_RUN' : 'FAIL', `HTTP ${pptx.status()}, source preserved=${pptxPreserved}`)
+
         // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +
           encodeURIComponent(sessionId) + '&file=g0-art.svg')

@@ -35,6 +35,8 @@ import { createPdfAnnotator } from './pdf-annotation.mjs'
 
 import { createPdfPagePreview } from './pdf-page-preview.mjs'
 
+import { createPptxExporter } from './presentation-pptx.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -157,6 +159,7 @@ function approvedProposal(inbox, ctx, request) {
 export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   const copyPdfPages = createPdfPageCopier()
   const annotatePdf = createPdfAnnotator()
+  const exportPptx = createPptxExporter()
   const previewPdf = createPdfPagePreview()
   return async (req, res) => {
     try {
@@ -190,6 +193,19 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           includePdf:Boolean(url.searchParams.get('sessionId')) && url.searchParams.get('includePdf')==='1',
         })
         return reply(res,200,{ok:true,...result})
+      }
+      if (req.method === 'POST' && endpoint === '/presentation/pptx') {
+        const params = await bodyJson(req)
+        const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const doc = await store.read(params.file)
+        if (doc.hash !== params.baseHash || doc.identity !== params.baseIdentity) {
+          throw failure('stale-revision','The presentation changed; refresh before exporting')
+        }
+        const bytes = await exportPptx(doc.source)
+        res.writeHead(200,{'content-type':'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'content-length':bytes.length,'content-disposition':'attachment; filename="presentation.pptx"',
+          'cache-control':'no-store','x-content-type-options':'nosniff'})
+        return res.end(bytes)
       }
       if (req.method === 'GET' && endpoint === '/pdf/preview') {
         const store = await storeFor(ctx,{sessionId:url.searchParams.get('sessionId'),

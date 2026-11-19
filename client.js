@@ -842,6 +842,29 @@ window.__ModuleLoader__.load({
   #dsh-deck > section:last-child { break-after: auto !important }
 }`
 
+    function PresentationPptx({doc,scopeBody,disabled}) {
+      const [busy,setBusy]=React.useState(false)
+      const [error,setError]=React.useState('')
+      async function exportPptx() {
+        if(busy)return
+        setBusy(true);setError('')
+        try {
+          const name=doc.file.split('/').at(-1).replace(/\.html?$/i,'')+'.pptx'
+          await requestBinaryDownload('/presentation/pptx',{...scopeBody,file:doc.file,
+            baseHash:doc.hash,baseIdentity:doc.identity},name)
+        } catch(error) {
+          setError(String(error.message))
+        } finally {
+          setBusy(false)
+        }
+      }
+      return h('div',null,
+        h('button',{type:'button',style:button,disabled:disabled||busy,
+          title:'Titres, paragraphes et listes éditables dans PowerPoint. La mise en page est reconstruite.',
+          onClick:()=>void exportPptx()},busy?'Export…':'PPTX (texte éditable)'),
+        error&&h('p',{role:'alert'},error))
+    }
+
     function PresentationPrint({source, linkedCss, disabled}) {
       const [open,setOpen]=React.useState(false)
       const [ready,setReady]=React.useState(false)
@@ -912,11 +935,11 @@ window.__ModuleLoader__.load({
       boxSizing:'border-box',display:'grid',gap:8,padding:12,background:'var(--panel)',
       border:'1px solid var(--line)',borderRadius:8,zIndex:45,maxHeight:'calc(100% - 110px)',overflow:'auto'}
 
-    async function requestPdfDownload(endpoint, payload, name) {
-      const response=await fetch(new URL('/'+api+'/pdf/'+endpoint,document.baseURI),{
+    async function requestBinaryDownload(endpoint, payload, name) {
+      const response=await fetch(new URL('/'+api+endpoint,document.baseURI),{
         method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload),
       })
-      if(!response.ok) throw new Error((await response.json()).message || 'Copie PDF indisponible')
+      if(!response.ok) throw new Error((await response.json()).message || 'Téléchargement indisponible')
       downloadBlob(await response.blob(),name)
     }
 
@@ -1005,7 +1028,7 @@ window.__ModuleLoader__.load({
         if(!valid||busy)return
         setBusy(true);setError('')
         try {
-          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,kind,
+          await requestBinaryDownload('/pdf/annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,kind,
             ...(highlight?{width:width/100,height:height/100}:{}),
             ...(visualRevision?{previewRevision:visualRevision}:{})},
             file.split('/').at(-1).replace(/\.pdf$/i,'')+'-annote.pdf')
@@ -1079,7 +1102,7 @@ window.__ModuleLoader__.load({
         try {
           const uniqueFiles=new Set(selections.map(item=>item.file))
           const name=uniqueFiles.size===1?selections[0].file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf':'assemblage.pdf'
-          await requestPdfDownload('copy',{...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))},name)
+          await requestBinaryDownload('/pdf/copy',{...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))},name)
           close()
         } catch(error) {
           setError(String(error.message))
@@ -5292,7 +5315,9 @@ doc?.format==='css'?
                         alignSelf:'flex-start',maxHeight:'100%',overflow:'auto'}},
                       slides&&h(PresentationControls,{key:doc.file,slides,active:activeSlide,select:selectSlide,save,
                         disabled:busy||reloadRequired||source!==doc.source}),
-                      slides&&h(PresentationPrint,{key:doc.identity,source:doc.source,linkedCss:htmlPreviewCss,
+                      slides&&h(PresentationPrint,{key:'print-'+doc.identity,source:doc.source,linkedCss:htmlPreviewCss,
+                        disabled:busy||reloadRequired||source!==doc.source}),
+                      slides&&h(PresentationPptx,{key:'pptx-'+doc.identity,doc,scopeBody,
                         disabled:busy||reloadRequired||source!==doc.source}),
                       h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
                         style:{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}},
