@@ -68,3 +68,9 @@ deck.save(sys.argv[1])
   assert.equal(omitted,1)
   await assert.rejects(createPptxImporter(python)(Buffer.from('Invalid input')),{code:'unsupported-presentation'})
 })
+
+test('PPTX export rejects overlapping HTML cell spans',{skip:!available},async()=>{
+  const table='<table><tr><td>A</td><td rowspan="2">B</td></tr><tr><td colspan="2">C</td></tr></table>'
+  const source=createHtmlPresentation().replace('</section>',table+'</section>')
+  await assert.rejects(createPptxExporter(python)(source),{code:'unsupported-presentation'})
+})

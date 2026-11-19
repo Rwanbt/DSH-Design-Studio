@@ -29,6 +29,7 @@ function createConverter(python, mode, inputName, outputName, maxBytes) {
       } catch(error) {
         if (error.code==='ENOENT'||error.code===10) fail('pptx-engine-unavailable','Python with python-pptx is unavailable on this host')
         if (error.code===11) fail('unsupported-presentation','Expected a valid PPTX with one to 32 slides within the import limits')
+        if (error.code===12) fail('unsupported-presentation','PPTX export requires non-nested tables with valid spans and at most 400 cells each')
         fail('pptx-'+mode+'-failed','The PPTX conversion failed')
       }
       const output = path.join(folder,outputName)

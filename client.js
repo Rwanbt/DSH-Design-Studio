@@ -860,8 +860,8 @@ window.__ModuleLoader__.load({
       }
       return h('div',null,
         h('button',{type:'button',style:button,disabled:disabled||busy,
-          title:'Titres, paragraphes et listes éditables dans PowerPoint. La mise en page est reconstruite.',
-          onClick:()=>void exportPptx()},busy?'Export…':'PPTX (texte éditable)'),
+          title:'Texte et tableaux éditables dans PowerPoint. La mise en page est reconstruite.',
+          onClick:()=>void exportPptx()},busy?'Export…':'PPTX (texte et tableaux)'),
         error&&h('p',{role:'alert'},error))
     }
 

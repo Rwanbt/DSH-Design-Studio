@@ -376,7 +376,7 @@ async function main() {
             highlightOk ? 'PASS' : 'FAIL', `HTTP ${highlight.status()}`)
         }
         const deckFile = 'g0-pptx.html'
-        const deckSource = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Real DSH</h1></section></main>'
+        const deckSource = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Real DSH</h1><table><tr><th colspan="2">Total</th></tr><tr><td>41</td><td>42</td></tr></table></section></main>'
         await writeFile(path.join(workspace,deckFile),deckSource,'utf8')
         const deckQuery = new URLSearchParams({sessionId,file:deckFile})
         const deck = await context.request.get(origin + '/design-studio-native/document?' + deckQuery)
@@ -406,6 +406,7 @@ async function main() {
           const preserved = (await readFile(path.join(workspace,file))).equals(pptxBytes)
           record('import editable presentation text through the real Host',
             result.status() === 201 && /id="slide-page-1-text-1">Real DSH<\/p>/.test(content)
+              && /colspan="2"><p[^>]+>Total<\/p>/.test(content)
               && repeated.status() === 409 && preserved ? 'PASS' : 'FAIL',
             `HTTP ${result.status()}, repeat ${repeated.status()}, source preserved=${preserved}`)
         }

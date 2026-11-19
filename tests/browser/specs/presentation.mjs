@@ -83,26 +83,18 @@ export const presentationPptxSpec = {
     const { promisify } = await import('node:util')
     const { readFile } = await import('node:fs/promises')
     const python = process.env.DSH_PPTX_PYTHON || 'python3'
-    const original = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Titre éditable</h1></section></main>'
+    const original = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Titre éditable</h1><table><tr><th colspan="2">Libellé</th></tr><tr><td>Montant initial</td><td>42</td></tr></table></section></main>'
     await harness.write('deck.html',original)
     await openWorkspaceFile(page,'deck.html',{expect:'html'})
-    const button=page.getByRole('button',{name:'PPTX (texte éditable)',exact:true})
+    const button=page.getByRole('button',{name:'PPTX (texte et tableaux)',exact:true})
     if (spawnSync(python,['-I','-c','import pptx'],{stdio:'ignore'}).status===0) {
       const [download]=await Promise.all([page.waitForEvent('download'),button.click()])
       assert.equal(download.suggestedFilename(),'deck.pptx')
       const inspect='import sys; from pptx import Presentation; print(Presentation(sys.argv[1]).slides[0].shapes[0].text)'
       const downloaded = await download.path()
       assert.equal((await promisify(execFile)(python,['-I','-c',inspect,downloaded])).stdout.trim(),'Titre éditable')
-      const addTable = `
-import sys
-from pptx import Presentation
-deck = Presentation(sys.argv[1])
-table = deck.slides[0].shapes.add_table(2, 2, 0, 0, 1000000, 700000).table
-table.cell(0, 0).text = "Libellé"
-table.cell(1, 0).text = "Montant initial"
-deck.save(sys.argv[1])
-`
-      await promisify(execFile)(python,['-I','-c',addTable,downloaded])
+      const inspectTable = 'import sys; from pptx import Presentation; t=Presentation(sys.argv[1]).slides[0].shapes[1].table; print(t.cell(0,0).span_width,t.cell(1,0).text)'
+      assert.equal((await promisify(execFile)(python,['-I','-c',inspectTable,downloaded])).stdout.trim(),'2 Montant initial')
       const bytes = await readFile(downloaded)
       await harness.write('incoming.pptx',bytes)
       await openFileMenu(page)
