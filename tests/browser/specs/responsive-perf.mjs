@@ -12,15 +12,18 @@ export const responsiveSpec = {
 <link rel="stylesheet" href="r.css"></head>
 <body><h1 id="headline">Responsive</h1><p id="lead">Body copy.</p></body></html>
 `)
-    await harness.write('r.css', 'h1 { color: #202124 }\n.lead { color: #555 }\n')
+    await harness.write('r.css', '#headline { color: #202124 }\n@media (max-width: 600px) { #headline { color: #123456 } }\n')
     await openWorkspaceFile(page, 'page.html', { expect: 'html' })
 
     const preview = page.locator('iframe[title="Isolated design preview"]')
+    const heading=page.frameLocator('iframe[title="Isolated design preview"]').locator('#headline')
     const results = {}
     for (const [label, width, expected] of [['desktop', 1280, 1280], ['tablet', 768, 768], ['mobile', 390, 390]]) {
       await page.setViewportSize({ width: width + 400, height: 900 })
       await page.getByRole('button', { name: 'HTML viewport ' + label }).click()
       await page.waitForTimeout(250)
+      assert.equal(await heading.evaluate(node=>getComputedStyle(node).color),
+        label==='mobile'?'rgb(18, 52, 86)':'rgb(32, 33, 36)')
       results[label] = await preview.evaluate((node) => node.getBoundingClientRect().width)
       assert.ok(Math.abs(results[label] - expected) <= 2,
         `${label} preview width must be ${expected}px, measured ${results[label]}`)

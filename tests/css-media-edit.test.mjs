@@ -3,8 +3,8 @@
  *
  * The rule is addressed by its exact offset, so two identical selectors in
  * different media blocks are never confused. Only one simple width feature is
- * accepted, conditional rules stay non-`editable` so the HTML preview can never
- * project them unconditionally, and every refusal leaves the source untouched.
+ * accepted, conditional rules stay non-`editable` and
+ * the HTML preview preserves their width condition, and every refusal leaves the source untouched.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -150,8 +150,7 @@ test('conditional rules are never flattened into the partial HTML preview', () =
   const projected = buildSafeLinkedPreviewCss(
     listCssVisualRuleDetails(css), new Set(['#title']))
   assert.equal(projected.css.includes('color:#123456'), true)
-  assert.equal(projected.css.includes('ff0000'), false, 'the conditional override must not be projected')
-  assert.equal(/@media/.test(projected.css), false, 'no @media block is emitted')
+  assert.equal(projected.css,'#title{color:#123456;}\n@media (max-width: 600px){#title{color:#ff0000;}}')
 })
 
 /* -------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { HTML_STYLE_PROPERTIES } from './html-visual.mjs'
+import { simpleMediaCondition } from './css-visual.mjs'
 
 const MAX_PREVIEW_BYTES = 24 * 1024
 const RULE_SELECTOR = /^[#.][A-Za-z_][A-Za-z0-9_-]{0,79}$/
@@ -7,21 +8,19 @@ const RULE_SELECTOR = /^[#.][A-Za-z_][A-Za-z0-9_-]{0,79}$/
  * Builds a strictly allowlisted *partial* CSS preview from simple source
  * rules. This is not a CSS parser, cascade resolver or stylesheet renderer.
  * Only bytes matching the existing native manual style allowlist are emitted.
- * No original stylesheet bytes, at-rules or URLs are injected into srcDoc.
- *
- * Limits: only simple `#id`/`.class` rules with allowlisted declarations are
- * projected. Selector lists, combinators, custom properties, pseudo-classes,
- * conditional `@media`/`@supports` rules, inheritance, `!important`, external
- * or framework CSS and source maps are intentionally omitted, so the preview
- * is never a faithful computed rendering and is never presented as one.
+ * Simple width media queries are rebuilt from validated conditions and rules.
+ * Original stylesheet bytes, URLs, other at-rules, and complex selectors
+ * are omitted. The resulting stylesheet is a partial preview.
  */
 export function buildSafeLinkedPreviewCss(rules, acceptedSelectors, currentLength=0) {
   const permitted = new Set(acceptedSelectors)
   const css = []
   let omitted = 0, included = 0, truncated = false, length = currentLength
   for (const rule of rules) {
-    if (!rule || !rule.editable || !RULE_SELECTOR.test(rule.selector) ||
-        !permitted.has(rule.selector)) continue
+    if (!rule || !RULE_SELECTOR.test(rule.selector) || !permitted.has(rule.selector)) continue
+    const media = rule.scope==='inside-at-rule' && rule.mediaEditable
+      ? simpleMediaCondition([{name:'media',prelude:rule.mediaCondition}]) : null
+    if (!media && (!rule.editable || (rule.scope && rule.scope!=='top-level'))) continue
     const declarations = []
     for (const item of rule.declarations || []) {
       if (!item || typeof item.property !== 'string' ||
@@ -40,7 +39,8 @@ export function buildSafeLinkedPreviewCss(rules, acceptedSelectors, currentLengt
       declarations.push(item.property+':'+item.value+';')
     }
     if (!declarations.length) continue
-    const text=rule.selector+'{'+declarations.join('')+'}'
+    const block=rule.selector+'{'+declarations.join('')+'}'
+    const text=media?'@media '+media+'{'+block+'}':block
     const addition=text.length+(css.length?1:0)
     if (length+addition > MAX_PREVIEW_BYTES) {
       truncated=true

@@ -252,7 +252,7 @@ window.__ModuleLoader__.load({
       const marked = /^(?:[A-Za-z][\w:.-]{0,79})$/.test(selectedHtmlId)?
         '<style>[id="'+selectedHtmlId+'"]{outline:2px solid #bda991!important;outline-offset:2px!important;}</style>':''
       // Linked CSS is a bounded, allowlisted *subset* prepared by the native
-      // Host, never the original stylesheet bytes. No @rules, URLs or JS.
+      // Host, never the original stylesheet bytes. Simple width queries are reconstructed. URLs remain excluded.
       const projected = ['html','htm'].includes(format) &&
         typeof linkedCss==='string' && linkedCss.length<=24576 &&
         !/[<>&]/.test(linkedCss) ?
@@ -5600,7 +5600,7 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
                   background:'var(--dsw-alias-bg-layer-2, #282a2d)',border:'1px solid #3e4042',borderRadius:6}},
                   h('strong',{style:{fontSize:12,color:'#c5ae94'}},'CSS externe · correspondances possibles'),
                   h('small',{style:{fontSize:11,color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},
-                    'Ce ne sont pas des styles calculés. Cascade, !important, media queries et héritage non résolus.'),
+                    'Ce ne sont pas des styles calculés. Le rendu des feuilles liées est partiel. Seules les conditions de largeur simples sont prises en charge.'),
                   htmlStylesheets.filter(link=>link.status!=='inspected').map((link,index)=>
                     h('small',{key:'blocked-'+index,style:{color:'var(--dsw-alias-state-warn-primary, #e5b39b)'}},
                       (link.file||'Lien CSS')+' · '+link.status)),
