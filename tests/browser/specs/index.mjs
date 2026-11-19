@@ -1,3 +1,4 @@
+import { pdfOpenSpec } from './pdf-open.mjs'
 import { presentationSpec, presentationPrintSpec } from './presentation.mjs'
 import { proposalReviewSpec } from './proposal-review.mjs'
 /**
@@ -190,4 +191,5 @@ export const specs = [
   proposalReviewSpec,
   presentationSpec,
   presentationPrintSpec,
+  pdfOpenSpec,
 ]

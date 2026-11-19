@@ -28,7 +28,7 @@ function fail(code, message) {
  * and no traversal into package-manager caches. A directory changing while
  * scanned is skipped rather than failing the whole picker.
  */
-export async function listWorkspaceDocuments(workspace) {
+export async function listWorkspaceDocuments(workspace, { includePdf = false } = {}) {
   if (typeof workspace !== 'string' || workspace.length === 0) {
     fail('invalid-path','Workspace root must be a directory')
   }
@@ -71,7 +71,7 @@ export async function listWorkspaceDocuments(workspace) {
       }
       if (!info.isFile() || info.nlink !== 1 || info.size > MAX_BYTES) continue
       const format=path.extname(entry.name).slice(1).toLowerCase()
-      if (!FORMATS.has(format)) continue
+      if (!FORMATS.has(format) && !(includePdf && format === 'pdf')) continue
       files.push({path:relative,format,size:info.size})
       if (files.length >= MAX_FILES) {truncated=true;break}
     }

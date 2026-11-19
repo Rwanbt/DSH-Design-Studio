@@ -908,10 +908,13 @@ window.__ModuleLoader__.load({
           h('button',{type:'submit',style:button,disabled:disabled||!title.trim()||slides.length>=32},'Ajouter une diapositive')))
     }
 
+    let getSidebarRight=()=>null
+
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
       const workspaceId = props && typeof props.workspaceId === 'string' ? props.workspaceId : ''
       const panelMode = props && props.panel === true
+      const canOpenPdf = !panelMode && Boolean(sessionId) && typeof getSidebarRight()?.openResource==='function'
       // Exactly one target: a conversation session, or a registered workspace
       // (ADR-024). The Host refuses a request carrying both, so build one here.
       const scope = workspaceId ? {workspaceId} : (sessionId ? {sessionId} : null)
@@ -1780,7 +1783,7 @@ window.__ModuleLoader__.load({
       async function loadWorkspaceFiles() {
         if(!scopeReady) return false
         try {
-          const response=await request('/files?'+scopeQuery)
+          const response=await request('/files?'+scopeQuery+(canOpenPdf?'&includePdf=1':''))
           setWorkspaceFiles(response.files||[])
           setFilesTruncated(!!response.truncated)
           return true
@@ -1794,9 +1797,25 @@ window.__ModuleLoader__.load({
         let cancelled=false
         void loadWorkspaceFiles().then(()=>{ if(cancelled) return })
         return ()=>{cancelled=true}
-      },[scopeKey])
+      },[scopeKey,canOpenPdf])
 
       async function openPickedFile(picked) {
+        if (/\.pdf$/i.test(picked)) {
+          if (!canOpenPdf || !workspaceFiles.some(file=>file.format==='pdf'&&file.path===picked)) {
+            setError('Actualisez les fichiers et sélectionnez un PDF de cette conversation.')
+            return
+          }
+          try {
+            const segments=picked.split('/')
+            if (segments.some(segment=>!segment||segment==='.'||segment==='..')) throw new Error('Chemin PDF invalide')
+            getSidebarRight().openResource('dsh-resource://file/session/'+encodeURIComponent(sessionId)+'/'+segments.map(encodeURIComponent).join('/'))
+            setShowFiles(false)
+            setError('')
+          } catch(error) {
+            setError('Impossible d’ouvrir le lecteur PDF : '+String(error.message))
+          }
+          return
+        }
         const opened=await openInTab(picked)
         if(opened)setShowFiles(false)
       }
@@ -4420,7 +4439,7 @@ window.__ModuleLoader__.load({
           h('span',{className:'dsh-studio-status',style:{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}},busy?'Enregistrement…':reloadRequired?'À recharger':doc?source!==doc.source||hasTextDraft()?'Modifications non enregistrées':'✓ Enregistré localement':'Mode local · sans IA'),
           h('details',{className:'dsh-studio-menu'},h('summary',null,'Fichier'),h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0}},
             h('input',{style:field,'aria-label':'Workspace file',value:pathInput,onChange:e=>setPathInput(e.target.value),placeholder:'relative/path/file.svg'}),
-            h('button',{style:button,onClick:()=>openInTab(pathInput),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
+            h('button',{style:button,onClick:()=>openPickedFile(pathInput),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
             h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',title:'Créer '+creationTarget(format),onClick:()=>void createDocument(format)},'+ '+format.toUpperCase())),createPresentationButton))),
            h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-muted',disabled:!doc,
              'aria-label':'Preview native document','aria-pressed':previewMode,
@@ -4496,10 +4515,10 @@ window.__ModuleLoader__.load({
                   onClick:()=>void openPickedFile(item.path)},
                   h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
                   item.path),
-                h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
+                item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
-                h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Delete '+item.path,
+                item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Delete '+item.path,
                   title:'Supprimer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'delete',file:item.path})}},'Supprimer')))),
           // Deleting is not undoable, so the confirmation names the exact path
@@ -5480,6 +5499,7 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
           try { slots.inject(slot,register) }
           catch (error) { console.error('[dsh-design-studio] could not register '+slot, error) }
         }
+        getSidebarRight=()=>ctx.get?.('sidebarRight')
         mount('conversation.view',()=>slots.register({name:'conversation.view',id:'dsh-design-studio',order:25,label:()=> 'Design Studio'},Studio))
         // A sidebar entry is the first place a user looks for an installed
         // plugin. The list id addresses the main cell of the same name, so both

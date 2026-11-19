@@ -91,7 +91,7 @@
         return () => {}
       },
     }
-    try { module.apply({ slots }) } catch (error) { return fail('apply threw: ' + String(error)) }
+    try { module.apply({ slots, get: key => key === 'sidebarRight' ? { openResource(address) { state.openedResource = address } } : undefined }) } catch (error) { return fail('apply threw: ' + String(error)) }
     if (registrations.conversation.length === 0) return fail('no conversation.view component registered')
     const icon = registrations.sidebar.get('design-studio')
     if (icon) {
