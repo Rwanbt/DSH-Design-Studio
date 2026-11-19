@@ -907,6 +907,7 @@ window.__ModuleLoader__.load({
       // can land in the same document or in another one. Nothing is written to
       // the system clipboard and nothing leaves the renderer until a paste.
       const [clipboard,setClipboard] = React.useState(null)
+      const [appearanceClipboard,setAppearanceClipboard] = React.useState(null)
       const [layerSearch,setLayerSearch] = React.useState('')
       const [previewMode,setPreviewMode] = React.useState(false)
       const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
@@ -1894,6 +1895,37 @@ window.__ModuleLoader__.load({
       async function layerAction(operation) {
         if(!active || busy || reloadRequired || !doc || doc.format!=='svg' || source!==doc.source)return false
         return save({kind:'svg-layer',id:active,operation})
+      }
+      /** Capture the source layer identity, not untrusted style markup.
+       * The Host validates the current source and its exact paint attributes
+       * when the user applies the style to another layer in this document. */
+      function copyAppearance(id) {
+        const target=id||active
+        const node=nodes.find(entry=>entry.id===target)
+        if(!doc||doc.format!=='svg'||!node) {setError('Sélectionnez un calque SVG.');return}
+        const props=['fill','stroke','stroke-width','stroke-opacity','fill-opacity','opacity',
+          'stroke-linecap','stroke-linejoin','stroke-dasharray']
+        if(!props.some(name=>Object.prototype.hasOwnProperty.call(node.attributes||{},name))) {
+          setError('Ce calque ne porte aucun attribut d’apparence natif explicite à copier.')
+          return
+        }
+        setAppearanceClipboard({file:doc.file,id:target})
+        setNotice('Apparence native copiée depuis '+node.tag+' #'+target)
+        setError('')
+      }
+      function pasteAppearance(id) {
+        const target=id||active
+        if(!appearanceClipboard||appearanceClipboard.file!==doc?.file) {
+          setError('Copiez une apparence depuis un calque du même document SVG.')
+          return
+        }
+        if(!target||target===appearanceClipboard.id) {
+          setError('Sélectionnez une autre forme SVG comme destination.')
+          return
+        }
+        if(busy||reloadRequired||source!==doc?.source)return
+        closeLayerMenu()
+        void save({kind:'svg-appearance-transfer',sourceId:appearanceClipboard.id,targetId:target})
       }
       /** Copy the selected SVG layer's exact bytes into the in-memory clipboard. */
       function copyLayer(id) {
@@ -3902,6 +3934,17 @@ window.__ModuleLoader__.load({
              onPointerUp:e=>commitAttributes({opacity:String(Number(e.currentTarget.value)/100)}),
              onKeyUp:e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))commitAttributes({opacity:String(Number(e.currentTarget.value)/100)})}}),
            h('div',{className:'dsh-studio-rowspace'}),
+           h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+             h('button',{type:'button',style:{...button,flex:1},
+               'aria-label':'Copier apparence SVG',disabled:!selected||!editable,
+               onClick:()=>copyAppearance(active)},'Copier apparence'),
+             h('button',{type:'button',style:{...button,flex:1},
+               'aria-label':'Appliquer apparence SVG',
+               disabled:!selected||!editable||!appearanceClipboard||
+                 appearanceClipboard.file!==doc?.file||appearanceClipboard.id===active,
+               title:'Appliquer les seuls attributs SVG explicites du calque source ; Undo exact',
+               onClick:()=>pasteAppearance(active)},'Appliquer apparence')),
+           h('div',{className:'dsh-studio-rowspace'}),
           h('div',{className:'dsh-studio-toggle-row'},h('span',null,'Visibilité'),
             h('button',{className:'dsh-studio-switch'+(!selected?.hidden?' dsh-studio-on':''),type:'button',
               'aria-label':selected?.hidden?'Show selected layer':'Hide selected layer',disabled:!selected||!editable,
@@ -3986,6 +4029,10 @@ window.__ModuleLoader__.load({
               ()=>save({kind:'svg-layer',id:layerMenu.id,operation:'duplicate'}),menuBlocked),
             layerMenuItem('Copier le calque','Ctrl+C',()=>copyLayer(layerMenu.id),menuBlocked),
             layerMenuItem('Coller l’élément copié','Ctrl+V',()=>pasteLayer(),menuBlocked||!clipboard),
+            layerMenuItem('Copier l’apparence native','',()=>copyAppearance(layerMenu.id),menuBlocked),
+            layerMenuItem('Appliquer l’apparence copiée','',()=>pasteAppearance(layerMenu.id),
+              menuBlocked||!appearanceClipboard||appearanceClipboard.file!==doc?.file||
+              appearanceClipboard.id===layerMenu.id),
             h('span',{role:'separator',style:{height:1,background:'#3d434c',margin:'3px 0'}}),
             layerMenuItem('Avancer d’un plan','Ctrl+]',()=>reorderLayer('forward',layerMenu.id),menuBlocked),
             layerMenuItem('Reculer d’un plan','Ctrl+[',()=>reorderLayer('backward',layerMenu.id),menuBlocked),

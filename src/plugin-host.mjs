@@ -14,6 +14,7 @@ import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
 import { listHtmlVisualElements, htmlVisualStylePatch, htmlVisualTextPatch, htmlVisualAttributePatch } from './html-visual.mjs'
 import { svgGroupingPatch } from './svg-groups.mjs'
+import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
 import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
@@ -355,6 +356,9 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'svg-path-point') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=svgPathPointPatches(doc.source,{id:params.id,index:params.index,x:params.x,y:params.y})
+        } else if (params.kind === 'svg-appearance-transfer') {
+          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
+          patches=planSvgAppearanceTransfer(doc.source,{sourceId:params.sourceId,targetId:params.targetId})
         } else if (params.kind === 'svg-gradient-create') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           const created=planSvgGradientCreation(doc.source,{id:params.id,type:params.type})
