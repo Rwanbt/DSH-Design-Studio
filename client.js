@@ -2737,7 +2737,9 @@ window.__ModuleLoader__.load({
         if(!rect.width||!rect.height)return
         marqueeRef.current={pointerId:event.pointerId,rect:{
           left:rect.left,top:rect.top,width:rect.width,height:rect.height},
-          startClientX:event.clientX,startClientY:event.clientY}
+          startClientX:event.clientX,startClientY:event.clientY,
+          additive:!!event.shiftKey,contain:!!event.altKey,
+          originalIds:selectionIds().filter(id=>nodes.some(n=>n.id===id&&n.parentTag==='svg'))}
         setMarquee(null)
         try{event.currentTarget.setPointerCapture(event.pointerId)}catch(_){}
         event.preventDefault()
@@ -2755,7 +2757,8 @@ window.__ModuleLoader__.load({
         const from=marqueeCoords({clientX:gesture.startClientX,clientY:gesture.startClientY},gesture)
         const to=marqueeCoords(event,gesture)
         setMarquee({left:Math.min(from.x,to.x),top:Math.min(from.y,to.y),
-          right:Math.max(from.x,to.x),bottom:Math.max(from.y,to.y)})
+          right:Math.max(from.x,to.x),bottom:Math.max(from.y,to.y),
+          contain:gesture.contain,additive:gesture.additive})
       }
       function finishMarquee(event,cancel=false) {
         const gesture=marqueeRef.current
@@ -2764,7 +2767,7 @@ window.__ModuleLoader__.load({
         setMarquee(null)
         if(cancel)return
         if(Math.hypot(event.clientX-gesture.startClientX,event.clientY-gesture.startClientY)<4) {
-          setActive('');setExtraSelection([])
+          if(!gesture.additive){setActive('');setExtraSelection([])}
           return
         }
         const from=marqueeCoords({clientX:gesture.startClientX,clientY:gesture.startClientY},gesture)
@@ -2775,15 +2778,21 @@ window.__ModuleLoader__.load({
         const chosen=nodes.filter(node=>{
           if(node.parentTag!=='svg'||node.hidden||node.locked||node.readOnly)return false
           const h=byId.get(node.id)
-          return h&&h.x<=right&&h.x+h.width>=left&&h.y<=bottom&&h.y+h.height>=top
+          return h&&(gesture.contain
+            ?h.x>=left&&h.x+h.width<=right&&h.y>=top&&h.y+h.height<=bottom
+            :h.x<=right&&h.x+h.width>=left&&h.y<=bottom&&h.y+h.height>=top)
         })
-        if(chosen.length>16) {
+        const wanted=new Set(chosen.map(node=>node.id))
+        if(gesture.additive)for(const id of gesture.originalIds)wanted.add(id)
+        const combined=nodes.filter(node=>wanted.has(node.id)&&node.parentTag==='svg')
+        if(combined.length>16) {
           setNotice('Rectangle de sélection : plus de 16 objets. Affinez la zone.')
           return
         }
-        setActive(chosen[0]?.id||'')
-        setExtraSelection(chosen.slice(1).map(node=>node.id))
-        setNotice(chosen.length+' objet(s) sélectionné(s) par rectangle.')
+        setActive(combined[0]?.id||'')
+        setExtraSelection(combined.slice(1).map(node=>node.id))
+        setNotice(combined.length+' objet(s) sélectionné(s) par rectangle'+
+          (gesture.additive?' (ajout)':'')+(gesture.contain?' (contenus)':'')+'.')
         setError('')
       }
       function startPan(event) {
@@ -4698,12 +4707,14 @@ doc?.format==='css'?
                       onPointerUp:event=>finishMarquee(event),
                       onPointerCancel:event=>finishMarquee(event,true)},
                     marquee&&h('div',{role:'presentation','data-marquee-selection':'',
+                      'data-marquee-mode':(marquee.contain?'contain':'intersect')+
+                        (marquee.additive?'-add':''),
                       style:{position:'absolute',
                         left:((marquee.left-artboard.x)/artboard.width*100)+'%',
                         top:((marquee.top-artboard.y)/artboard.height*100)+'%',
                         width:((marquee.right-marquee.left)/artboard.width*100)+'%',
                         height:((marquee.bottom-marquee.top)/artboard.height*100)+'%',
-                        border:'1px solid #c9a77c',
+                        border:'1px '+(marquee.contain?'dashed':'solid')+' #c9a77c',
                         background:'rgba(201,167,124,0.15)',
                         pointerEvents:'none',boxSizing:'border-box',zIndex:20}}),
                     handles.flatMap(handle=>{
