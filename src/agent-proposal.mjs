@@ -11,6 +11,8 @@ const editFields = Object.freeze({
   'svg-transform': ['id', 'operation'],
   'svg-add-shape': ['shape'],
   'svg-gradient-create': ['id', 'type', 'fromColor', 'toColor'],
+  'svg-gradient-stop': ['gradientId','index','attribute','value'],
+  'svg-gradient-geometry': ['gradientId','attribute','value'],
   'svg-visibility': ['id', 'property', 'value'],
   'css-rule': ['selector', 'property', 'value'],
   'css-media': ['selector', 'condition', 'property', 'value'],
@@ -58,6 +60,7 @@ function validatedEdit(args) {
   const fields = [...required, ...editFields[args.kind], ...(placedShape?['x','y']:[]), ...(hasText?['text']:[])]
   if (Object.keys(args).length !== fields.length || fields.some(field =>
     !Object.hasOwn(args, field) || (field==='operation' ? !validTransform(args[field]) :
+      field==='index' ? !Number.isSafeInteger(args[field])||args[field]<0 :
       field==='x'||field==='y' ? !Number.isFinite(args[field]) :
       typeof args[field] !== 'string' || args[field].length > 8192 || (field !== 'value' && field !== 'text' && !args[field].trim())))) return null
   return Object.fromEntries(fields.map(field => [field, args[field]]))
@@ -66,7 +69,7 @@ function validatedEdit(args) {
 const maxBatchEdits=6
 const editProperties = {
   ...Object.fromEntries(optional.map(field=>[field,field==='operation'?transformSchema:{type:'string'}])),
-  x:{type:'number'},y:{type:'number'},text:{type:'string'},
+  x:{type:'number'},y:{type:'number'},text:{type:'string'},index:{type:'integer',minimum:0},
 }
 
 function validatedProposal(args) {
@@ -89,7 +92,7 @@ export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use svg-add-shape with shape rect, circle, ellipse, text or path to insert a native primitive at the artboard center. Supply numeric x and y together to place a rect or text by its anchor, or a circle or ellipse by its center. For text shapes, optional text sets the literal initial content and supports line breaks. Use svg-gradient-create with id, type (linear or radial), fromColor and toColor in hex to add and apply a gradient. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use svg-add-shape with shape rect, circle, ellipse, text or path to insert a native primitive at the artboard center. Supply numeric x and y together to place a rect or text by its anchor, or a circle or ellipse by its center. For text shapes, optional text sets the literal initial content and supports line breaks. Use svg-gradient-create with id, type (linear or radial), fromColor and toColor in hex to add and apply a gradient. Use svg-gradient-stop with gradientId, zero-based index, attribute (offset, stop-color or stop-opacity) and value, or svg-gradient-geometry with gradientId, attribute and value. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,

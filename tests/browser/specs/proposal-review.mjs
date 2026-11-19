@@ -237,6 +237,17 @@ export const svgGradientProposalReviewSpec = {
     await frame.locator('#target[fill="url(#dsh_gradient_1)"]').waitFor()
     assert.deepEqual(await frame.locator('radialGradient stop').evaluateAll(stops=>
       stops.map(stop=>stop.getAttribute('stop-color'))),['#e84834','#143a65'])
+    const revised=await harness.propose({file,kind:'svg-gradient-stop',gradientId:'dsh_gradient_1',index:1,
+      attribute:'stop-color',value:'#abc123'})
+    assert.equal(revised.ok,true)
+    const menu=page.locator('details').filter({has:page.getByText('Propositions IA',{exact:true})})
+    if(await menu.getAttribute('open')===null) await menu.locator('summary').click()
+    else await menu.getByRole('button',{name:'Actualiser les propositions'}).click()
+    await menu.getByRole('button',{name:/Proposition 1.*svg-gradient-stop/}).click()
+    await menu.getByRole('button',{name:'Appliquer la proposition'}).click()
+    await frame.locator('stop[stop-color="#abc123"]').waitFor({state:'attached'})
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await frame.locator('stop[stop-color="#143a65"]').waitFor({state:'attached'})
     await page.getByRole('button',{name:'Undo saved edit'}).click()
     await frame.locator('#target[fill="#222222"]').waitFor()
     assert.equal(await harness.read(file),original)

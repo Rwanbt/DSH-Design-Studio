@@ -4,6 +4,7 @@ import { cssMediaDeclarationPatch, cssVisualRulePatch } from './css-visual.mjs'
 import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
 import { htmlVisualAttributePatch, htmlVisualStylePatch, htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
+import { svgGradientGeometryPatch, svgGradientStopPatch } from './svg-gradient.mjs'
 import { planSvgGradientCreation } from './svg-gradient-create.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
@@ -18,7 +19,7 @@ const slidePlanners = Object.freeze({
   'slide-remove': removeHtmlSlide,
 })
 export const REVIEWABLE_EDIT_KINDS = Object.freeze([
-  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'svg-transform', 'svg-add-shape', 'svg-gradient-create', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
+  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'svg-transform', 'svg-add-shape', 'svg-gradient-create', 'svg-gradient-stop', 'svg-gradient-geometry', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
 ])
 
 function fail(code, message) {
@@ -38,6 +39,8 @@ export function planReviewableEdit(document, edit) {
     return [svgAttributePatch(source, { id, attribute: edit.attribute, value })]
   }
   if (format === 'svg') {
+    if (kind === 'svg-gradient-stop') return [svgGradientStopPatch(source,edit)]
+    if (kind === 'svg-gradient-geometry') return [svgGradientGeometryPatch(source,edit)]
     if (kind === 'svg-gradient-create') return planSvgGradientCreation(source,edit).patches
     if (kind === 'svg-add-shape') return [planShapeAddition(source,edit).patch]
     if (kind === 'svg-transform') return [svgTransformPatch(source,{id,operation:edit.operation}).patch]

@@ -4,7 +4,7 @@ import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
 import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenContinuePatch, svgPathTangentPatches } from './svg-paths.mjs'
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
-import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch, svgGradientGeometryPatch, svgGradientStopMovePatches } from './svg-gradient.mjs'
+import { listSvgGradients, svgGradientStopInsertPatch, svgGradientStopRemovePatch, svgGradientStopMovePatches } from './svg-gradient.mjs'
 import { planSvgGradientCreation } from './svg-gradient-create.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
@@ -497,17 +497,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         } else if (params.kind === 'svg-appearance-transfer') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=planSvgAppearanceTransfer(doc.source,{sourceId:params.sourceId,targetId:params.targetId})
-        } else if (params.kind === 'svg-gradient-geometry') {
-          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[svgGradientGeometryPatch(doc.source,{gradientId:params.gradientId,
-            attribute:params.attribute,value:params.value})]
-        } else if (params.kind === 'svg-gradient-stop') {
-          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          // One existing stop attribute, one exact value span: the inverse is
-          // byte-exact, so Undo restores the original file. No attribute is
-          // ever inserted or removed by this operation.
-          patches=[svgGradientStopPatch(doc.source,{gradientId:params.gradientId,index:params.index,
-            attribute:params.attribute,value:params.value})]
         } else if (params.kind === 'svg-gradient-stop-move') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=svgGradientStopMovePatches(doc.source,{gradientId:params.gradientId,
