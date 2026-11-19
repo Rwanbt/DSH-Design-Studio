@@ -67,7 +67,9 @@ export const layerMenuRowSpec = {
     await page.keyboard.press('ArrowDown')
     await focused('Copier le calque')
     await page.keyboard.press('ArrowDown')
-    await focused('Avancer d’un plan') // Empty clipboard: disabled paste is skipped.
+    await focused('Copier l’apparence native')
+    await page.keyboard.press('ArrowDown')
+    await focused('Avancer d’un plan') // Empty clipboards: disabled actions are skipped.
     await page.keyboard.press('ArrowUp')
     await focused('Copier le calque')
     await page.keyboard.press('End')
