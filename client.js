@@ -865,6 +865,61 @@ window.__ModuleLoader__.load({
         error&&h('p',{role:'alert'},error))
     }
 
+    function PresentationPlayer({source, linkedCss, slides, active, disabled}) {
+      const [position,setPosition]=React.useState(null)
+      const trigger=React.useRef(null)
+      const dialog=React.useRef(null)
+      const exit=React.useRef(null)
+      React.useEffect(()=>{
+        if(position!==null && dialog.current && !dialog.current.open) {
+          dialog.current.showModal()
+          exit.current?.focus()
+        }
+      },[position])
+      function close() {
+        dialog.current?.close()
+        setPosition(null)
+        trigger.current?.focus()
+      }
+      function move(next) {
+        setPosition(Math.max(0,Math.min(slides.length-1,next)))
+      }
+      function navigate(event) {
+        if(event.key==='Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          close()
+          return
+        }
+        const directions={ArrowLeft:position-1,PageUp:position-1,ArrowRight:position+1,
+          PageDown:position+1,Home:0,End:slides.length-1}
+        if(Object.hasOwn(directions,event.key)) {
+          event.preventDefault()
+          event.stopPropagation()
+          move(directions[event.key])
+        }
+      }
+      return h('div',null,
+        h('button',{ref:trigger,type:'button',style:button,disabled,onClick:()=>{
+          setPosition(Math.max(0,slides.findIndex(slide=>slide.id===active)))
+        }},'Lancer le diaporama'),
+        position!==null&&slides[position]&&h('dialog',{ref:dialog,'aria-label':'Diaporama',
+          onCancel:event=>{event.preventDefault();close()},onKeyDown:navigate,
+          style:{width:'100vw',height:'100dvh',maxWidth:'none',maxHeight:'none',
+            margin:0,padding:0,border:0,background:'#17181b',color:'#f4f1eb'}},
+          h('div',{style:{height:'100%',boxSizing:'border-box',padding:12,display:'grid',
+            gridTemplateRows:'minmax(0,1fr) auto',gap:10}},
+          h('iframe',{title:'Diapositive en cours',sandbox:'',tabIndex:-1,referrerPolicy:'no-referrer',
+            style:{width:'min(100%, calc((100dvh - 76px) * 16 / 9))',aspectRatio:'16 / 9',
+              maxHeight:'100%',border:0,background:'#fff',alignSelf:'center',justifySelf:'center',pointerEvents:'none'},
+            srcDoc:safePreview(source,'html','',linkedCss,slides[position].id)}),
+          h('div',{style:{display:'flex',gap:8,alignItems:'center',justifyContent:'center',flexWrap:'wrap'}},
+            h('button',{type:'button',style:button,disabled:position===0,onClick:()=>move(position-1)},'Précédente'),
+            h('span',{role:'status'},(position+1)+' / '+slides.length),
+            h('button',{type:'button',style:button,disabled:position===slides.length-1,onClick:()=>move(position+1)},'Suivante'),
+            h('button',{type:'button',ref:exit,style:button,onClick:close},'Quitter le diaporama')))))
+    }
+
     function PresentationPrint({source, linkedCss, disabled}) {
       const [open,setOpen]=React.useState(false)
       const [ready,setReady]=React.useState(false)
@@ -5335,6 +5390,8 @@ doc?.format==='css'?
                         alignSelf:'flex-start',maxHeight:'100%',overflow:'auto'}},
                       slides&&h(PresentationControls,{key:doc.file,slides,active:activeSlide,select:selectSlide,save,
                         disabled:busy||reloadRequired||source!==doc.source}),
+                      slides&&h(PresentationPlayer,{key:'player-'+doc.identity,source:doc.source,linkedCss:htmlPreviewCss,
+                        slides,active:activeSlide,disabled:busy||reloadRequired||source!==doc.source}),
                       slides&&h(PresentationPrint,{key:'print-'+doc.identity,source:doc.source,linkedCss:htmlPreviewCss,
                         disabled:busy||reloadRequired||source!==doc.source}),
                       slides&&h(PresentationPptx,{key:'pptx-'+doc.identity,doc,scopeBody,

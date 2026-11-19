@@ -293,6 +293,18 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     if (!(await readFile(deckPath, 'utf8')).includes('Real DSH slide')) {
       throw new Error('Slide title did not write through the real Host')
     }
+    const addedDeck = await readFile(deckPath,'utf8')
+    await studio.getByRole('button',{name:'Lancer le diaporama'}).click()
+    const player = page.getByRole('dialog',{name:'Diaporama'})
+    const current = player.frameLocator('iframe[title="Diapositive en cours"]')
+    await current.getByText('Real DSH slide',{exact:true}).waitFor()
+    await page.keyboard.press('Home')
+    await current.getByText('Untitled slide',{exact:true}).waitFor()
+    await page.keyboard.press('Escape')
+    await player.waitFor({state:'hidden'})
+    await expectDisk(addedDeck,'g0-slides.html')
+    record('sidebar runs the in-place slideshow in real DSH Web',
+      'PASS', 'starts on active slide, keyboard navigation and dismissal, source preserved')
     await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
     await expectDisk(deck, 'g0-slides.html')
     await waitReady('g0-slides.html', deck)

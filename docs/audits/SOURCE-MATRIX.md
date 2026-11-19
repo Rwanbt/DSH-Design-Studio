@@ -68,3 +68,7 @@ L’export reconstruit aussi les tableaux HTML sous forme de tableaux PowerPoint
 ## Suppression réversible d’une diapositive
 
 L’action utilise le même verrou et les mêmes préconditions de révision que l’édition HTML native. Elle retire uniquement la section sélectionnée, protège la dernière diapositive et conserve une inversion exacte dans l’historique. Les vérifications couvrent la cible absente, la dernière page, l’annulation et les octets sur disque.
+
+## Mode diaporama HTML
+
+Le lecteur ouvre une boîte modale dans le panneau DSH et démarre sur la diapositive sélectionnée. Les flèches, Page précédente/suivante, Début, Fin et Échap agissent sur le lecteur. Le rendu réutilise l’aperçu HTML isolé avec une iframe sans permissions et n’écrit aucun fichier. Les scénarios Chromium et Firefox vérifient la diapositive initiale, le clavier, le retour du focus et la préservation du HTML.
