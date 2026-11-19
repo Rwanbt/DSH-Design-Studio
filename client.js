@@ -789,11 +789,13 @@ window.__ModuleLoader__.load({
       return h('svg',{viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.7,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':'true',focusable:'false'},
         (GRAPHITE_ICONS[name]||GRAPHITE_ICONS.rect).map(([tag,attrs],index)=>h(tag,{...attrs,key:index})))
     }
-    function ProposalReview({sessionId, document:active, disabled, save}) {
+    function ProposalReview({sessionId, document:active, linkedCss, disabled, save}) {
       const [state,setState]=React.useState({proposals:[],status:''})
       const [selection,setSelection]=React.useState(null)
+      const [showPreview,setShowPreview]=React.useState(false)
       async function refresh() {
         setSelection(null)
+        setShowPreview(false)
         setState({proposals:[],status:'Chargement…'})
         try {
           const query=new URLSearchParams({sessionId,file:active.file})
@@ -804,6 +806,13 @@ window.__ModuleLoader__.load({
         }
       }
       const matches=selection && selection.baseHash===active.hash && selection.baseIdentity===active.identity
+      const visual=matches&&['svg','html','htm'].includes(active.format)&&active.source.length<=512*1024
+      const proposed=visual&&showPreview?sourceAfterPatches(active.source,selection.patches):null
+      const renderPreview=(title,content)=>h('div',{key:title,style:{minWidth:0,display:'grid',gap:4}},
+        h('strong',null,title),
+        h('iframe',{title,sandbox:'',referrerPolicy:'no-referrer',tabIndex:-1,
+          srcDoc:safePreview(content,active.format,'',linkedCss),
+          style:{width:'100%',height:180,background:'#fff',border:'1px solid var(--line)',pointerEvents:'none'}}))
       return h('details',{className:'dsh-studio-menu',
         onToggle:event=>{if(event.currentTarget.open)void refresh()}},
         h('summary',null,'Propositions IA'),
@@ -811,7 +820,7 @@ window.__ModuleLoader__.load({
           h('button',{type:'button',style:button,onClick:()=>void refresh()},'Actualiser les propositions'),
           state.status&&h('div',{role:'status'},state.status),
           state.proposals.map((proposal,index)=>h('button',{key:proposal.id,type:'button',style:button,
-            'aria-pressed':selection?.id===proposal.id,onClick:()=>setSelection(proposal)},
+            'aria-pressed':selection?.id===proposal.id,onClick:()=>{setSelection(proposal);setShowPreview(false)}},
             'Proposition '+(index+1)+' · '+proposal.edit.kind)),
           selection&&h('section',{'aria-label':'Comparaison de la proposition'},
             h('p',null,active.file),
@@ -819,6 +828,10 @@ window.__ModuleLoader__.load({
             selection.patches.map(patch=>h('div',{key:patch.start},
               h('strong',null,'Avant'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.before),
               h('strong',null,'Après'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.after))),
+            visual&&h('button',{type:'button',style:button,'aria-expanded':showPreview,
+              onClick:()=>setShowPreview(value=>!value)},showPreview?'Masquer l’aperçu comparatif':'Afficher l’aperçu comparatif'),
+            proposed!==null&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:8}},
+              renderPreview('Aperçu avant',active.source),renderPreview('Aperçu après',proposed)),
             !matches&&h('p',{role:'status'},'Le fichier a changé. Demandez une nouvelle proposition.'),
             h('button',{type:'button',style:button,disabled:disabled||!matches,
               onClick:()=>void save({kind:'agent-proposal',proposalId:selection.id,
@@ -4868,7 +4881,7 @@ window.__ModuleLoader__.load({
           h('span',{className:'dsh-studio-grow'}),
           h('button',{className:'dsh-studio-tooltext',type:'button','aria-label':'Toggle canvas grid','aria-pressed':gridVisible,onClick:()=>setGridVisible(v=>!v)},glyph('grid'),'Grille'),
           !panelMode&&scope?.sessionId&&doc&&h(ProposalReview,{key:scopeKey+':'+doc.file+':'+doc.identity,
-            sessionId:scope.sessionId,document:doc,disabled:busy||reloadRequired||source!==doc.source,save}),
+            sessionId:scope.sessionId,document:doc,linkedCss:htmlPreviewCss,disabled:busy||reloadRequired||source!==doc.source,save}),
           h('span',{className:'dsh-studio-helper'},'Édition manuelle'),h('details',{className:'dsh-studio-menu dsh-studio-settings'},h('summary',null,'Options'),h('div',{className:'dsh-studio-menu-body'},
             h('button',{style:button,'aria-label':'Toggle snap to grid','aria-pressed':snapToGrid,onClick:()=>setSnapToGrid(v=>!v)},'Magnétisme'),
             h('select',{style:field,'aria-label':'Grid spacing',value:gridStep,onChange:e=>setGridStep(Number(e.target.value))},[2,5,8,10,16,20,25,32,50,64,100].map(step=>h('option',{key:step,value:step},step+' u'))),
