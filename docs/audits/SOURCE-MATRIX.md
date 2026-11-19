@@ -84,3 +84,5 @@ Chaque sélection peut ajouter une rotation de 90°, 180° ou 270° aux pages qu
 ## Outils PDF dans le panneau d’espace de travail
 
 Le panneau découvre les PDF par le même identifiant d’espace enregistré que les fichiers HTML et SVG. Il ouvre l’aperçu avec les outils de notes et de surlignage, ou le formulaire d’assemblage depuis la liste. Dans une conversation avec lecteur natif disponible, le fichier s’ouvre dans ce lecteur et les actions restent disponibles dans le panneau. Chromium et Firefox ont vérifié le périmètre de la requête d’aperçu et les deux voies d’accès. Le vrai DSH Web a ouvert les deux formulaires depuis un espace enregistré.
+
+La sélection d’un assemblage PDF accepte les numéros isolés, les plages ascendantes et les plages descendantes dans le même champ. Le compteur affiche le nombre de pages de la copie en comptant les répétitions. L’expansion respecte la limite existante de 24 pages et conserve l’ordre avant l’envoi au Host. Les scénarios Chromium et Firefox vérifient la plage descendante, le refus d’une plage excessive et l’ordre du texte dans le téléchargement.

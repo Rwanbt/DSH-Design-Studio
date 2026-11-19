@@ -1136,14 +1136,27 @@ window.__ModuleLoader__.load({
         error&&h('p',{role:'alert'},error))
     }
 
+    function parsePdfPageSelection(selection) {
+      const pages=[]
+      for(const token of selection.split(',')) {
+        const match=/^([1-9][0-9]{0,4})(?:\s*-\s*([1-9][0-9]{0,4}))?$/.exec(token.trim())
+        if(!match)return null
+        const first=Number(match[1]),last=Number(match[2]??match[1])
+        if(Math.max(first,last)>10000||pages.length+Math.abs(last-first)+1>24)return null
+        const step=last<first?-1:1
+        for(let number=first;number!==last+step;number+=step)pages.push(number)
+      }
+      return pages
+    }
+
     function PdfCopy({file, files, scopeBody, close}) {
       const [rows,setRows]=React.useState([{id:0,file,selection:''}])
       const nextId=React.useRef(1)
       const [busy,setBusy]=React.useState(false)
       const [error,setError]=React.useState('')
-      const selections=rows.map(row=>({file:row.file,rotation:row.rotation??0,pages:row.selection.trim().split(/\s*,\s*/)}))
-      const valid=selections.reduce((total,item)=>total+item.pages.length,0)<=24&&
-        selections.every(item=>item.pages.every(page=>/^[1-9]\d{0,4}$/.test(page)&&Number(page)<=10000))
+      const selections=rows.map(row=>({file:row.file,rotation:row.rotation??0,pages:parsePdfPageSelection(row.selection)}))
+      const count=selections.reduce((total,item)=>total+(item.pages?.length??0),0)
+      const valid=count<=24&&selections.every(item=>item.pages!==null)
       function update(id,patch) {
         setRows(previous=>previous.map(row=>row.id===id?{...row,...patch}:row))
       }
@@ -1162,7 +1175,7 @@ window.__ModuleLoader__.load({
         try {
           const uniqueFiles=new Set(selections.map(item=>item.file))
           const name=uniqueFiles.size===1?selections[0].file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf':'assemblage.pdf'
-          await requestBinaryDownload('/pdf/copy',{...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))},name)
+          await requestBinaryDownload('/pdf/copy',{...scopeBody,selections},name)
           close()
         } catch(error) {
           setError(String(error.message))
@@ -1177,7 +1190,7 @@ window.__ModuleLoader__.load({
             h('select',{style:field,value:row.file,onChange:event=>update(row.id,{file:event.target.value})},
               files.map(item=>h('option',{key:item.path,value:item.path},item.path)))),
           h('label',null,'Pages dans l’ordre souhaité',
-            h('input',{style:field,value:row.selection,placeholder:'3, 1, 2',maxLength:160,
+            h('input',{style:field,value:row.selection,placeholder:'3, 1-2, 5-4',maxLength:160,
               onChange:event=>update(row.id,{selection:event.target.value})})),
           h('label',null,'Rotation des pages',
             h('select',{style:field,value:row.rotation??0,onChange:event=>update(row.id,{rotation:Number(event.target.value)})},
@@ -1190,6 +1203,9 @@ window.__ModuleLoader__.load({
           const id=nextId.current++
           setRows(previous=>[...previous,{id,file:files.find(item=>item.path!==previous.at(-1).file)?.path||file,selection:''}])
         }},'Ajouter une sélection'),
+        h('p',{role:'status'},valid
+          ? count+' page(s) dans la copie'
+          : 'Indiquez jusqu’à 24 pages. Exemple : 3, 1-2, 5-4.'),
         h('div',{style:{display:'flex',gap:8}},
           h('button',{type:'submit',style:button,disabled:!valid||busy},busy?'Assemblage…':'Télécharger la copie PDF'),
           h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),

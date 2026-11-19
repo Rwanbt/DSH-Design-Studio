@@ -29,7 +29,7 @@ export const pdfCopySpec = {
     const form = page.getByRole('form', { name: 'Assembler des pages PDF' })
     const first = form.getByRole('group', { name: 'Sélection 1', exact: true })
     await first.getByLabel('Fichier PDF').selectOption(file)
-    await first.getByLabel('Pages dans l’ordre souhaité').fill('2, 1, 2')
+    await first.getByLabel('Pages dans l’ordre souhaité').fill('2-1, 2')
     await form.getByRole('button', { name: 'Ajouter une sélection' }).click()
     const second = form.getByRole('group', { name: 'Sélection 2', exact: true })
     await second.getByLabel('Fichier PDF').selectOption('other.pdf')
@@ -39,6 +39,11 @@ export const pdfCopySpec = {
     const canRotate = spawnSync(python,['-I','-c','import pypdf'],{stdio:'ignore'}).status === 0
     if (canRotate) await first.getByLabel('Rotation des pages').selectOption('90')
     const button = form.getByRole('button', { name: 'Télécharger la copie PDF' })
+    assert.equal(await form.getByRole('status').textContent(),'4 page(s) dans la copie')
+    const selection = form.getByRole('group',{name:'Sélection 2',exact:true}).getByLabel('Pages dans l’ordre souhaité')
+    await selection.fill('1-10000')
+    assert.ok(await button.isDisabled())
+    await selection.fill('2-1, 2')
     const hasEngine = ['pdfinfo','pdfseparate','pdfunite'].every(tool =>
       spawnSync(tool,['-v'],{stdio:'ignore'}).status === 0)
     if (hasEngine) {
