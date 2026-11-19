@@ -55,3 +55,32 @@ export const pdfCopySpec = {
     assert.equal(await harness.read('other.pdf'), other)
   },
 }
+
+export const pdfNoteSpec = {
+  name: 'pdf: download a text note on the selected page',
+  async run({ page, harness, assert }) {
+    const { pdfFixture } = await import('../../fixtures/pdf-fixture.mjs')
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const python = process.env.DSH_PDF_PYTHON || 'python3'
+    const file = 'source.pdf'
+    const original = pdfFixture().toString('utf8')
+    await harness.write(file, original)
+    await page.getByRole('button', { name: 'Refresh workspace design files' }).click()
+    await page.getByRole('button', { name: 'Ajouter une note', exact: true }).click()
+    const form = page.getByRole('form', { name: 'Ajouter une note PDF' })
+    await form.getByRole('spinbutton', { name: 'Page', exact: true }).fill('2')
+    await form.getByLabel('Texte de la note').fill('Note de révision')
+    const submit = form.getByRole('button', { name: 'Télécharger la copie annotée' })
+    if (spawnSync(python,['-I','-c','from pypdf.annotations import Text'],{stdio:'ignore'}).status===0) {
+      const [download] = await Promise.all([page.waitForEvent('download'),submit.click()])
+      assert.equal(download.suggestedFilename(),'source-annote.pdf')
+      const inspect = 'import json,sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); print(json.dumps(str(r.pages[1]["/Annots"][0].get_object()["/Contents"])))'
+      assert.equal(JSON.parse(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'})), 'Note de révision')
+    } else {
+      await submit.click()
+      await form.getByRole('alert').waitFor()
+      assert.match(await form.getByRole('alert').textContent(), /unavailable/)
+    }
+    assert.equal(await harness.read(file),original)
+  },
+}

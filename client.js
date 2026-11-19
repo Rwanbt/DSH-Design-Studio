@@ -908,6 +908,56 @@ window.__ModuleLoader__.load({
           h('button',{type:'submit',style:button,disabled:disabled||!title.trim()||slides.length>=32},'Ajouter une diapositive')))
     }
 
+    const pdfFormStyle={position:'absolute',top:98,right:12,width:'min(420px, calc(100% - 24px))',
+      boxSizing:'border-box',display:'grid',gap:8,padding:12,background:'var(--panel)',
+      border:'1px solid var(--line)',borderRadius:8,zIndex:45,maxHeight:'calc(100% - 110px)',overflow:'auto'}
+
+    async function requestPdfDownload(endpoint, payload, name) {
+      const response=await fetch(new URL('/'+api+'/pdf/'+endpoint,document.baseURI),{
+        method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload),
+      })
+      if(!response.ok) throw new Error((await response.json()).message || 'Copie PDF indisponible')
+      downloadBlob(await response.blob(),name)
+    }
+
+    function PdfNote({file,scopeBody,close}) {
+      const [text,setText]=React.useState('')
+      const [position,setPosition]=React.useState({page:'1',x:'10',y:'10'})
+      const [busy,setBusy]=React.useState(false)
+      const [error,setError]=React.useState('')
+      const page=Number(position.page),x=Number(position.x),y=Number(position.y)
+      const valid=Number.isInteger(page)&&page>=1&&page<=10000&&text.trim()&&
+        position.x!==''&&position.y!==''&&[x,y].every(value=>value>=0&&value<=100)
+      async function annotate(event) {
+        event.preventDefault()
+        if(!valid||busy)return
+        setBusy(true);setError('')
+        try {
+          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text},
+            file.split('/').at(-1).replace(/\.pdf$/i,'')+'-annote.pdf')
+          close()
+        } catch(error) {
+          setError(String(error.message))
+        } finally {
+          setBusy(false)
+        }
+      }
+      return h('form',{onSubmit:annotate,'aria-label':'Ajouter une note PDF',style:pdfFormStyle},
+        h('strong',null,file),
+        h('div',{style:{display:'flex',gap:6}},
+          [['page','Page',1,10000],['x','Depuis la gauche (%)',0,100],['y','Depuis le haut (%)',0,100]]
+            .map(([key,label,min,max])=>h('label',{key,style:{minWidth:0}},label,
+              h('input',{type:'number',style:field,min,max,step:key==='page'?1:'any',required:true,disabled:busy,
+                value:position[key],onChange:event=>setPosition({...position,[key]:event.target.value})})))),
+        h('label',null,'Texte de la note',
+          h('textarea',{style:field,value:text,maxLength:2000,required:true,disabled:busy,
+            onChange:event=>setText(event.target.value)})),
+        h('div',{style:{display:'flex',gap:8}},
+          h('button',{type:'submit',style:button,disabled:busy||!valid},'Télécharger la copie annotée'),
+          h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),
+        error&&h('p',{role:'alert'},error))
+    }
+
     function PdfCopy({file, files, scopeBody, close}) {
       const [rows,setRows]=React.useState([{id:0,file,selection:''}])
       const nextId=React.useRef(1)
@@ -932,14 +982,9 @@ window.__ModuleLoader__.load({
         if(!valid||busy)return
         setBusy(true);setError('')
         try {
-          const response=await fetch(new URL('/'+api+'/pdf/copy',document.baseURI),{
-            method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
-            body:JSON.stringify({...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))}),
-          })
-          if(!response.ok) throw new Error((await response.json()).message || 'Copie PDF indisponible')
           const uniqueFiles=new Set(selections.map(item=>item.file))
           const name=uniqueFiles.size===1?selections[0].file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf':'assemblage.pdf'
-          downloadBlob(await response.blob(),name)
+          await requestPdfDownload('copy',{...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))},name)
           close()
         } catch(error) {
           setError(String(error.message))
@@ -947,10 +992,7 @@ window.__ModuleLoader__.load({
           setBusy(false)
         }
       }
-      return h('form',{onSubmit:exportCopy,'aria-label':'Assembler des pages PDF',
-        style:{position:'absolute',top:98,right:12,width:'min(420px, calc(100% - 24px))',boxSizing:'border-box',
-          display:'grid',gap:8,padding:12,background:'var(--panel)',border:'1px solid var(--line)',
-          borderRadius:8,zIndex:45,maxHeight:'calc(100% - 110px)',overflow:'auto'}},
+      return h('form',{onSubmit:exportCopy,'aria-label':'Assembler des pages PDF',style:pdfFormStyle},
         rows.map((row,index)=>h('fieldset',{key:row.id,disabled:busy,style:{display:'grid',gap:6,minWidth:0}},
           h('legend',null,'Sélection '+(index+1)),
           h('label',null,'Fichier PDF',
@@ -1052,7 +1094,7 @@ window.__ModuleLoader__.load({
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
-      const [pdfCopyFile,setPdfCopyFile] = React.useState('')
+      const [pdfAction,setPdfAction] = React.useState(null)
       const [slideSelection,setSlideSelection] = React.useState(null)
       const [fileAction,setFileAction] = React.useState(null)
       const [layerMenu,setLayerMenu] = React.useState(null)
@@ -4561,7 +4603,7 @@ window.__ModuleLoader__.load({
             ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
-        canOpenPdf&&pdfCopyFile&&h(PdfCopy,{key:scopeKey+pdfCopyFile,file:pdfCopyFile,files:workspaceFiles.filter(item=>item.format==='pdf'),scopeBody,close:()=>setPdfCopyFile('')}),
+        canOpenPdf&&pdfAction&&h(pdfAction.kind==='note'?PdfNote:PdfCopy,{key:scopeKey+pdfAction.file,file:pdfAction.file,files:workspaceFiles.filter(item=>item.format==='pdf'),scopeBody,close:()=>setPdfAction(null)}),
                 showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
           padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
           maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
@@ -4582,7 +4624,8 @@ window.__ModuleLoader__.load({
                   onClick:()=>void openPickedFile(item.path)},
                   h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
                   item.path),
-                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfCopyFile(item.path)},'Assembler les pages'),
+                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'copy',file:item.path})},'Assembler les pages'),
+                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'note',file:item.path})},'Ajouter une note'),
                 item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
@@ -4905,7 +4948,8 @@ window.__ModuleLoader__.load({
                     return item.format==='pdf'
                       ?h('div',{key:item.path,style:{display:'grid',gap:4}},open,
                         h('button',{type:'button',style:button,
-                          onClick:()=>setPdfCopyFile(item.path)},'Assembler les pages'))
+                          onClick:()=>setPdfAction({kind:'copy',file:item.path})},'Assembler les pages'),
+                        h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'note',file:item.path})},'Ajouter une note'))
                       :open
                   }))
             : h('div',{role:'status',style:{...pane,padding:12,marginTop:4,background:'var(--dsw-alias-bg-layer-1, #232529)'}},

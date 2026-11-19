@@ -26,3 +26,19 @@ conversation workspace and up to 24 output pages total. The controls move
 whole selections up and down. Each selection preserves the entered page
 order, and a repeated source is read once. The legacy single-file request
 remains supported. Cross-workspace inputs are outside the PDF copy API.
+
+## Text note annotations
+
+The conversation picker can add a native PDF text note to a downloaded copy.
+The form addresses a 1-based page and percentages from the visible crop
+box's top-left corner, accounting for PDF page rotation. The Host checks
+the source and clones the document in a private working directory. The
+original PDF remains unchanged. The adapter refuses encrypted PDFs and
+detected signed forms.
+
+This operation needs Python with pypdf installed on the Host. It runs
+`python3` by default, or the administrator's `DSH_PDF_PYTHON` interpreter
+path. The Python package is neither bundled nor installed automatically.
+The fixture qualifies a Unicode text note and preservation of page text.
+Other markup types, interactive placement and complex document fidelity
+require separate qualification.

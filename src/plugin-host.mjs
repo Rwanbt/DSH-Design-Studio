@@ -31,6 +31,8 @@ import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPr
 
 import { createPdfPageCopier } from './pdf-page-copy.mjs'
 
+import { createPdfAnnotator } from './pdf-annotation.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -152,6 +154,7 @@ function approvedProposal(inbox, ctx, request) {
 
 export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   const copyPdfPages = createPdfPageCopier()
+  const annotatePdf = createPdfAnnotator()
   return async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://dsh.local')
@@ -185,13 +188,16 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         })
         return reply(res,200,{ok:true,...result})
       }
-      if (req.method === 'POST' && endpoint === '/pdf/copy') {
+      if (req.method === 'POST' && (endpoint === '/pdf/copy' || endpoint === '/pdf/annotate')) {
         const params = await bodyJson(req)
         const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
         const selections = params.selections ?? [{file:params.file,pages:params.pages}]
-        const bytes = await copyPdfPages(selections,async file=>(await store.readPdf(file)).source)
+        const readSource = async file=>(await store.readPdf(file)).source
+        const bytes = endpoint === '/pdf/annotate'
+          ? await annotatePdf(params,()=>readSource(params.file))
+          : await copyPdfPages(selections,readSource)
         res.writeHead(200,{'content-type':'application/pdf','content-length':bytes.length,
-          'content-disposition':'attachment; filename="pages.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'})
+          'content-disposition':'attachment; filename="design-studio.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'})
         return res.end(bytes)
       }
       if (req.method === 'GET' && endpoint === '/document') {

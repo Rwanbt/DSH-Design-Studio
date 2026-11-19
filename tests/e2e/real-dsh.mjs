@@ -322,6 +322,20 @@ async function main() {
           copyVerified ? 'PASS' : copyError === 'pdf-engine-unavailable' && sourcePreserved ? 'NOT_RUN' : 'FAIL',
           `HTTP ${copied.status()}, source preserved=${sourcePreserved}, ${copyError || copyType}`)
 
+        const annotated = await context.request.post(origin + '/design-studio-native/pdf/annotate', {
+          data: { sessionId, file:'g0-source.pdf', page:2, x:0.25, y:0.5, text:'Real DSH note' },
+        })
+        const annotationType = annotated.headers()['content-type']
+        const annotationPreserved = (await readFile(pdfFile)).equals(pdf)
+        const annotationBytes = await annotated.body()
+        const annotationError = annotated.status() === 400 && annotationType?.startsWith('application/json')
+          ? JSON.parse(annotationBytes.toString()).error : null
+        const annotationVerified = annotated.ok() && annotationType === 'application/pdf' &&
+          annotationBytes.subarray(0,5).toString() === '%PDF-' && annotationPreserved
+        record('annotate a PDF copy through the real Host',
+          annotationVerified ? 'PASS' : annotationError === 'pdf-annotation-unavailable' && annotationPreserved ? 'NOT_RUN' : 'FAIL',
+          `HTTP ${annotated.status()}, source preserved=${annotationPreserved}, ${annotationError || annotationType}`)
+
         // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +
           encodeURIComponent(sessionId) + '&file=g0-art.svg')
