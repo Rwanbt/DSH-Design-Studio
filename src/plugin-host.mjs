@@ -222,9 +222,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
       if (req.method === 'POST' && endpoint === '/pdf/import-text') {
         const params = await bodyJson(req)
         const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
-        const {source,emptyPages} = await importPdfText(async()=>(await store.readPdf(params.file)).source)
+        const {source,emptyPages,recognizedPages} = await importPdfText(async()=>(await store.readPdf(params.file)).source,params.ocr)
         const created = await store.create(params.file.replace(/\.pdf$/i,'.pdf-text.html'),{source})
-        return reply(res,201,{ok:true,file:created.file,emptyPages})
+        return reply(res,201,{ok:true,file:created.file,emptyPages,recognizedPages})
       }
       if (req.method === 'GET' && endpoint === '/pdf/preview') {
         const store = await storeFor(ctx,{sessionId:url.searchParams.get('sessionId'),

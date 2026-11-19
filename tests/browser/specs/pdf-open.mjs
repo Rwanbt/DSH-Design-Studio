@@ -22,6 +22,11 @@ export const pdfCopySpec = {
     const file = 'source.pdf'
     const original = pdfFixture().toString('utf8')
     await harness.write(file, original)
+    const scan=process.env.DSH_E2E_OCR_FIXTURE
+    if (scan) {
+      const {readFile}=await import('node:fs/promises')
+      await harness.write('scan.pdf',await readFile(scan))
+    }
     const other = pdfFixture(['Third text','Fourth text']).toString('utf8')
     await harness.write('other.pdf', other)
     await page.getByRole('button', { name: 'Refresh workspace design files' }).click()
@@ -75,6 +80,14 @@ export const pdfCopySpec = {
       await frame.getByText('Edited PDF text',{exact:true}).waitFor()
       assert.match(await harness.read('source.pdf-text.html'),/id="pdf-page-2-line-1">Edited PDF text/)
       assert.equal(await harness.read(file),original)
+      if (scan) {
+        await page.locator('.dsh-studio-top details.dsh-studio-menu summary').click()
+        await page.getByRole('button',{name:'Browse workspace design files'}).click()
+        const scanRow=page.getByRole('button',{name:'Open file scan.pdf',exact:true}).locator('..')
+        await scanRow.getByRole('button',{name:'Importer avec OCR',exact:true}).click()
+        await frame.getByText('Second scanned sentence',{exact:true}).waitFor()
+        assert.match(await harness.read('scan.pdf-text.html'),/Second scanned sentence/)
+      }
     }
   },
 }

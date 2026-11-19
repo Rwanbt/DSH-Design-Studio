@@ -354,6 +354,20 @@ async function main() {
             `HTTP ${pdfText.status()}, ${importedPdf.error}`)
         }
 
+        if (process.env.DSH_E2E_OCR_FIXTURE) {
+          const scan = await readFile(process.env.DSH_E2E_OCR_FIXTURE)
+          await writeFile(path.join(workspace,'g0-scan.pdf'),scan)
+          const recognized = await context.request.post(importUrl,{data:{sessionId,file:'g0-scan.pdf',ocr:true}})
+          const result = await recognized.json()
+          const imported = result.file === 'g0-scan.pdf-text.html'
+            ? await readFile(path.join(workspace,result.file),'utf8') : ''
+          record('recognize an image-only PDF through the real Host',
+            recognized.status()===201 && result.recognizedPages?.join(',')==='1,2' &&
+            /Second scanned sentence/.test(imported) &&
+            (await readFile(path.join(workspace,'g0-scan.pdf'))).equals(scan) ? 'PASS' : 'FAIL',
+            `HTTP ${recognized.status()}, ${result.recognizedPages || result.error}`)
+        }
+
         const previewQuery = new URLSearchParams({sessionId,file:'g0-source.pdf',page:'2'})
         const pdfPreview = await context.request.get(origin + '/design-studio-native/pdf/preview?' + previewQuery)
         const previewHeaders = pdfPreview.headers()

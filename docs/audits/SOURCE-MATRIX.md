@@ -94,3 +94,9 @@ Le formulaire PDF peut préparer jusqu’à douze annotations sur plusieurs page
 ## Import du texte PDF en HTML
 
 Le Host utilise Poppler pour extraire le texte sélectionnable et vérifier les limites de pages. L’import restitue des sections HTML par page avec des IDs stables sur les lignes, échappe le texte et crée le fichier voisin par écriture exclusive. Les PDF de plus de 32 pages sont refusés. Les pages sans texte sont signalées et un PDF entièrement sans texte ne crée aucun fichier. L’OCR, les polices et la reconstruction visuelle des objets restent à traiter. Une vérification directe a confirmé l’échappement de caractères HTML et le signalement d’une page vide. Le parcours navigateur ouvre la copie, modifie une ligne importée et vérifie les octets de l’original.
+
+## Reconnaissance locale des pages PDF numérisées
+
+L’action « Importer avec OCR » conserve le texte sélectionnable et traite uniquement les pages pour lesquelles Poppler n’en trouve pas. Elle rend ces pages en niveaux de gris et lance Tesseract en français et en anglais, sans service distant. La conversion accepte jusqu’à huit pages à reconnaître par import et signale les pages reconnues ou sans résultat dans le document de sortie HTML. Les pages mixtes qui comportent déjà du texte sélectionnable suivent l’extraction ordinaire. La mise en page n’est pas reconstruite.
+
+Les parcours navigateur et DSH Web peuvent recevoir une fixture de deux pages raster via `DSH_E2E_OCR_FIXTURE`. Pour cette validation, la source de la fixture a été générée par `pdfFixture(['First scanned sentence','Second scanned sentence'])`, rendue en PGM avec `pdftoppm -r 180 -gray`, puis enregistrée en PDF multipage avec Pillow. L’extraction simple a refusé ce PDF sans texte et le mode OCR a reconnu les deux pages. Tesseract 5.5.0 et les données française et anglaise ont été extraits de paquets Ubuntu dans un dossier temporaire et n’entrent pas dans le bundle.

@@ -2138,16 +2138,17 @@ window.__ModuleLoader__.load({
         return ()=>{cancelled=true}
       },[scopeKey])
 
-      async function importPdfText(file) {
+      async function importPdfText(file, ocr=false) {
         if (busy || !workspaceFiles.some(item=>item.format==='pdf'&&item.path===file)) return
         setBusy(true);setError('')
         try {
           const result=await request('/pdf/import-text',{method:'POST',headers:{'content-type':'application/json'},
-            body:JSON.stringify({...scopeBody,file})})
+            body:JSON.stringify({...scopeBody,file,ocr})})
           await loadWorkspaceFiles()
           if(await openInTab(result.file)) setShowFiles(false)
           const missing=result.emptyPages
           setNotice('Texte PDF importé dans '+result.file+
+            (result.recognizedPages.length?' · Pages reconnues par OCR : '+result.recognizedPages.join(', '):'')+
             (missing.length?' · Pages sans texte : '+missing.join(', '):''))
         } catch(error) {
           setError('Impossible d’importer le texte du PDF : '+String(error.message))
@@ -4894,6 +4895,7 @@ window.__ModuleLoader__.load({
                   item.path+(item.format==='pptx'?' · Importer':'')),
                 item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('copy',item.path)},'Assembler les pages'),
                 item.format==='pdf'&&h('button',{type:'button',style:button,disabled:busy,title:'Convertir le texte sélectionnable en HTML',onClick:()=>void importPdfText(item.path)},'Importer le texte'),
+                item.format==='pdf'&&h('button',{type:'button',style:button,disabled:busy,title:'Reconnaître le texte des pages numérisées en français et en anglais',onClick:()=>void importPdfText(item.path,true)},'Importer avec OCR'),
                 item.format==='pdf'&&canOpenPdf&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('note',item.path)},'Ajouter une note'),
                 !['pdf','pptx'].includes(item.format)&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
@@ -5219,6 +5221,7 @@ window.__ModuleLoader__.load({
                         h('button',{type:'button',style:button,
                           onClick:()=>openPdfAction('copy',item.path)},'Assembler les pages'),
                         h('button',{type:'button',style:button,disabled:busy,title:'Convertir le texte sélectionnable en HTML',onClick:()=>void importPdfText(item.path)},'Importer le texte'),
+                        h('button',{type:'button',style:button,disabled:busy,title:'Reconnaître le texte des pages numérisées en français et en anglais',onClick:()=>void importPdfText(item.path,true)},'Importer avec OCR'),
                         canOpenPdf&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('note',item.path)},'Ajouter une note'))
                       :open
                   }))
