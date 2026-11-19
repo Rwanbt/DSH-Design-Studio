@@ -34,6 +34,7 @@ import { strokeCreateSpec, strokeRefusalSpec } from './stroke.mjs'
 import { touchSelectSpec, accessibleTreeSpec } from './touch-a11y.mjs'
 import { pathTangentSpec } from './path-tangent.mjs'
 import { appearanceTransferSpec } from './appearance.mjs'
+import { customRotationSpec } from './custom-rotation.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec, gradientCreateSpec, gradientGeometrySpec, gradientStopMoveSpec, gradientSharedWarningSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -111,6 +112,7 @@ export const specs = [
   fillInspectorSpec,
   pathTangentSpec,
   appearanceTransferSpec,
+  customRotationSpec,
   gradientStopEditSpec,
   gradientOffsetInspectorSpec,
   gradientCreateSpec,

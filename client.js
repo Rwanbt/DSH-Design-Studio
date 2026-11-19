@@ -1022,6 +1022,7 @@ window.__ModuleLoader__.load({
       const [snapToGrid,setSnapToGrid]=React.useState(false)
       const [smartGuides,setSmartGuides]=React.useState(true)
       const [gridStep,setGridStep]=React.useState(10)
+      const [relativeRotation,setRelativeRotation]=React.useState('15')
       const [undoStack,setUndoStack]=React.useState([])
       const [redoStack,setRedoStack]=React.useState([])
       // Every value the journal needs, mirrored after the whole state list is
@@ -1870,8 +1871,12 @@ window.__ModuleLoader__.load({
         }finally{setBusy(false)}
       }
       /** Rotate or scale the selected layer about its real rendered centre. */
-      function transformSelected(kind) {
+      function transformSelected(kind,angle=90) {
         if(!selected || busy || reloadRequired || source!==doc?.source) return
+        if(kind==='rotate'&&(!Number.isFinite(angle)||Math.abs(angle)>360||angle===0)) {
+          setError('Angle de rotation refusé : utilisez un nombre non nul entre -360 et 360 degrés.')
+          return
+        }
         const box=handles.find(item=>item.id===selected.id)
         if(!box || !Number.isFinite(box.x) || !box.width) {
           setError('Transformations are unavailable for this layer: its geometry is not addressable')
@@ -1887,7 +1892,7 @@ window.__ModuleLoader__.load({
           {x:rounded(pinv[0]*absolute.x+pinv[2]*absolute.y+pinv[4]),
            y:rounded(pinv[1]*absolute.x+pinv[3]*absolute.y+pinv[5])}
           :{x:rounded(absolute.x),y:rounded(absolute.y)}
-        const operation=kind==='rotate'?{type:'rotate',angle:90,pivot}
+        const operation=kind==='rotate'?{type:'rotate',angle,pivot}
           :kind==='scaleUp'?{type:'scale',sx:1.1,sy:1.1,pivot}
             :{type:'scale',sx:1/1.1,sy:1/1.1,pivot}
         return save({kind:'svg-transform',id:selected.id,operation})
@@ -3634,6 +3639,20 @@ window.__ModuleLoader__.load({
         h('div',{className:'dsh-studio-ins-row'},
           h('button',{className:'dsh-studio-prop','aria-label':'Rotate selected layer 90 degrees',disabled:!selected||!editable,title:'Rotation 90° autour du centre réel',onClick:()=>void transformSelected('rotate')},'↻ 90°'),
           h('button',{className:'dsh-studio-prop',disabled:true,title:'Verrouillage permanent non implémenté ; Shift pendant redimensionnement'},'◇ Proportions libres')),
+        h('div',{className:'dsh-studio-ins-row',style:{marginTop:8,alignItems:'center'}},
+          h('label',{className:'dsh-studio-prop',style:{flex:1}},
+            h('span',null,'Rotation relative (°)'),
+            h('input',{type:'number',min:-360,max:360,step:1,
+              value:relativeRotation,onChange:e=>setRelativeRotation(e.target.value),
+              'aria-label':'Relative rotation angle',disabled:!selected||!editable,
+              style:{...field,width:82,height:28}})),
+          h('button',{className:'dsh-studio-prop',type:'button',
+            'aria-label':'Apply custom rotation',
+            title:'Appliquer une rotation relative au centre visible · Undo exact',
+            disabled:!selected||!editable||relativeRotation.trim()===''||
+              !Number.isFinite(Number(relativeRotation))||Number(relativeRotation)===0||
+              Math.abs(Number(relativeRotation))>360,
+            onClick:()=>void transformSelected('rotate',Number(relativeRotation))},'Appliquer')),
         selected?.tag==='text'&&h('p',{className:'dsh-studio-hint'},'X/Y : origine de la ligne de base SVG ; taille dans Typographie.'))
       const fillValue=typeof attr.fill==='string'?attr.fill:''
       const hexFill=/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(fillValue)
