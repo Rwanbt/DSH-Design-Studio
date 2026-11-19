@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, reorderHtmlSlide } from '../src/html-presentation.mjs'
+import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, removeHtmlSlide, reorderHtmlSlide } from '../src/html-presentation.mjs'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 
 function apply(source, ...patches) {
@@ -47,4 +47,15 @@ test('duplication preserves markup and remaps internal references in a single re
   assert.match(result.source, /fill="url\(#slide-two-2\)"/)
   assert.equal(apply(result.source, ...result.inverse).source, source)
   assert.throws(() => duplicateHtmlSlide(source, { id: 'slide-one', newId: 'slide-one' }), { code: 'duplicate-id' })
+})
+
+test('removing a slide changes just the selected section and preserves the last slide',()=>{
+  const initial=createHtmlPresentation()
+  const {source}=apply(initial,appendHtmlSlide(initial,{id:'slide-second',title:'Second'}))
+  const patch=removeHtmlSlide(source,{id:'slide-intro'})
+  const {source:remaining}=apply(source,patch)
+  assert.deepEqual(readHtmlPresentation(remaining).slides.map(slide=>slide.id),['slide-second'])
+  assert.equal(remaining.slice(0,patch.start)+patch.before+remaining.slice(patch.start),source)
+  assert.throws(()=>removeHtmlSlide(remaining,{id:'slide-second'}),{code:'last-slide'})
+  assert.throws(()=>removeHtmlSlide(source,{id:'slide-absent'}),{code:'unknown-slide'})
 })

@@ -64,3 +64,7 @@ Le test unitaire vérifie l’ordre, les IDs d’édition, les caractères Unico
 L’import reconnaît aussi les tableaux PowerPoint de premier niveau. Il crée des cellules HTML avec IDs stables, en-têtes et fusions de lignes ou de colonnes. Le test unitaire vérifie une fusion horizontale et des paragraphes échappés. Les scénarios Chromium et Firefox vérifient l’import, l’édition d’une cellule depuis l’aperçu et la préservation des deux fichiers lors d’un second import. L’export PowerPoint a encore un rendu textuel des tableaux.
 
 L’export reconstruit aussi les tableaux HTML sous forme de tableaux PowerPoint natifs. Les cellules et en-têtes restent éditables, les fusions rectangulaires sont conservées et un tableau aux fusions incompatibles est signalé avant téléchargement. La disposition est recalculée en 16:9, avec les objets texte et tableaux empilés dans l’ordre du document. Les styles CSS et la mise en forme riche interne des cellules ne sont pas reproduits. Le test en navigateur inspecte le tableau PowerPoint avec python-pptx, puis le réimporte et modifie une cellule depuis l’aperçu.
+
+## Suppression réversible d’une diapositive
+
+L’action utilise le même verrou et les mêmes préconditions de révision que l’édition HTML native. Elle retire uniquement la section sélectionnée, protège la dernière diapositive et conserve une inversion exacte dans l’historique. Les vérifications couvrent la cible absente, la dernière page, l’annulation et les octets sur disque.

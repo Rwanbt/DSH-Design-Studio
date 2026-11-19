@@ -315,9 +315,21 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
       'PASS', 'print dispatch observed through frame instrumentation, source bytes untouched')
     await slides.getByRole('button', { name: 'Dupliquer la diapositive', exact: true }).click()
     await slides.getByRole('button', { name: 'Diapositive 2', exact: true }).waitFor()
-    if (!(await readFile(deckPath, 'utf8')).includes('id="slide-page-2-1"')) {
+    const duplicated = await readFile(deckPath, 'utf8')
+    if (!duplicated.includes('id="slide-page-2-1"')) {
       throw new Error('Slide copy did not write a distinct title identifier')
     }
+    const remove = slides.getByRole('button', { name: 'Supprimer la diapositive', exact: true })
+    await remove.click()
+    await slides.getByRole('button', { name: 'Diapositive 2', exact: true }).waitFor({state:'detached'})
+    if (!await remove.isDisabled() || (await readFile(deckPath,'utf8')).includes('id="slide-page-2-1"')) {
+      throw new Error('Slide removal did not leave exactly one protected slide')
+    }
+    await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+    await expectDisk(duplicated, 'g0-slides.html')
+    await waitReady('g0-slides.html', duplicated)
+    record('sidebar removes a native slide and undoes exactly',
+      'PASS', 'last slide protected and exact restoration of source')
     await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
     await expectDisk(deck, 'g0-slides.html')
     await waitReady('g0-slides.html', deck)

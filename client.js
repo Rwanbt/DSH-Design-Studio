@@ -921,6 +921,11 @@ window.__ModuleLoader__.load({
               const newId=nextSlideId()
               void save({kind:'slide-duplicate',id:active,newId},'record',()=>select(newId))
             }},'Dupliquer la diapositive'),
+          h('button',{type:'button',style:button,disabled:disabled||index<0||slides.length<=1,
+            onClick:()=>{
+              const neighbor=slides[index+1]??slides[index-1]
+              void save({kind:'slide-remove',id:active},'record',()=>select(neighbor.id))
+            }},'Supprimer la diapositive'),
           h('button',{type:'button',style:button,disabled:disabled||index<=0,
             onClick:()=>void save({kind:'slide-reorder',id:active,direction:'earlier'})},'Déplacer à gauche'),
           h('button',{type:'button',style:button,disabled:disabled||index<0||index===slides.length-1,

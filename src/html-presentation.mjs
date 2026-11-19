@@ -68,6 +68,15 @@ export function appendHtmlSlide(source, { id, title }) {
   return { start:deck.closeStart, end:deck.closeStart, before:'', after }
 }
 
+export function removeHtmlSlide(source, { id }) {
+  const { slides } = readHtmlPresentation(source)
+  const slide = slides.find(entry => entry.id === id)
+  if (!slide) fail('unknown-slide', 'The slide is not part of the presentation')
+  if (slides.length === 1) fail('last-slide', 'A presentation must keep at least one slide')
+  const { start, end } = slide
+  return { start, end, before:source.slice(start,end), after:'' }
+}
+
 export function reorderHtmlSlide(source, { id, direction }) {
   const { slides } = readHtmlPresentation(source)
   const index = slides.findIndex(slide => slide.id === id)
