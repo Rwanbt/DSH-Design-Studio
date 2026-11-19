@@ -101,6 +101,7 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   const batch=await invoke({file:inputs.file,kind:'batch',edits})
   assert.equal(batch.ok,true)
   assert.equal(batch.proposal.patches.length,2)
+  assert.deepEqual(batch.proposal.patchCounts,[1,1])
   assert.equal((await invoke({file:inputs.file,kind:'batch',edits:[edits[0],edits[0]]})).ok,false)
   assert.equal((await invoke({file:inputs.file,kind:'batch',edits:[edits[0],{...edits[1],file:'other.html'}]})).error,'invalid-edit')
   assert.equal(await readFile(join(root,inputs.file),'utf8'),original)

@@ -824,6 +824,21 @@ window.__ModuleLoader__.load({
       const matches=selection && selection.baseHash===active.hash && selection.baseIdentity===active.identity
       const visual=matches&&['svg','html','htm'].includes(active.format)&&active.source.length<=512*1024
       const proposed=visual&&showPreview?sourceAfterPatches(active.source,selection.patches):null
+      const renderPatch=patch=>h('div',{key:patch.start},
+        h('strong',null,'Avant'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.before),
+        h('strong',null,'Après'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.after))
+      function renderDifferences(proposal) {
+        if(proposal.edit.kind!=='batch'||!Array.isArray(proposal.patchCounts)) return proposal.patches.map(renderPatch)
+        let offset=0
+        return proposal.edit.edits.map((edit,index)=>{
+          const count=proposal.patchCounts[index]
+          const patches=proposal.patches.slice(offset,offset+count)
+          offset+=count
+          const target=edit.id||edit.gradientId||edit.selector
+          return h('section',{key:index,'aria-label':'Modification '+(index+1)},
+            h('h4',null,edit.kind+(target?' · '+target:'')),patches.map(renderPatch))
+        })
+      }
       const renderPreview=(title,content)=>h('div',{key:title,style:{minWidth:0,display:'grid',gap:4}},
         h('strong',null,title),
         h('iframe',{title,sandbox:'',referrerPolicy:'no-referrer',tabIndex:-1,
@@ -841,9 +856,7 @@ window.__ModuleLoader__.load({
           selection&&h('section',{'aria-label':'Comparaison de la proposition'},
             h('p',null,active.file),
             h('small',null,'Appel DSH '+selection.callId),
-            selection.patches.map(patch=>h('div',{key:patch.start},
-              h('strong',null,'Avant'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.before),
-              h('strong',null,'Après'),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}},patch.after))),
+            renderDifferences(selection),
             visual&&h('button',{type:'button',style:button,'aria-expanded':showPreview,
               onClick:()=>setShowPreview(value=>!value)},showPreview?'Masquer l’aperçu comparatif':'Afficher l’aperçu comparatif'),
             proposed!==null&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:8}},

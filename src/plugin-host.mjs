@@ -442,7 +442,7 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         }
         let patches; let createdId=null
         if (batch) {
-          patches=planReviewableBatch(doc,params.edits)
+          patches=planReviewableBatch(doc,params.edits).flat()
         } else if (params.kind==='svg-add-shape' && doc.format==='svg') {
           const created=planShapeAddition(doc.source,params)
           patches=[created.patch];createdId=created.id

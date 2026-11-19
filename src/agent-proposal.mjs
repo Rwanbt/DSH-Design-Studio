@@ -122,9 +122,10 @@ export function registerAgentProposal(ctx, inbox) {
         signal.throwIfAborted()
         const document = await createNativeFileStore(root).read(edit.file)
         signal.throwIfAborted()
-        const patches=edit.kind==='batch'?planReviewableBatch(document,edit.edits):planReviewableEdit(document,edit)
-        const preview = previewNativeEdit(document,patches)
-        const proposal = { version: 1, edit, ...preview }
+        const groups=edit.kind==='batch'?planReviewableBatch(document,edit.edits):null
+        const preview = previewNativeEdit(document,groups?groups.flat():planReviewableEdit(document,edit))
+        const proposal = { version: 1, edit, ...preview,
+          ...(groups?{patchCounts:groups.map(group=>group.length)}:{}) }
         const output = JSON.stringify({ ok: true, proposal, callId })
         if (Buffer.byteLength(output) > maxProposalBytes) {
           return JSON.stringify({ ok: false, error: 'proposal-too-large' })

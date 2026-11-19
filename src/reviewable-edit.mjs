@@ -66,7 +66,7 @@ export function planReviewableEdit(document, edit) {
 }
 
 export function planReviewableBatch(document,edits) {
-  return edits.flatMap(edit=>planReviewableEdit(document,edit))
+  return edits.map(edit=>planReviewableEdit(document,edit))
 }
 
 export function previewNativeEdit(document, patches) {
