@@ -909,6 +909,10 @@ window.__ModuleLoader__.load({
       const [clipboard,setClipboard] = React.useState(null)
       const [appearanceClipboard,setAppearanceClipboard] = React.useState(null)
       const [layerSearch,setLayerSearch] = React.useState('')
+      // Rendering thousands of React buttons at once overflows Firefox's
+      // reconciliation stack. Keep source nodes complete; page only the
+      // navigation controls. Search still addresses every layer.
+      const [layerVisibleLimit,setLayerVisibleLimit] = React.useState(250)
       const [previewMode,setPreviewMode] = React.useState(false)
       const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
       const [creating,setCreating] = React.useState(false)
@@ -2903,6 +2907,9 @@ window.__ModuleLoader__.load({
       const alignmentHint=alignNotice || (gestureBlockedReasons.length
         ? gestureBlockedReasons.join(' ')
         : 'Six alignements, deux distributions, une seule écriture · Undo exact.')
+      const filteredSvgLayerNodes=nodes.filter(n=>!layerSearch||
+        (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase()))
+      const renderedSvgLayerNodes=filteredSvgLayerNodes.slice(0,layerVisibleLimit)
       const selected=nodes.find(n=>n.id===active)
       const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
       const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
@@ -4285,7 +4292,7 @@ window.__ModuleLoader__.load({
                 title:'Non implémenté dans cette version'},'Composants')),
             h('input',{className:'dsh-studio-layer-search',value:layerSearch,
               'aria-label':'Filter layers',placeholder:'Rechercher des calques',
-              onChange:e=>setLayerSearch(e.target.value)}),
+              onChange:e=>{setLayerSearch(e.target.value);setLayerVisibleLimit(250)}}),
             h('div',{className:'dsh-studio-group'},'Pages'),
             h('div',{className:'dsh-studio-item',style:{margin:'0 7px'}},h('span',{className:'dsh-studio-mini'},'▦'),h('span',{className:'dsh-studio-label'},doc?.file||'Nouveau document')),
             h('div',{className:'dsh-studio-group',style:{marginTop:9}},'Calques',h('span',{style:{float:'right',letterSpacing:0}},nodes.length)),
@@ -4314,8 +4321,7 @@ window.__ModuleLoader__.load({
                   style:{...button,textAlign:'left',background:htmlActive===n.id?'#494034':'transparent'},
                   onClick:()=>chooseHtmlElement(n.id)},n.tag+' #'+n.id+(n.editable?'':' · lecture seule'))):
                   h('small',null,'HTML visuel : ajoutez des id uniques aux éléments à éditer.')):
-                (nodes.length?nodes.filter(n=>!layerSearch||
-                    (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase())).map(n=>renaming?.id===n.id
+                (nodes.length?renderedSvgLayerNodes.map(n=>renaming?.id===n.id
                   // Inline rename: a real input, never a fake button. Enter asks
                   // the Host for one exact patch; Escape closes without writing.
                   ? h('div',{key:n.id,className:'dsh-studio-item dsh-studio-renaming','data-layer-id':n.id,
@@ -4378,6 +4384,13 @@ window.__ModuleLoader__.load({
                    h('span',{className:'dsh-studio-eye','aria-hidden':'true'},n.locked?'◇':n.hidden?'◌':'◉'),
                    h('span',{className:'dsh-studio-grip','aria-hidden':'true'},'⠿'))):
                   h('small',null,'Aucun nœud SVG adressable (un id unique est requis).'))),
+            doc?.format==='svg'&&filteredSvgLayerNodes.length>renderedSvgLayerNodes.length&&
+              h('button',{type:'button',className:'dsh-studio-item',
+                'aria-label':'Afficher plus de calques',
+                'data-layer-pagination':'',
+                title:'Afficher 250 calques supplémentaires ; filtrez pour rechercher dans tous les calques.',
+                onClick:()=>setLayerVisibleLimit(value=>Math.min(filteredSvgLayerNodes.length,value+250))},
+                'Afficher '+renderedSvgLayerNodes.length+' / '+filteredSvgLayerNodes.length+' calques · Voir plus'),
             layerDrag&&h('div',{className:'dsh-studio-drop-status',role:'status','data-layer-drop-status':'',
               'data-invalid':layerDrag.plan&&!layerDrag.plan.ok&&!layerDrag.plan.same?'true':'false'},
               layerDrag.plan?.same?'Même ligne : aucun déplacement.'
