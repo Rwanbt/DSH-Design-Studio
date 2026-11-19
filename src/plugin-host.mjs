@@ -27,7 +27,7 @@ export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
 const MAX_BODY = 9 * 1024 * 1024
-const PREVIEWABLE_EDITS = new Set(['svg-text','svg-attribute','html-text'])
+const PREVIEWABLE_EDITS = new Set(['svg-text','svg-attribute','html-text','css-rule'])
 
 /** Typed route failure: the HTTP status is derived from `code`, never invented. */
 function failure(code, message, cause) {
@@ -284,8 +284,13 @@ export function createRouteHandler(ctx) {
       if (req.method === 'POST' && (endpoint === '/apply' || endpoint === '/preview')) {
         const preview = endpoint === '/preview'
         const params=await bodyJson(req)
-        if (preview && !PREVIEWABLE_EDITS.has(params.kind)) {
+        const reviewed = Object.hasOwn(params,'expectedProposedHash')
+        if ((preview || reviewed) && !PREVIEWABLE_EDITS.has(params.kind)) {
           return reply(res,400,{ok:false,error:'unsupported-operation'})
+        }
+        if (reviewed && (preview || typeof params.expectedProposedHash !== 'string' ||
+            !/^[a-f0-9]{64}$/.test(params.expectedProposedHash))) {
+          return reply(res,400,{ok:false,error:'invalid-proposal-hash'})
         }
         if (typeof params.baseIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(params.baseIdentity)) {
           return reply(res,428,{ok:false,error:'missing-revision',
@@ -471,14 +476,20 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
-        if (preview) {
+        if (preview || reviewed) {
           const result=applyNativePatches({source:doc.source,format:doc.format,baseHash:doc.hash,patches})
           if (!result.ok) throw failure(result.code,result.message)
           if (Buffer.byteLength(result.source) > MAX_NATIVE_FILE_BYTES) {
             throw failure('too-large','Edited file exceeds 8 MiB')
           }
-          return reply(res,200,{ok:true,patches,baseHash:doc.hash,baseIdentity:doc.identity,
-            proposedHash:result.hash,changed:result.changed})
+          if (preview) {
+            return reply(res,200,{ok:true,patches,baseHash:doc.hash,baseIdentity:doc.identity,
+              proposedHash:result.hash,changed:result.changed})
+          }
+          if (result.hash !== params.expectedProposedHash) {
+            return reply(res,409,{ok:false,error:'proposal-changed',
+              message:'The edit no longer matches the preview; review it again before applying'})
+          }
         }
         const result=await store.apply(params.file,{baseHash:params.baseHash,baseIdentity:params.baseIdentity,patches})
         return reply(res,200,{ok:true,result,patches,createdId})

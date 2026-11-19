@@ -317,7 +317,19 @@ async function main() {
           const previewBody = await preview.json().catch(() => null)
           const previewUnchanged = (await readFile(file)).equals(original)
 
-          const applied = await context.request.post(origin + '/design-studio-native/apply', { data })
+          const expectedProposedHash = previewBody?.proposedHash ?? null
+          const mismatch = await context.request.post(origin + '/design-studio-native/apply', {
+            data: { ...data, expectedProposedHash, value: '26' },
+          })
+          const mismatchBody = await mismatch.json()
+          const mismatchUnchanged = (await readFile(file)).equals(original)
+          record('refuse a changed reviewed edit through the real Host',
+            mismatch.status() === 409 && mismatchBody.error === 'proposal-changed' && mismatchUnchanged ? 'PASS' : 'FAIL',
+            `HTTP ${mismatch.status()} unchanged=${mismatchUnchanged}`)
+
+          const applied = await context.request.post(origin + '/design-studio-native/apply', {
+            data: { ...data, expectedProposedHash },
+          })
           const appliedBody = await applied.json().catch(() => null)
           const onDisk = await readFile(file, 'utf8')
           const previewMatchesApply = preview.status() === 200 && previewBody?.changed === true &&

@@ -652,3 +652,35 @@ test('preview rejects raw replacement and requires the reopened file identity', 
   assert.equal(wrongIdentity.body.error, 'stale-revision')
   assert.equal(await host.read('scene.svg'), SVG)
 })
+
+test('reviewed CSS changes commit only the displayed result and remain reversible', async (context) => {
+  const host = await mount()
+  context.after(host.close)
+  const original = '.hero { color: #112233; }\n'
+  await host.write('theme.css', original)
+  const request = { sessionId: 's1', ...host.revision(await host.open('theme.css')),
+    kind: 'css-rule', selector: '.hero', property: 'color', value: '#abcdef' }
+  const preview = await host.call('POST', '/design-studio-native/preview', request)
+  assert.equal(preview.status, 200, JSON.stringify(preview.body))
+  const reviewed = { ...request, expectedProposedHash: preview.body.proposedHash }
+  const tampered = await host.apply({ ...reviewed, value: '#123456' })
+  assert.equal(tampered.status, 409)
+  assert.equal(tampered.body.error, 'proposal-changed')
+  const malformed = await host.apply({ ...reviewed, expectedProposedHash: null })
+  assert.equal(malformed.body.error, 'invalid-proposal-hash')
+  const raw = await host.apply({ ...reviewed, kind: 'replace-source', source: 'replacement' })
+  assert.equal(raw.body.error, 'unsupported-operation')
+  assert.equal(await host.read('theme.css'), original)
+
+  const applied = await host.apply(reviewed)
+  assert.equal(applied.status, 200, JSON.stringify(applied.body))
+  assert.equal(applied.body.result.hash, preview.body.proposedHash)
+  assert.equal(await host.read('theme.css'), original.replace('#112233', '#abcdef'))
+  const replayed = await host.apply(reviewed)
+  assert.equal(replayed.body.error, 'stale-revision')
+
+  const undo = await host.apply({ ...host.revision(await host.open('theme.css')),
+    kind: 'patches', patches: applied.body.result.inverse })
+  assert.equal(undo.status, 200)
+  assert.equal(await host.read('theme.css'), original)
+})

@@ -29,3 +29,14 @@ An agent tool binding must constrain which session and file it can read.
 Before wiring model-driven commits, the workbench needs a review surface
 that handles live drafts, approval and provenance. The preview route alone
 provides no model connection or agent write authority.
+
+## Binding application to the displayed result
+
+CSS declaration edits (`css-rule`) also support preview. A review client can
+send the returned `proposedHash` as `expectedProposedHash` to the typed
+`/apply` endpoint. The Host rebuilds the patch from the typed request, checks
+its resulting source hash, then delegates to the existing locked,
+revision-checked write. A changed proposal is rejected even when the file
+revision has not changed. A proposal hash is a content precondition. The
+reviewing client is responsible for obtaining human approval and must never
+delegate its apply operation to an agent.
