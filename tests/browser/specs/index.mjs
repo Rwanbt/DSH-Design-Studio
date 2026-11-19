@@ -40,7 +40,7 @@ import { groupKeyboardNudgeSpec } from './group-keyboard.mjs'
 import { transformedKeyboardNudgeSpec } from './transformed-keyboard.mjs'
 import { multiNudgeSpec } from './multi-nudge.mjs'
 import { selectAllArtboardSpec } from './select-all.mjs'
-import { marqueeSelectionSpec } from './marquee.mjs'
+import { marqueeSelectionSpec, marqueeModifierSpec } from './marquee.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec, gradientCreateSpec, gradientGeometrySpec, gradientStopMoveSpec, gradientSharedWarningSpec } from './gradient.mjs'
 import { graphiteReferenceSpec, graphiteWelcomeSpec } from './graphite-reference.mjs'
 import { graphiteEllipseSpec, graphiteExampleSpec } from './graphite-interactions.mjs'
@@ -125,6 +125,7 @@ export const specs = [
   multiNudgeSpec,
   selectAllArtboardSpec,
   marqueeSelectionSpec,
+  marqueeModifierSpec,
   gradientStopEditSpec,
   gradientOffsetInspectorSpec,
   gradientCreateSpec,
