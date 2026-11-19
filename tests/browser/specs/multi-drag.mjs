@@ -23,15 +23,20 @@ export const multiDragSpec={
     const before=applies()
     await page.mouse.move(start.x,start.y)
     await page.mouse.down()
+    await page.keyboard.down('Alt')
     await page.mouse.move(start.x+dx,start.y,{steps:8})
     assert.equal(applies(),before,'drag preview never writes')
     assert.equal(await harness.read('multi-drag.svg'),ORIGINAL,
       'native document remains unchanged until pointer release')
     await page.mouse.up()
+    await page.keyboard.up('Alt')
+    const translations=text=>Array.from(text.matchAll(/transform="matrix\(1,0,0,1,([\d.]+),0\)"/g),
+      match=>Number(match[1]))
     const result=await waitForDisk(harness,'multi-drag.svg',
-      text=>(text.match(/transform="matrix\(1,0,0,1,10,0\)"/g)||[]).length===2,
-      {label:'multi drag saved'})
-    assert.equal((result.match(/transform="matrix\(1,0,0,1,10,0\)"/g)||[]).length,2)
+      text=>translations(text).length===2,{label:'multi drag saved'})
+    const [first,second]=translations(result)
+    assert.equal(first,second,'the same translation moves both selected shapes')
+    assert.ok(Math.abs(first-10)<=200/artboard.width,'translation matches the pointer within one CSS pixel')
     assert.equal(applies(),before+1,'multi drag is exactly one Host write')
     await page.waitForFunction(()=>document.querySelector('[aria-label="Undo saved edit"]')?.disabled===false)
     await page.getByRole('button',{name:'Undo saved edit'}).click()
