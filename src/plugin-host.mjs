@@ -6,7 +6,6 @@ import { listSvgPathModels, svgPathPointPatches, svgPathTopologyPatch, svgPenCon
 import { svgFragmentInsertPatch } from './svg-fragment.mjs'
 import { listSvgGradients, svgGradientStopPatch, svgGradientStopInsertPatch, svgGradientStopRemovePatch, svgGradientGeometryPatch, svgGradientStopMovePatches } from './svg-gradient.mjs'
 import { planSvgGradientCreation } from './svg-gradient-create.mjs'
-import { svgOrderPatch } from './svg-order.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
 import { listSvgTextNodes } from './svg-text.mjs'
@@ -15,7 +14,7 @@ import { listWorkspaceDocuments } from './workspace-files.mjs'
 import { listHtmlVisualElements } from './html-visual.mjs'
 import { svgGroupingPatch } from './svg-groups.mjs'
 import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
-import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
+import { svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
 import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
@@ -446,11 +445,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           const positioned=Object.hasOwn(params,'x') || Object.hasOwn(params,'y')
           const created=svgShapeInsertPatch(doc.source,params.shape,positioned?{x:params.x,y:params.y}:null)
           patches=[created.patch];createdId=created.id
-        } else if (params.kind === 'svg-order') {
-          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
-          // Document order is paint order in SVG: moving one exact span is the
-          // whole implementation, so Undo restores the original bytes.
-          patches=[svgOrderPatch(doc.source,{id:params.id,direction:params.direction}).patch]
         } else if (params.kind === 'svg-paste') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           // The clipboard payload is re-validated here: the renderer is not a
@@ -557,11 +551,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           })
           patches=operation.patches
           createdId=operation.id||null
-        } else if (params.kind === 'svg-visibility') {
-          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[svgVisibilityPatch(doc.source,{
-            id:params.id,property:params.property,value:params.value===undefined?null:params.value,
-          })]
         } else if (params.kind === 'svg-lock') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgLockPatch(doc.source,{id:params.id,locked:params.locked===true})]

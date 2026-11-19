@@ -97,6 +97,17 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   assert.equal((await invoke({file:inputs.file,kind:'html-attribute',id:'hero',attribute:'onclick',value:'run()'})).ok,false)
   assert.equal(await readFile(join(root,inputs.file),'utf8'),original)
 
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect id="a"/><rect id="b"/></svg>'
+  await writeFile(join(root,'shapes.svg'),svg)
+  const order = await invoke({file:'shapes.svg',kind:'svg-order',id:'a',direction:'front'})
+  assert.equal(order.ok,true)
+  assert.match(order.proposal.patches[0].after,/id="b".*id="a"/)
+  const visibility = await invoke({file:'shapes.svg',kind:'svg-visibility',id:'a',property:'display',value:'none'})
+  assert.equal(visibility.ok,true)
+  assert.match(visibility.proposal.patches[0].after,/display="none"/)
+  assert.equal((await invoke({file:'shapes.svg',kind:'svg-order',id:'a',direction:'sideways'})).error,'invalid-target')
+  assert.equal(await readFile(join(root,'shapes.svg'),'utf8'),svg)
+
   const deck = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>First</h1></section>\n'+
     '<section id="slide-second"><h1>Second</h1></section></main>'
   await writeFile(join(root,'deck.html'),deck)

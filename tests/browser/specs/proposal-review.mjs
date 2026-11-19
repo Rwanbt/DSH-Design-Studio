@@ -107,3 +107,26 @@ export const cssMediaProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const svgOrderProposalReviewSpec = {
+  name: 'proposals: review and undo SVG layer order',
+  async run({ page, harness, assert }) {
+    const file = 'layers.svg'
+    const original = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'+
+      '<rect id="back" width="70" height="70" fill="blue"/><rect id="front" width="60" height="60" fill="red"/></svg>'
+    await harness.write(file,original)
+    const result=await harness.propose({file,kind:'svg-order',id:'back',direction:'front'})
+    assert.equal(result.ok,true)
+    await openWorkspaceFile(page,file,{expect:'svg'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*svg-order/}).click()
+    assert.equal(await harness.read(file),original)
+    await page.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const shapes=page.frameLocator('iframe[title="Isolated SVG preview"]').locator('svg > rect')
+    await shapes.last().and(page.frameLocator('iframe[title="Isolated SVG preview"]').locator('#back')).waitFor()
+    assert.match(await harness.read(file),/id="front".*id="back"/)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await shapes.last().and(page.frameLocator('iframe[title="Isolated SVG preview"]').locator('#front')).waitFor()
+    assert.equal(await harness.read(file),original)
+  },
+}
