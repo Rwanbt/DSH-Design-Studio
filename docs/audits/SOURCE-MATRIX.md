@@ -54,3 +54,9 @@ Le plugin embarque désormais un module interne indépendant `src/html-responsiv
 ## Alpha.20 — Préréglages de layout et dock compact (17 novembre 2026)
 
 Les contrôles Flex/Grid et la navigation compacte sont implémentés directement dans le client DSH natif, sans intégration de bibliothèque visuelle tierce. Le stockage conserve sa logique de patches exacts HTML/CSS, et les colonnes Grid sont limitées à des préréglages strictement validés dans `src/html-visual.mjs`. La CI [run 43993385351](https://github.com/Rwanbt/DSH-Design-Studio/actions/runs/43993385351) sur le SHA `a88f340b8098cedef1a3e8847f37f320277aa237`, commande `npm run check` (Node 22), rapporte **269 PASS / 0 FAIL / 0 SKIP**. Il s'agit d'interactions simulées, **pas** d'une preuve de rendu/appareil réel. Architecture : [ADR-020](../adr/ADR-020-LAYOUT-PRESETS-AND-COMPACT-PANELS.md). **NOT_RUN :** DSH réel, rendu mobile, navigation clavier/lecteur d'écran, audit sécurité iframe et CSS complexe. G0/G1/G2/G4 ouverts.
+
+## Import du texte PowerPoint
+
+Le mode d’import de `src/presentation-pptx.py` utilise le même moteur optionnel python-pptx que l’export, sans ajouter de dépendance npm. Le Host lit un fichier PPTX du workspace, borne la taille de l’archive et crée une présentation HTML distincte par écriture exclusive. Les titres et paragraphes des cadres de texte de premier niveau sont éditables. Les tableaux, images, groupes, graphiques et la mise en page PowerPoint restent à couvrir.
+
+Le test unitaire vérifie l’ordre, les IDs d’édition, les caractères Unicode et l’échappement HTML. Chromium et Firefox ont exécuté le parcours d’export et de réimport en mode headless. Le vrai Host DSH Web a répondu HTTP 201 au premier import et HTTP 409 au second, avec le PPTX source préservé. DSH Desktop et le tour d’assistant avec identifiants étaient désactivés pour cette validation.

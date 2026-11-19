@@ -2009,7 +2009,7 @@ window.__ModuleLoader__.load({
       async function loadWorkspaceFiles() {
         if(!scopeReady) return false
         try {
-          const response=await request('/files?'+scopeQuery+(canOpenPdf?'&includePdf=1':''))
+          const response=await request('/files?'+scopeQuery+'&includePptx=1'+(canOpenPdf?'&includePdf=1':''))
           setWorkspaceFiles(response.files||[])
           setFilesTruncated(!!response.truncated)
           return true
@@ -2026,6 +2026,21 @@ window.__ModuleLoader__.load({
       },[scopeKey,canOpenPdf])
 
       async function openPickedFile(picked) {
+        if (/\.pptx$/i.test(picked)) {
+          if (busy || !workspaceFiles.some(item=>item.format==='pptx'&&item.path===picked)) return
+          setBusy(true);setError('')
+          try {
+            const imported=await request('/presentation/import-pptx',{method:'POST',
+              headers:{'content-type':'application/json'},body:JSON.stringify({...scopeBody,file:picked})})
+            await loadWorkspaceFiles()
+            if(await openInTab(imported.file)) setShowFiles(false)
+            setNotice('Texte PowerPoint importé dans '+imported.file+
+              (imported.omitted ? ' · '+imported.omitted+' élément(s) sans cadre de texte ignoré(s)' : ''))
+          } catch(error) {
+            setError('Impossible d’importer le PowerPoint : '+String(error.message))
+          } finally {setBusy(false)}
+          return
+        }
         if (/\.pdf$/i.test(picked)) {
           if (!canOpenPdf || !workspaceFiles.some(file=>file.format==='pdf'&&file.path===picked)) {
             setError('Actualisez les fichiers et sélectionnez un PDF de cette conversation.')
@@ -4737,17 +4752,17 @@ window.__ModuleLoader__.load({
               h('div',{key:item.path,role:'listitem',
                 style:{display:'flex',gap:4,alignItems:'center',background:'#2c2e31',border:'1px solid #43454a',borderRadius:6,padding:'2px 4px'}},
                 h('button',{style:{...button,flex:1,minWidth:0,textAlign:'left',overflowWrap:'anywhere',background:'transparent',border:0},
-                  'aria-label':'Open file '+item.path,disabled:busy,
+                  'aria-label':(item.format==='pptx'?'Importer le texte PowerPoint de ':'Open file ')+item.path,disabled:busy,
                   title:item.path+' · '+item.size+' bytes',
                   onClick:()=>void openPickedFile(item.path)},
                   h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
-                  item.path),
+                  item.path+(item.format==='pptx'?' · Importer le texte':'')),
                 item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'copy',file:item.path})},'Assembler les pages'),
                 item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'note',file:item.path})},'Ajouter une note'),
-                item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
+                !['pdf','pptx'].includes(item.format)&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
-                item.format!=='pdf'&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Delete '+item.path,
+                !['pdf','pptx'].includes(item.format)&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Delete '+item.path,
                   title:'Supprimer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'delete',file:item.path})}},'Supprimer')))),
           // Deleting is not undoable, so the confirmation names the exact path
@@ -5061,8 +5076,8 @@ window.__ModuleLoader__.load({
                   .map(item=>{
                     const open=h('button',{key:item.path,type:'button',
                       style:{...button,textAlign:'left',overflowWrap:'anywhere'},
-                      'aria-label':'Open file '+item.path,disabled:busy,
-                      onClick:()=>void openPickedFile(item.path)},item.path)
+                      'aria-label':(item.format==='pptx'?'Importer le texte PowerPoint de ':'Open file ')+item.path,disabled:busy,
+                      onClick:()=>void openPickedFile(item.path)},item.path+(item.format==='pptx'?' · Importer le texte':''))
                     return item.format==='pdf'
                       ?h('div',{key:item.path,style:{display:'grid',gap:4}},open,
                         h('button',{type:'button',style:button,

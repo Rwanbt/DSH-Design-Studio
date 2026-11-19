@@ -1,7 +1,9 @@
-"""Export semantic HTML slide text as editable PowerPoint text boxes."""
+"""Convert between HTML slides and editable PowerPoint text."""
 import json
 import sys
+from html import escape
 from html.parser import HTMLParser
+from zipfile import BadZipFile, ZipFile
 
 try:
     from pptx import Presentation
@@ -60,7 +62,7 @@ class SlideText(HTMLParser):
             self.buffer.append(data)
 
 
-def main():
+def export_deck():
     with open("slides.json", encoding="utf-8") as file:
         fragments = json.load(file)
     deck = Presentation()
@@ -87,5 +89,53 @@ def main():
     deck.save("output.pptx")
 
 
+def import_deck():
+    try:
+        with ZipFile("input.pptx") as archive:
+            entries = archive.infolist()
+            names = {entry.filename for entry in entries}
+            if (len(entries) > 2048 or len(entries) != len(names)
+                    or sum(entry.file_size for entry in entries) > 32 * 1024 * 1024
+                    or "ppt/presentation.xml" not in names
+                    or any(entry.flag_bits & 1 for entry in entries)):
+                sys.exit(11)
+        deck = Presentation("input.pptx")
+        if not 1 <= len(deck.slides) <= 32:
+            sys.exit(11)
+        slides = []
+        omitted = 0
+        for number, slide in enumerate(deck.slides, 1):
+            slide_id = f"slide-page-{number}"
+            blocks = []
+            title = slide.shapes.title
+            shapes = list(slide.shapes)
+            ordered = ([title] if title is not None else []) + [
+                shape for shape in shapes if title is None or shape.shape_id != title.shape_id]
+            for shape in ordered:
+                if not shape.has_text_frame:
+                    omitted += 1
+                    continue
+                for paragraph in shape.text_frame.paragraphs:
+                    value = " ".join(paragraph.text.split())
+                    if not value:
+                        continue
+                    tag = "h1" if shape is title and not blocks else "p"
+                    block_id = f"{slide_id}-text-{len(blocks) + 1}"
+                    blocks.append(f'<{tag} id="{block_id}">{escape(value)}</{tag}>')
+                    if len(blocks) > 200:
+                        sys.exit(11)
+            slides.append(f'<section id="{slide_id}">\n' + "\n".join(blocks) + "\n</section>")
+        source = ('<!doctype html>\n<html><head><meta charset="utf-8"><title>Presentation</title></head>'
+                  '<body><main id="dsh-deck" data-dsh-deck="1">\n'
+                  + "\n".join(slides) + '\n</main></body></html>\n')
+        with open("slides.json", "w", encoding="utf-8") as file:
+            json.dump({"source": source, "omitted": omitted}, file, ensure_ascii=False)
+    except (BadZipFile, KeyError, ValueError, TypeError, OSError):
+        sys.exit(11)
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "import":
+        import_deck()
+    else:
+        export_deck()

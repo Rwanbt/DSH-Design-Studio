@@ -1,4 +1,4 @@
-import { openWorkspaceFile, waitForEditorSource } from './helpers.mjs'
+import { openFileMenu, openWorkspaceFile, waitForEditorSource } from './helpers.mjs'
 
 export const presentationSpec = {
   name: 'presentations: create native deck, add, navigate, reorder and undo slides',
@@ -76,9 +76,12 @@ export const presentationPrintSpec = {
 }
 
 export const presentationPptxSpec = {
-  name: 'presentations: download a PPTX with editable text from the saved deck',
+  name: 'presentations: export and reimport editable PPTX text without overwriting',
+  allowConsoleErrors: 'refusals',
   async run({ page, harness, assert }) {
-    const { spawnSync, execFileSync } = await import('node:child_process')
+    const { spawnSync, execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const { readFile } = await import('node:fs/promises')
     const python = process.env.DSH_PPTX_PYTHON || 'python3'
     const original = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>Titre éditable</h1></section></main>'
     await harness.write('deck.html',original)
@@ -88,7 +91,23 @@ export const presentationPptxSpec = {
       const [download]=await Promise.all([page.waitForEvent('download'),button.click()])
       assert.equal(download.suggestedFilename(),'deck.pptx')
       const inspect='import sys; from pptx import Presentation; print(Presentation(sys.argv[1]).slides[0].shapes[0].text)'
-      assert.equal(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'}).trim(),'Titre éditable')
+      const downloaded = await download.path()
+      assert.equal((await promisify(execFile)(python,['-I','-c',inspect,downloaded])).stdout.trim(),'Titre éditable')
+      const bytes = await readFile(downloaded)
+      await harness.write('incoming.pptx',bytes)
+      await openFileMenu(page)
+      await page.getByRole('button',{name:'Browse workspace design files'}).click()
+      await page.getByRole('button',{name:'Importer le texte PowerPoint de incoming.pptx'}).click()
+      await page.getByRole('button',{name:'Diapositive 1',exact:true}).waitFor()
+      await page.getByText('Texte PowerPoint importé dans incoming.imported.html').waitFor()
+      const imported = await harness.read('incoming.imported.html')
+      assert.match(imported, /<p id="slide-page-1-text-1">Titre éditable<\/p>/)
+      assert.deepEqual(await readFile(harness.file('incoming.pptx')),bytes)
+      await openFileMenu(page)
+      await page.getByRole('button',{name:'Browse workspace design files'}).click()
+      await page.getByRole('button',{name:'Importer le texte PowerPoint de incoming.pptx'}).click()
+      await page.getByRole('alert').waitFor()
+      assert.equal(await harness.read('incoming.imported.html'),imported)
     } else {
       await button.click()
       await page.getByRole('alert').waitFor()

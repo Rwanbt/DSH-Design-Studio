@@ -394,6 +394,22 @@ async function main() {
         record('export editable presentation text through the real Host',
           pptxOk ? 'PASS' : pptxUnavailable ? 'NOT_RUN' : 'FAIL', `HTTP ${pptx.status()}, source preserved=${pptxPreserved}`)
 
+        if (pptxOk) {
+          const file = 'g0-import.pptx'
+          await writeFile(path.join(workspace,file),pptxBytes)
+          const endpoint = origin + '/design-studio-native/presentation/import-pptx'
+          const result = await context.request.post(endpoint,{data:{sessionId,file}})
+          const imported = (await result.json()).file
+          const content = imported === 'g0-import.imported.html'
+            ? await readFile(path.join(workspace,imported),'utf8') : ''
+          const repeated = await context.request.post(endpoint,{data:{sessionId,file}})
+          const preserved = (await readFile(path.join(workspace,file))).equals(pptxBytes)
+          record('import editable presentation text through the real Host',
+            result.status() === 201 && /id="slide-page-1-text-1">Real DSH<\/p>/.test(content)
+              && repeated.status() === 409 && preserved ? 'PASS' : 'FAIL',
+            `HTTP ${result.status()}, repeat ${repeated.status()}, source preserved=${preserved}`)
+        }
+
         // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +
           encodeURIComponent(sessionId) + '&file=g0-art.svg')

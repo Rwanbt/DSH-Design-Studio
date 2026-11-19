@@ -35,7 +35,7 @@ import { createPdfAnnotator } from './pdf-annotation.mjs'
 
 import { createPdfPagePreview } from './pdf-page-preview.mjs'
 
-import { createPptxExporter } from './presentation-pptx.mjs'
+import { createPptxExporter, createPptxImporter } from './presentation-pptx.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
@@ -160,6 +160,7 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   const copyPdfPages = createPdfPageCopier()
   const annotatePdf = createPdfAnnotator()
   const exportPptx = createPptxExporter()
+  const importPptx = createPptxImporter()
   const previewPdf = createPdfPagePreview()
   return async (req, res) => {
     try {
@@ -190,9 +191,18 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           workspaceId:url.searchParams.get('workspaceId'),
         })
         const result = await listWorkspaceDocuments(root,{
+          includePptx:url.searchParams.get('includePptx')==='1',
           includePdf:Boolean(url.searchParams.get('sessionId')) && url.searchParams.get('includePdf')==='1',
         })
         return reply(res,200,{ok:true,...result})
+      }
+      if (req.method === 'POST' && endpoint === '/presentation/import-pptx') {
+        const params = await bodyJson(req)
+        const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const input = await store.readPptx(params.file)
+        const {source, omitted} = await importPptx(input.source)
+        const created = await store.create(input.file.replace(/\.pptx$/i,'.imported.html'),{source})
+        return reply(res,201,{ok:true,file:created.file,omitted})
       }
       if (req.method === 'POST' && endpoint === '/presentation/pptx') {
         const params = await bodyJson(req)
