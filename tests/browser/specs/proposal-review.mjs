@@ -33,3 +33,28 @@ export const proposalReviewSpec = {
     assert.equal(await harness.read(file), original)
   },
 }
+
+export const slideProposalReviewSpec = {
+  name: 'proposals: review, apply and undo a presentation structural edit',
+  async run({ page, harness, assert }) {
+    const file = 'slides.html'
+    const deck = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>First</h1></section></main>'
+    await harness.write(file,deck)
+    const proposed = await harness.propose({file,kind:'slide-add',id:'slide-next',title:'Proposed slide'})
+    assert.equal(proposed.ok,true)
+    const [patch] = proposed.proposal.patches
+    const expected = deck.slice(0,patch.start)+patch.after+deck.slice(patch.end)
+    await openWorkspaceFile(page,file,{expect:'html'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*slide-add/}).click()
+    const review = page.getByRole('region',{name:'Comparaison de la proposition'})
+    await review.getByText(/Proposed slide/).waitFor()
+    assert.equal(await harness.read(file),deck)
+    await review.getByRole('button',{name:'Appliquer la proposition'}).click()
+    await page.getByRole('button',{name:'Diapositive 2',exact:true}).waitFor()
+    assert.equal(await harness.read(file),expected)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await page.getByRole('button',{name:'Diapositive 2',exact:true}).waitFor({state:'detached'})
+    assert.equal(await harness.read(file),deck)
+  },
+}

@@ -1,11 +1,20 @@
 import { applyNativePatches } from './native-patch.mjs'
 import { MAX_NATIVE_FILE_BYTES } from './native-file-store.mjs'
 import { cssVisualRulePatch } from './css-visual.mjs'
+import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
 import { htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
 import { svgTextPatch } from './svg-text.mjs'
 
-export const REVIEWABLE_EDIT_KINDS = Object.freeze(['svg-text', 'svg-attribute', 'html-text', 'css-rule'])
+const slidePlanners = Object.freeze({
+  'slide-add': appendHtmlSlide,
+  'slide-reorder': reorderHtmlSlide,
+  'slide-duplicate': duplicateHtmlSlide,
+  'slide-remove': removeHtmlSlide,
+})
+export const REVIEWABLE_EDIT_KINDS = Object.freeze([
+  'svg-text', 'svg-attribute', 'html-text', 'css-rule', ...Object.keys(slidePlanners),
+])
 
 function fail(code, message) {
   throw Object.assign(new Error(message), { code })
@@ -17,6 +26,9 @@ export function planReviewableEdit(document, edit) {
   if (kind === 'svg-text' && format === 'svg') return [svgTextPatch(source, { id, value })]
   if (kind === 'svg-attribute' && format === 'svg') {
     return [svgAttributePatch(source, { id, attribute: edit.attribute, value })]
+  }
+  if (Object.hasOwn(slidePlanners,kind) && (format === 'html' || format === 'htm')) {
+    return [slidePlanners[kind](source, edit)]
   }
   if (kind === 'html-text' && (format === 'html' || format === 'htm')) {
     return [htmlVisualTextPatch(source, { id, key: edit.key, path: edit.path, text: value })]

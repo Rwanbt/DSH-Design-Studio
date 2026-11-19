@@ -1,6 +1,6 @@
 import { pdfOpenSpec, pdfCopySpec, pdfNoteSpec, pdfHighlightSpec } from './pdf-open.mjs'
 import { presentationSpec, presentationPrintSpec, presentationPptxSpec } from './presentation.mjs'
-import { proposalReviewSpec } from './proposal-review.mjs'
+import { proposalReviewSpec, slideProposalReviewSpec } from './proposal-review.mjs'
 /**
  * Browser gate spec registry.
  *
@@ -189,6 +189,7 @@ export const specs = [
   performanceSpec,
   largeDocumentSpec,
   proposalReviewSpec,
+  slideProposalReviewSpec,
   presentationSpec,
   presentationPrintSpec,
   presentationPptxSpec,

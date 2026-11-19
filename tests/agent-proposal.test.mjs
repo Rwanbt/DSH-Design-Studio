@@ -87,4 +87,23 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
     baseHash: savedRevision.hash, baseIdentity: savedRevision.identity, patches: savedRevision.inverse })
   assert.equal(undo.status, 200)
   assert.equal(await readFile(join(root, 'page.html'), 'utf8'), original)
+  const deck = '<main id="dsh-deck" data-dsh-deck="1"><section id="slide-first"><h1>First</h1></section>\n'+
+    '<section id="slide-second"><h1>Second</h1></section></main>'
+  await writeFile(join(root,'deck.html'),deck)
+  for (const fields of [
+    {kind:'slide-add',id:'slide-third',title:'Third'},
+    {kind:'slide-duplicate',id:'slide-first',newId:'slide-copy'},
+    {kind:'slide-reorder',id:'slide-second',direction:'earlier'},
+    {kind:'slide-remove',id:'slide-second'},
+  ]) {
+    const edit = {file:'deck.html',...fields}
+    const planned = await invoke(edit)
+    assert.equal(planned.ok,true,fields.kind)
+    assert.deepEqual(planned.proposal.edit,edit)
+    assert.equal(planned.proposal.changed,true)
+  }
+  assert.equal((await invoke({file:'deck.html',kind:'slide-reorder',id:'slide-second',direction:'sideways'})).error,'invalid-slide-order')
+  assert.equal((await invoke({file:'deck.html',kind:'slide-remove',id:'slide-first',value:'extra'})).error,'invalid-edit')
+  assert.equal(await readFile(join(root,'deck.html'),'utf8'),deck)
+
 })

@@ -72,3 +72,7 @@ L’action utilise le même verrou et les mêmes préconditions de révision que
 ## Mode diaporama HTML
 
 Le lecteur ouvre une boîte modale dans le panneau DSH et démarre sur la diapositive sélectionnée. Les flèches, Page précédente/suivante, Début, Fin et Échap agissent sur le lecteur. Le rendu réutilise l’aperçu HTML isolé avec une iframe sans permissions et n’écrit aucun fichier. Les scénarios Chromium et Firefox vérifient la diapositive initiale, le clavier, le retour du focus et la préservation du HTML.
+
+## Propositions IA sur la structure des présentations
+
+L’outil DSH `design_studio_propose` accepte l’ajout, la duplication, le déplacement et la suppression d’une diapositive. Les opérations proposées partagent les mêmes fonctions de validation et de planification que les actions manuelles. La proposition reste dans la session du document et expose les différences avant et après. L’application vérifie à nouveau la révision et l’empreinte présentée, puis enregistre une opération annulable. Les tests invoquent l’outil directement et vérifient le parcours de validation en navigateur. Le test DSH Web sans identifiants ne déclenche aucun appel de modèle.

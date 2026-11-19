@@ -27,7 +27,7 @@ import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs
 
 import { createProposalInbox } from './proposal-inbox.mjs'
 
-import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
+import { createHtmlPresentation, readHtmlPresentation } from './html-presentation.mjs'
 
 import { createPdfPageCopier } from './pdf-page-copy.mjs'
 
@@ -423,10 +423,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         let patches; let createdId=null
         if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
-        } else if (['slide-add','slide-reorder','slide-duplicate','slide-remove'].includes(params.kind)) {
-          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
-          const plan = { 'slide-add':appendHtmlSlide, 'slide-reorder':reorderHtmlSlide, 'slide-duplicate':duplicateHtmlSlide, 'slide-remove':removeHtmlSlide }[params.kind]
-          patches=[plan(doc.source,params)]
         } else if (params.kind === 'css-media') {
           // Conditional editing is addressed by the rule's exact offset and the
           // condition the user was shown, so two identical selectors can never be

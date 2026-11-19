@@ -1,19 +1,23 @@
 import { createNativeFileStore } from './native-file-store.mjs'
 import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
 
-const selectorFields = Object.freeze({
-  'html-text': ['id'],
-  'svg-text': ['id'],
-  'svg-attribute': ['id', 'attribute'],
-  'css-rule': ['selector', 'property'],
+const editFields = Object.freeze({
+  'html-text': ['id', 'value'],
+  'svg-text': ['id', 'value'],
+  'svg-attribute': ['id', 'attribute', 'value'],
+  'css-rule': ['selector', 'property', 'value'],
+  'slide-add': ['id', 'title'],
+  'slide-reorder': ['id', 'direction'],
+  'slide-duplicate': ['id', 'newId'],
+  'slide-remove': ['id'],
 })
-const required = ['file', 'kind', 'value']
-const optional = [...new Set(Object.values(selectorFields).flat())]
+const required = ['file', 'kind']
+const optional = [...new Set(Object.values(editFields).flat())]
 const maxProposalBytes = 64 * 1024
 
 function validatedEdit(args) {
   if (!args || typeof args !== 'object' || !REVIEWABLE_EDIT_KINDS.includes(args.kind)) return null
-  const fields = [...required, ...selectorFields[args.kind]]
+  const fields = [...required, ...editFields[args.kind]]
   if (Object.keys(args).length !== fields.length || fields.some(field =>
     !Object.hasOwn(args, field) || typeof args[field] !== 'string' || args[field].length > 8192 ||
     (field !== 'value' && !args[field].trim()))) return null
@@ -25,7 +29,7 @@ export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,
