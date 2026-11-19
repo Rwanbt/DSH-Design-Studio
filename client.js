@@ -1276,6 +1276,7 @@ window.__ModuleLoader__.load({
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
       const [pdfAction,setPdfAction] = React.useState(null)
+      const openPdfAction=(kind,file)=>setPdfAction({kind,file,scopeKey})
       const [slideSelection,setSlideSelection] = React.useState(null)
       const [fileAction,setFileAction] = React.useState(null)
       const [layerMenu,setLayerMenu] = React.useState(null)
@@ -2072,7 +2073,7 @@ window.__ModuleLoader__.load({
       async function loadWorkspaceFiles() {
         if(!scopeReady) return false
         try {
-          const response=await request('/files?'+scopeQuery+'&includePptx=1'+(canOpenPdf?'&includePdf=1':''))
+          const response=await request('/files?'+scopeQuery+'&includePptx=1&includePdf=1')
           setWorkspaceFiles(response.files||[])
           setFilesTruncated(!!response.truncated)
           return true
@@ -2086,7 +2087,7 @@ window.__ModuleLoader__.load({
         let cancelled=false
         void loadWorkspaceFiles().then(()=>{ if(cancelled) return })
         return ()=>{cancelled=true}
-      },[scopeKey,canOpenPdf])
+      },[scopeKey])
 
       async function openPickedFile(picked) {
         if (/\.pptx$/i.test(picked)) {
@@ -2105,8 +2106,14 @@ window.__ModuleLoader__.load({
           return
         }
         if (/\.pdf$/i.test(picked)) {
-          if (!canOpenPdf || !workspaceFiles.some(file=>file.format==='pdf'&&file.path===picked)) {
-            setError('Actualisez les fichiers et sélectionnez un PDF de cette conversation.')
+          if (!workspaceFiles.some(file=>file.format==='pdf'&&file.path===picked)) {
+            setError('Actualisez les fichiers et sélectionnez un PDF de cet espace de travail.')
+            return
+          }
+          if (!canOpenPdf) {
+            openPdfAction('note',picked)
+            setShowFiles(false)
+            setError('')
             return
           }
           try {
@@ -4799,7 +4806,7 @@ window.__ModuleLoader__.load({
             ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
-        canOpenPdf&&pdfAction&&h(pdfAction.kind==='note'?PdfNote:PdfCopy,{key:scopeKey+pdfAction.file,file:pdfAction.file,files:workspaceFiles.filter(item=>item.format==='pdf'),scopeBody,close:()=>setPdfAction(null)}),
+        pdfAction?.scopeKey===scopeKey&&h(pdfAction.kind==='note'?PdfNote:PdfCopy,{key:JSON.stringify([scopeKey,pdfAction.kind,pdfAction.file]),file:pdfAction.file,files:workspaceFiles.filter(item=>item.format==='pdf'),scopeBody,close:()=>setPdfAction(null)}),
                 showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
           padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
           maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8
@@ -4815,13 +4822,13 @@ window.__ModuleLoader__.load({
               h('div',{key:item.path,role:'listitem',
                 style:{display:'flex',gap:4,alignItems:'center',background:'#2c2e31',border:'1px solid #43454a',borderRadius:6,padding:'2px 4px'}},
                 h('button',{style:{...button,flex:1,minWidth:0,textAlign:'left',overflowWrap:'anywhere',background:'transparent',border:0},
-                  'aria-label':(item.format==='pptx'?'Importer le PowerPoint de ':'Open file ')+item.path,disabled:busy,
+                  'aria-label':(item.format==='pptx'?'Importer le PowerPoint de ':item.format==='pdf'&&!canOpenPdf?'Aperçu et annotations du PDF ':'Open file ')+item.path,disabled:busy,
                   title:item.path+' · '+item.size+' bytes',
                   onClick:()=>void openPickedFile(item.path)},
                   h('span',{style:{color:ACCENT,marginRight:8,fontWeight:650}},item.format.toUpperCase()),
                   item.path+(item.format==='pptx'?' · Importer':'')),
-                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'copy',file:item.path})},'Assembler les pages'),
-                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'note',file:item.path})},'Ajouter une note'),
+                item.format==='pdf'&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('copy',item.path)},'Assembler les pages'),
+                item.format==='pdf'&&canOpenPdf&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('note',item.path)},'Ajouter une note'),
                 !['pdf','pptx'].includes(item.format)&&h('button',{style:{...button,whiteSpace:'nowrap'},'aria-label':'Rename '+item.path,
                   title:'Renommer '+item.path,disabled:busy||creating,
                   onClick:()=>{setError('');setFileAction({kind:'rename',file:item.path,next:item.path})}},'Renommer'),
@@ -4849,7 +4856,7 @@ window.__ModuleLoader__.load({
                     onClick:()=>void manageFile('delete',fileAction.file)},'Confirmer la suppression')),
             h('button',{style:button,'aria-label':'Cancel file action',disabled:busy,
               onClick:()=>setFileAction(null)},'Annuler')),
-          workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun fichier SVG, HTML ou CSS détecté.')
+          workspaceFiles.length===0&&h('small',{style:{color:'var(--dsw-alias-label-secondary, #aaa9a5)'}},'Aucun document pris en charge détecté.')
         ),
 
         h('div',{className:'dsh-studio-alerts'},
@@ -5125,7 +5132,7 @@ window.__ModuleLoader__.load({
             'Destination : ',
             h('code',null,'espace de travail/'+
               (newName.trim().replace(/\.(?:svg|html?|css)$/i,'').replace(/^\.+/,'')||'nouveau-fichier')),
-            h('code',null,'.{svg,html,css}')),
+            h('code',null,'.{svg,html,css,pdf,pptx}')),
           workspaceFiles.length
             ? h('input',{style:{...field,maxWidth:420},value:fileSearch,'aria-label':'Filter design files',
                 placeholder:'Filtrer : nom, dossier, extension…',
@@ -5139,17 +5146,17 @@ window.__ModuleLoader__.load({
                   .map(item=>{
                     const open=h('button',{key:item.path,type:'button',
                       style:{...button,textAlign:'left',overflowWrap:'anywhere'},
-                      'aria-label':(item.format==='pptx'?'Importer le PowerPoint de ':'Open file ')+item.path,disabled:busy,
+                      'aria-label':(item.format==='pptx'?'Importer le PowerPoint de ':item.format==='pdf'&&!canOpenPdf?'Aperçu et annotations du PDF ':'Open file ')+item.path,disabled:busy,
                       onClick:()=>void openPickedFile(item.path)},item.path+(item.format==='pptx'?' · Importer':''))
                     return item.format==='pdf'
                       ?h('div',{key:item.path,style:{display:'grid',gap:4}},open,
                         h('button',{type:'button',style:button,
-                          onClick:()=>setPdfAction({kind:'copy',file:item.path})},'Assembler les pages'),
-                        h('button',{type:'button',style:button,onClick:()=>setPdfAction({kind:'note',file:item.path})},'Ajouter une note'))
+                          onClick:()=>openPdfAction('copy',item.path)},'Assembler les pages'),
+                        canOpenPdf&&h('button',{type:'button',style:button,onClick:()=>openPdfAction('note',item.path)},'Ajouter une note'))
                       :open
                   }))
             : h('div',{role:'status',style:{...pane,padding:12,marginTop:4,background:'var(--dsw-alias-bg-layer-1, #232529)'}},
-                h('span',null,'Aucun fichier SVG, HTML ou CSS dans cet espace de travail.'),
+                h('span',null,'Aucun document pris en charge dans cet espace de travail.'),
                 h('small',{style:{opacity:0.7,display:'block',marginTop:4}},
                   'Ajoutez-en un depuis la conversation, ou ouvrez un dossier qui en contient un.'))):
 doc?.format==='css'?

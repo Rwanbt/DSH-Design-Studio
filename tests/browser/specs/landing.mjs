@@ -57,7 +57,7 @@ export const landingEmptySpec = {
     await page.getByRole('button', { name: 'Refresh workspace design files' }).click()
     assert.equal(await page.getByText(/0 fichiers? de design/).count(), 1,
       'the empty workspace must report zero design files, not merely hide the rows')
-    const status = page.getByRole('status').filter({ hasText: 'Aucun fichier SVG, HTML ou CSS' })
+    const status = page.getByRole('status').filter({ hasText: 'Aucun document pris en charge' })
     await status.waitFor({ state: 'visible', timeout: 20000 })
     assert.equal(await page.getByRole('button', { name: /^Open file / }).count(), 0,
       'no file row may be offered when the workspace has none')

@@ -8,6 +8,8 @@
  * real file list, a real document in the canvas, and requests that carry a
  * workspace id instead of a session id.
  */
+import { pdfFixture } from '../../fixtures/pdf-fixture.mjs'
+import { spawnSync } from 'node:child_process'
 import { SVG_DOCUMENT } from './helpers.mjs'
 
 async function openPanel(page, harness, key = 'design-studio') {
@@ -28,6 +30,7 @@ export const panelSpec = {
     await harness.write('accueil.svg', SVG_DOCUMENT)
     await harness.write('notes.txt', 'pas un fichier de design')
 
+    await harness.write('document.pdf',pdfFixture())
     const state = await openPanel(page, harness)
     assert.deepEqual(state.registrations.main, ['design-studio'],
       'the main cell must be registered under the sidebar id: ' + JSON.stringify(state.registrations))
@@ -47,6 +50,22 @@ export const panelSpec = {
       'the registered workspace title must be shown, and its path must never be')
     assert.equal(await page.getByRole('combobox', { name: 'Workspace', exact: true }).count(), 0,
       'a single workspace needs no switcher, only its title')
+
+    await page.getByRole('button',{name:'Aperçu et annotations du PDF document.pdf'}).click()
+    const annotation = page.getByRole('form',{name:'Ajouter une note PDF'})
+    await annotation.waitFor()
+    if (spawnSync('pdftoppm',['-v'],{stdio:'ignore'}).status===0) {
+      await annotation.getByRole('button',{name:'Afficher la page'}).click()
+      await annotation.getByRole('img',{name:'Aperçu de la page PDF'}).waitFor()
+      assert.ok(harness.requests.some(entry=>entry.path.endsWith('/pdf/preview') &&
+        entry.search.includes('workspaceId=ws-e2e') && !entry.search.includes('sessionId=')))
+    }
+    await annotation.getByRole('button',{name:'Fermer',exact:true}).click()
+    await page.getByRole('button',{name:'Assembler les pages',exact:true}).click()
+    const assembly = page.getByRole('form',{name:'Assembler des pages PDF'})
+    await assembly.waitFor()
+    assert.equal(await assembly.getByLabel('Fichier PDF').inputValue(),'document.pdf')
+    await assembly.getByRole('button',{name:'Fermer',exact:true}).click()
 
     // A real file of that workspace opens in the real canvas.
     const file = page.getByRole('button', { name: 'Open file accueil.svg' })

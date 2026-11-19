@@ -50,6 +50,18 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     await panel.waitFor({ state: 'visible', timeout: 20000 })
     await panel.getByLabel('Workspace', { exact: true }).selectOption(workspaceId)
     const studio = panel.locator('.dsh-studio-workbench')
+    await studio.getByRole('button',{name:'Aperçu et annotations du PDF g0-sidebar.pdf'}).click()
+    const annotation = studio.getByRole('form',{name:'Ajouter une note PDF'})
+    await annotation.waitFor()
+    await annotation.getByRole('button',{name:'Fermer',exact:true}).click()
+    await studio.getByRole('button',{name:'Assembler les pages',exact:true}).click()
+    const assembly = studio.getByRole('form',{name:'Assembler des pages PDF'})
+    if (await assembly.getByLabel('Fichier PDF').inputValue() !== 'g0-sidebar.pdf') {
+      throw new Error('The PDF assembly form selected the wrong workspace file')
+    }
+    await assembly.getByRole('button',{name:'Fermer',exact:true}).click()
+    record('sidebar exposes PDF tools without a conversation',
+      'PASS','registered workspace opens preview/annotation and assembly tools for its PDF')
     await studio.getByRole('button', { name: 'Open file g0-art.svg', exact: true }).click({ timeout: 20000 })
     await studio.getByLabel('Canvas viewport', { exact: true }).waitFor({ state: 'visible', timeout: 20000 })
     const renderedBox = studio.frameLocator('iframe[title="Isolated SVG preview"]').locator('svg rect#box')

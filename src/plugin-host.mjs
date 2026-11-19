@@ -192,7 +192,7 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         })
         const result = await listWorkspaceDocuments(root,{
           includePptx:url.searchParams.get('includePptx')==='1',
-          includePdf:Boolean(url.searchParams.get('sessionId')) && url.searchParams.get('includePdf')==='1',
+          includePdf:url.searchParams.get('includePdf')==='1',
         })
         return reply(res,200,{ok:true,...result})
       }

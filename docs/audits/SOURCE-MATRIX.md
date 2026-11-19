@@ -80,3 +80,7 @@ L’outil DSH `design_studio_propose` accepte l’ajout, la duplication, le dép
 ## Rotation des pages dans un assemblage PDF
 
 Chaque sélection peut ajouter une rotation de 90°, 180° ou 270° aux pages qu’elle place dans la copie. Le Host assemble d’abord les pages avec Poppler et applique les rotations au document de sortie avec le moteur optionnel pypdf. L’assemblage sans rotation utilise toujours les outils Poppler seuls. Les tests navigateur vérifient l’angle par page, l’ordre, le texte sélectionnable et les fichiers sources intacts. Le test Host réel vérifie une copie tournée de 270°.
+
+## Outils PDF dans le panneau d’espace de travail
+
+Le panneau découvre les PDF par le même identifiant d’espace enregistré que les fichiers HTML et SVG. Il ouvre l’aperçu avec les outils de notes et de surlignage, ou le formulaire d’assemblage depuis la liste. Dans une conversation avec lecteur natif disponible, le fichier s’ouvre dans ce lecteur et les actions restent disponibles dans le panneau. Chromium et Firefox ont vérifié le périmètre de la requête d’aperçu et les deux voies d’accès. Le vrai DSH Web a ouvert les deux formulaires depuis un espace enregistré.

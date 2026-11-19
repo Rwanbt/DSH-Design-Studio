@@ -111,6 +111,7 @@ async function main() {
     await mkdir(otherWorkspaceDir, { recursive: true })
     const document = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">\n  <rect id="box" x="10" y="10" width="40" height="30" fill="#bda991"/>\n</svg>\n'
     await writeFile(path.join(workspaceDir, 'g0-art.svg'), document, 'utf8')
+    await writeFile(path.join(workspaceDir,'g0-sidebar.pdf'),pdfFixture())
     await mkdir(path.join(childEnv.DSH_HOME, 'storages'), { recursive: true })
     let credentialCopy = null
     if (reuseCredentials) {
