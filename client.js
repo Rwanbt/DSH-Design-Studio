@@ -998,6 +998,8 @@ window.__ModuleLoader__.load({
       const pathDragRef=React.useRef(null)
       const [dragDelta,setDragDelta] = React.useState(null)
       const dragRef=React.useRef(null)
+      const marqueeRef=React.useRef(null)
+      const [marquee,setMarquee]=React.useState(null)
       const panRef=React.useRef(null)
       const viewportRef=React.useRef(null)
       const viewportWheelRef=React.useRef(null)
@@ -2724,6 +2726,66 @@ window.__ModuleLoader__.load({
           }))
         }
       }
+      function startMarquee(event) {
+        // A blank-canvas drag selects artboard objects. A shape handle always
+        // owns its gesture: do not steal pointerdown from its descendant.
+        if(event.target!==event.currentTarget||event.button!==0||
+          canvasTool!=='select'||spaceHeld||busy||reloadRequired||
+          !doc||doc.format!=='svg'||source!==doc.source||!artboard)return
+        if(refuseTextDraft())return
+        const rect=event.currentTarget.getBoundingClientRect()
+        if(!rect.width||!rect.height)return
+        marqueeRef.current={pointerId:event.pointerId,rect:{
+          left:rect.left,top:rect.top,width:rect.width,height:rect.height},
+          startClientX:event.clientX,startClientY:event.clientY}
+        setMarquee(null)
+        try{event.currentTarget.setPointerCapture(event.pointerId)}catch(_){}
+        event.preventDefault()
+      }
+      function marqueeCoords(event,gesture) {
+        const rect=gesture.rect
+        const x=artboard.x+(event.clientX-rect.left)/rect.width*artboard.width
+        const y=artboard.y+(event.clientY-rect.top)/rect.height*artboard.height
+        return {x,y}
+      }
+      function moveMarquee(event) {
+        const gesture=marqueeRef.current
+        if(!gesture||gesture.pointerId!==event.pointerId||!artboard)return
+        if(Math.hypot(event.clientX-gesture.startClientX,event.clientY-gesture.startClientY)<4)return
+        const from=marqueeCoords({clientX:gesture.startClientX,clientY:gesture.startClientY},gesture)
+        const to=marqueeCoords(event,gesture)
+        setMarquee({left:Math.min(from.x,to.x),top:Math.min(from.y,to.y),
+          right:Math.max(from.x,to.x),bottom:Math.max(from.y,to.y)})
+      }
+      function finishMarquee(event,cancel=false) {
+        const gesture=marqueeRef.current
+        if(!gesture||gesture.pointerId!==event.pointerId||!artboard)return
+        marqueeRef.current=null
+        setMarquee(null)
+        if(cancel)return
+        if(Math.hypot(event.clientX-gesture.startClientX,event.clientY-gesture.startClientY)<4) {
+          setActive('');setExtraSelection([])
+          return
+        }
+        const from=marqueeCoords({clientX:gesture.startClientX,clientY:gesture.startClientY},gesture)
+        const to=marqueeCoords(event,gesture)
+        const left=Math.min(from.x,to.x),right=Math.max(from.x,to.x)
+        const top=Math.min(from.y,to.y),bottom=Math.max(from.y,to.y)
+        const byId=new Map(geometry.handles.map(handle=>[handle.id,handle]))
+        const chosen=nodes.filter(node=>{
+          if(node.parentTag!=='svg'||node.hidden||node.locked||node.readOnly)return false
+          const h=byId.get(node.id)
+          return h&&h.x<=right&&h.x+h.width>=left&&h.y<=bottom&&h.y+h.height>=top
+        })
+        if(chosen.length>16) {
+          setNotice('Rectangle de sélection : plus de 16 objets. Affinez la zone.')
+          return
+        }
+        setActive(chosen[0]?.id||'')
+        setExtraSelection(chosen.slice(1).map(node=>node.id))
+        setNotice(chosen.length+' objet(s) sélectionné(s) par rectangle.')
+        setError('')
+      }
       function startPan(event) {
         if(event.button!==1 && !((canvasTool==='hand'||spaceHeld) && event.button===0))return
         const rect=event.currentTarget.getBoundingClientRect()
@@ -2774,6 +2836,12 @@ window.__ModuleLoader__.load({
         }
         const tag=String(event.target?.tagName||'').toLowerCase()
         if(['input','textarea','select'].includes(tag)||event.target?.isContentEditable)return
+        if(event.key==='Escape' && marqueeRef.current) {
+          event.preventDefault()
+          marqueeRef.current=null
+          setMarquee(null)
+          return
+        }
         if(event.key==='Escape' && layerMenu) {event.preventDefault();closeLayerMenu();return}
         if(event.key==='Escape' && layerDragRef.current) {
           // Cancel the gesture without writing; the pointerup that follows is
@@ -4624,7 +4692,20 @@ doc?.format==='css'?
                   }}),
                   h('div',{style:{position:'absolute',inset:0,touchAction:'none',zIndex:2,
                       cursor:['rect','ellipse','text'].includes(canvasTool)?'crosshair':undefined},'aria-label':'Direct manipulation overlay',
-                      onPointerDownCapture:createShapeAtPointer},
+                      onPointerDownCapture:createShapeAtPointer,
+                      onPointerDown:startMarquee,
+                      onPointerMove:moveMarquee,
+                      onPointerUp:event=>finishMarquee(event),
+                      onPointerCancel:event=>finishMarquee(event,true)},
+                    marquee&&h('div',{role:'presentation','data-marquee-selection':'',
+                      style:{position:'absolute',
+                        left:((marquee.left-artboard.x)/artboard.width*100)+'%',
+                        top:((marquee.top-artboard.y)/artboard.height*100)+'%',
+                        width:((marquee.right-marquee.left)/artboard.width*100)+'%',
+                        height:((marquee.bottom-marquee.top)/artboard.height*100)+'%',
+                        border:'1px solid #c9a77c',
+                        background:'rgba(201,167,124,0.15)',
+                        pointerEvents:'none',boxSizing:'border-box',zIndex:20}}),
                     handles.flatMap(handle=>{
                       const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0,mode:'move'}
                       let left=handle.x+(delta.mode==='move'?delta.dx:0)
