@@ -221,9 +221,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         const store = await storeFor(ctx,{sessionId:url.searchParams.get('sessionId'),
           workspaceId:url.searchParams.get('workspaceId')})
         const page = Number(url.searchParams.get('page'))
-        const {png,hash,identity} = await previewPdf(page,()=>store.readPdf(url.searchParams.get('file')))
+        const {png,hash,identity,pageCount} = await previewPdf(page,()=>store.readPdf(url.searchParams.get('file')))
         res.writeHead(200,{'content-type':'image/png','content-length':png.length,
-          'x-dsh-pdf-hash':hash,'x-dsh-pdf-identity':identity,
+          'x-dsh-pdf-hash':hash,'x-dsh-pdf-identity':identity,'x-dsh-pdf-pages':String(pageCount),
           'cache-control':'no-store','x-content-type-options':'nosniff'})
         return res.end(png)
       }

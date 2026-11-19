@@ -1027,16 +1027,21 @@ window.__ModuleLoader__.load({
       const validArea=validPosition(x,y)&&width>0&&height>0&&x/100+width/100<=1+Number.EPSILON&&y/100+height/100<=1+Number.EPSILON
       const valid=Number.isInteger(page)&&page>=1&&page<=10000&&
         (highlight?validArea:Boolean(text.trim())&&validPosition(x,y))
-      async function loadPreview() {
+      async function loadPreview(target=page) {
         if(previewBusy)return
+        if(target!==page) {
+          setPosition(previous=>({...previous,page:String(target)}))
+          setVisualRevision(null)
+        }
         setPreviewBusy(true);setError('')
         try {
-          const query=new URLSearchParams({...scopeBody,file,page:String(page)})
+          const query=new URLSearchParams({...scopeBody,file,page:String(target)})
           const response=await fetch(new URL('/'+api+'/pdf/preview?'+query,document.baseURI),{credentials:'same-origin'})
           if(!response.ok)throw new Error((await response.json()).message)
           const hash=response.headers.get('x-dsh-pdf-hash'),identity=response.headers.get('x-dsh-pdf-identity')
-          if(!hash||!identity)throw new Error('Révision de l’aperçu indisponible')
-          setPreview({page,hash,identity,blob:await response.blob()})
+          const pageCount=Number(response.headers.get('x-dsh-pdf-pages'))
+          if(!hash||!identity||!Number.isSafeInteger(pageCount)||pageCount<target)throw new Error('Révision de l’aperçu indisponible')
+          setPreview({page:target,hash,identity,pageCount,blob:await response.blob()})
         } catch(error) {
           setPreview(null);setError(String(error.message))
         } finally {
@@ -1085,7 +1090,7 @@ window.__ModuleLoader__.load({
       }
       async function annotate(event) {
         event.preventDefault()
-        if(!valid||busy)return
+        if(!valid||busy||previewBusy)return
         setBusy(true);setError('')
         try {
           await requestBinaryDownload('/pdf/annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,kind,
@@ -1108,13 +1113,19 @@ window.__ModuleLoader__.load({
           [['page','Page',1,10000],['x','Depuis la gauche (%)',0,100],['y','Depuis le haut (%)',0,100],
             ...(highlight?[['width','Largeur (%)',0,100],['height','Hauteur (%)',0,100]]:[])]
             .map(([key,label,min,max])=>h('label',{key,style:{minWidth:0}},label,
-              h('input',{type:'number',style:field,min,max,step:key==='page'?1:'any',required:true,disabled:busy,
+              h('input',{type:'number',style:field,min,max,step:key==='page'?1:'any',required:true,disabled:busy||(key==='page'&&previewBusy),
                 value:position[key],onChange:event=>{
                   setPosition({...position,[key]:event.target.value})
                   if(key==='page')setVisualRevision(null)
                 }})))),
         h('button',{type:'button',style:button,disabled:busy||previewBusy||!Number.isInteger(page)||page<1||page>10000,
           onClick:()=>void loadPreview()},previewBusy?'Chargement…':'Afficher la page'),
+        preview?.page===page&&h('nav',{'aria-label':'Navigation du PDF',style:{display:'flex',gap:6,alignItems:'center'}},
+          h('button',{type:'button',style:button,disabled:busy||previewBusy||page<=1,
+            onClick:()=>void loadPreview(page-1)},'Page précédente'),
+          h('span',{'aria-live':'polite'},page+' / '+preview.pageCount),
+          h('button',{type:'button',style:button,disabled:busy||previewBusy||page>=Math.min(10000,preview.pageCount),
+            onClick:()=>void loadPreview(page+1)},'Page suivante')),
         preview?.page===page&&previewImage?.preview===preview&&h('div',null,
           h('p',null,highlight?'Tracez une zone sur la page pour la surligner.':'Cliquez sur la page pour placer la note.'),
           h('div',{style:{position:'relative',width:'fit-content',maxWidth:'100%'}},
@@ -1131,7 +1142,7 @@ window.__ModuleLoader__.load({
           h('textarea',{style:field,value:text,maxLength:2000,required:!highlight,disabled:busy,
             onChange:event=>setText(event.target.value)})),
         h('div',{style:{display:'flex',gap:8}},
-          h('button',{type:'submit',style:button,disabled:busy||!valid},'Télécharger la copie annotée'),
+          h('button',{type:'submit',style:button,disabled:busy||previewBusy||!valid},'Télécharger la copie annotée'),
           h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),
         error&&h('p',{role:'alert'},error))
     }

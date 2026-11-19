@@ -343,7 +343,7 @@ async function main() {
         const previewHeaders = pdfPreview.headers()
         const previewBytes = await pdfPreview.body()
         const previewRevision = {hash:previewHeaders['x-dsh-pdf-hash'],identity:previewHeaders['x-dsh-pdf-identity']}
-        const previewOk = pdfPreview.ok() && previewHeaders['content-type'] === 'image/png' &&
+        const previewOk = pdfPreview.ok() && previewHeaders['content-type'] === 'image/png' && previewHeaders['x-dsh-pdf-pages'] === '2' &&
           previewBytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) &&
           /^[a-f0-9]{64}$/.test(previewRevision.hash) && /^[a-f0-9]{64}$/.test(previewRevision.identity)
         const previewUnavailable = pdfPreview.status() === 400 &&
