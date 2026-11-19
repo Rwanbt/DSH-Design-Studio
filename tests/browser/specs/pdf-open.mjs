@@ -95,3 +95,43 @@ export const pdfNoteSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const pdfHighlightSpec = {
+  name: 'pdf: drag a highlight and download the annotated copy',
+  async run({ page, harness, assert }) {
+    const { pdfFixture } = await import('../../fixtures/pdf-fixture.mjs')
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const python = process.env.DSH_PDF_PYTHON || 'python3'
+    const file = 'source.pdf'
+    const original = pdfFixture().toString('utf8')
+    await harness.write(file,original)
+    await page.getByRole('button',{name:'Refresh workspace design files'}).click()
+    await page.getByRole('button',{name:'Ajouter une note',exact:true}).click()
+    const form = page.getByRole('form',{name:'Ajouter une note PDF'})
+    await form.getByLabel('Type d’annotation').selectOption('highlight')
+    if (spawnSync('pdftoppm',['-v'],{stdio:'ignore'}).status===0) {
+      await form.getByRole('button',{name:'Afficher la page'}).click()
+      const image = form.getByRole('img',{name:'Aperçu de la page PDF'})
+      await image.waitFor()
+      await image.scrollIntoViewIfNeeded()
+      const box = await image.boundingBox()
+      await page.mouse.move(box.x+box.width*0.1,box.y+box.height*0.2)
+      await page.mouse.down()
+      await page.mouse.move(box.x+box.width*0.5,box.y+box.height*0.35,{steps:5})
+      await page.mouse.up()
+      assert.ok(Math.abs(Number(await form.getByLabel('Largeur (%)').inputValue())-40)<1)
+      assert.ok(Math.abs(Number(await form.getByLabel('Hauteur (%)').inputValue())-15)<1)
+    }
+    const submit = form.getByRole('button',{name:'Télécharger la copie annotée'})
+    if (spawnSync(python,['-I','-c','from pypdf.annotations import Highlight'],{stdio:'ignore'}).status===0) {
+      const [download] = await Promise.all([page.waitForEvent('download'),submit.click()])
+      const inspect = 'import sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); print(r.pages[0]["/Annots"][0].get_object()["/Subtype"])'
+      assert.equal(execFileSync(python,['-I','-c',inspect,await download.path()],{encoding:'utf8'}).trim(),'/Highlight')
+    } else {
+      await submit.click()
+      await form.getByRole('alert').waitFor()
+      assert.match(await form.getByRole('alert').textContent(),/unavailable/)
+    }
+    assert.equal(await harness.read(file),original)
+  },
+}

@@ -922,7 +922,9 @@ window.__ModuleLoader__.load({
 
     function PdfNote({file,scopeBody,close}) {
       const [text,setText]=React.useState('')
-      const [position,setPosition]=React.useState({page:'1',x:'10',y:'10'})
+      const [position,setPosition]=React.useState({page:'1',x:'10',y:'10',width:'20',height:'5'})
+      const [kind,setKind]=React.useState('note')
+      const drag=React.useRef(null)
       const [busy,setBusy]=React.useState(false)
       const [error,setError]=React.useState('')
       const [preview,setPreview]=React.useState(null)
@@ -937,7 +939,11 @@ window.__ModuleLoader__.load({
       },[preview])
       const page=Number(position.page),x=Number(position.x),y=Number(position.y)
       const validPosition=(left,top)=>position.x!==''&&position.y!==''&&[left,top].every(value=>value>=0&&value<=100)
-      const valid=Number.isInteger(page)&&page>=1&&page<=10000&&text.trim()&&validPosition(x,y)
+      const width=Number(position.width),height=Number(position.height)
+      const highlight=kind==='highlight'
+      const validArea=validPosition(x,y)&&width>0&&height>0&&x/100+width/100<=1+Number.EPSILON&&y/100+height/100<=1+Number.EPSILON
+      const valid=Number.isInteger(page)&&page>=1&&page<=10000&&
+        (highlight?validArea:Boolean(text.trim())&&validPosition(x,y))
       async function loadPreview() {
         if(previewBusy)return
         setPreviewBusy(true);setError('')
@@ -954,19 +960,53 @@ window.__ModuleLoader__.load({
           setPreviewBusy(false)
         }
       }
-      function choosePosition(event) {
+      function pointAt(event) {
         const rect=event.currentTarget.getBoundingClientRect()
-        if(!rect.width||!rect.height)return
-        const percent=(point,start,size)=>String(Math.round(Math.min(1,Math.max(0,(point-start)/size))*10000)/100)
-        setPosition({...position,x:percent(event.clientX,rect.left,rect.width),y:percent(event.clientY,rect.top,rect.height)})
+        if(!rect.width||!rect.height)return null
+        const percent=(point,start,size)=>Math.round(Math.min(1,Math.max(0,(point-start)/size))*10000)/100
+        return {x:percent(event.clientX,rect.left,rect.width),y:percent(event.clientY,rect.top,rect.height)}
+      }
+      function bindPreview() {
         setVisualRevision({hash:preview.hash,identity:preview.identity})
+      }
+      function choosePosition(event) {
+        if(highlight||busy)return
+        const point=pointAt(event)
+        if(!point)return
+        setPosition(previous=>({...previous,x:String(point.x),y:String(point.y)}))
+        bindPreview()
+      }
+      function startHighlight(event) {
+        if(!highlight||busy||event.button!==0)return
+        const point=pointAt(event)
+        if(!point)return
+        event.preventDefault()
+        drag.current={id:event.pointerId,point}
+        event.currentTarget.setPointerCapture(event.pointerId)
+        bindPreview()
+        setPosition(previous=>({...previous,x:String(point.x),y:String(point.y),width:'0',height:'0'}))
+      }
+      function moveHighlight(event) {
+        const current=drag.current
+        if(!current||current.id!==event.pointerId)return
+        const end=pointAt(event)
+        if(!end)return
+        const {point}=current
+        setPosition(previous=>({...previous,x:String(Math.min(point.x,end.x)),y:String(Math.min(point.y,end.y)),
+          width:String(Math.abs(point.x-end.x).toFixed(2)),height:String(Math.abs(point.y-end.y).toFixed(2))}))
+      }
+      function finishHighlight(event) {
+        if(drag.current?.id!==event.pointerId)return
+        moveHighlight(event)
+        drag.current=null
       }
       async function annotate(event) {
         event.preventDefault()
         if(!valid||busy)return
         setBusy(true);setError('')
         try {
-          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,
+          await requestPdfDownload('annotate',{...scopeBody,file,page,x:x/100,y:y/100,text,kind,
+            ...(highlight?{width:width/100,height:height/100}:{}),
             ...(visualRevision?{previewRevision:visualRevision}:{})},
             file.split('/').at(-1).replace(/\.pdf$/i,'')+'-annote.pdf')
           close()
@@ -978,8 +1018,12 @@ window.__ModuleLoader__.load({
       }
       return h('form',{onSubmit:annotate,'aria-label':'Ajouter une note PDF',style:pdfFormStyle},
         h('strong',null,file),
-        h('div',{style:{display:'flex',gap:6}},
-          [['page','Page',1,10000],['x','Depuis la gauche (%)',0,100],['y','Depuis le haut (%)',0,100]]
+        h('label',null,'Type d’annotation',
+          h('select',{style:field,value:kind,disabled:busy,onChange:event=>setKind(event.target.value)},
+            h('option',{value:'note'},'Note'),h('option',{value:'highlight'},'Surlignage'))),
+        h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+          [['page','Page',1,10000],['x','Depuis la gauche (%)',0,100],['y','Depuis le haut (%)',0,100],
+            ...(highlight?[['width','Largeur (%)',0,100],['height','Hauteur (%)',0,100]]:[])]
             .map(([key,label,min,max])=>h('label',{key,style:{minWidth:0}},label,
               h('input',{type:'number',style:field,min,max,step:key==='page'?1:'any',required:true,disabled:busy,
                 value:position[key],onChange:event=>{
@@ -989,15 +1033,19 @@ window.__ModuleLoader__.load({
         h('button',{type:'button',style:button,disabled:busy||previewBusy||!Number.isInteger(page)||page<1||page>10000,
           onClick:()=>void loadPreview()},previewBusy?'Chargement…':'Afficher la page'),
         preview?.page===page&&previewImage?.preview===preview&&h('div',null,
-          h('p',null,'Cliquez sur la page pour placer la note.'),
+          h('p',null,highlight?'Tracez une zone sur la page pour la surligner.':'Cliquez sur la page pour placer la note.'),
           h('div',{style:{position:'relative',width:'fit-content',maxWidth:'100%'}},
             h('img',{alt:'Aperçu de la page PDF',src:previewImage.url,onClick:choosePosition,
-              style:{display:'block',maxWidth:'100%',maxHeight:340,cursor:'crosshair'}}),
-            validPosition(x,y)&&h('span',{'aria-hidden':'true',style:{position:'absolute',top:y+'%',left:x+'%',
+              draggable:false,onPointerDown:startHighlight,onPointerMove:moveHighlight,onPointerUp:finishHighlight,
+              onPointerCancel:()=>{drag.current=null},onLostPointerCapture:()=>{drag.current=null},
+              style:{display:'block',maxWidth:'100%',maxHeight:340,cursor:'crosshair',touchAction:highlight?'none':'auto'}}),
+            highlight&&validArea&&h('span',{'aria-hidden':'true',style:{position:'absolute',top:y+'%',left:x+'%',
+              width:width+'%',height:height+'%',background:'rgba(255,224,82,.35)',outline:'1px solid #9b6900',pointerEvents:'none'}}),
+            !highlight&&validPosition(x,y)&&h('span',{'aria-hidden':'true',style:{position:'absolute',top:y+'%',left:x+'%',
               width:12,height:12,transform:'translate(-50%,-50%)',border:'2px solid #8b4500',
               background:'#ffc446',borderRadius:'50%',pointerEvents:'none'}}))),
-        h('label',null,'Texte de la note',
-          h('textarea',{style:field,value:text,maxLength:2000,required:true,disabled:busy,
+        h('label',null,highlight?'Commentaire facultatif':'Texte de la note',
+          h('textarea',{style:field,value:text,maxLength:2000,required:!highlight,disabled:busy,
             onChange:event=>setText(event.target.value)})),
         h('div',{style:{display:'flex',gap:8}},
           h('button',{type:'submit',style:button,disabled:busy||!valid},'Télécharger la copie annotée'),

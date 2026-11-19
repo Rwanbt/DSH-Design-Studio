@@ -365,6 +365,16 @@ async function main() {
           annotationVerified ? 'PASS' : annotationError === 'pdf-annotation-unavailable' && annotationPreserved ? 'NOT_RUN' : 'FAIL',
           `HTTP ${annotated.status()}, source preserved=${annotationPreserved}, ${annotationError || annotationType}`)
 
+        if (annotationVerified) {
+          const highlight = await context.request.post(origin + '/design-studio-native/pdf/annotate', {
+            data: {sessionId,file:'g0-source.pdf',kind:'highlight',page:2,x:0.1,y:0.2,width:0.35,height:0.18},
+          })
+          const highlightBytes = await highlight.body()
+          const highlightOk = highlight.ok() && highlight.headers()['content-type'] === 'application/pdf' &&
+            highlightBytes.subarray(0,5).toString() === '%PDF-' && (await readFile(pdfFile)).equals(pdf)
+          record('highlight an area in a PDF copy through the real Host',
+            highlightOk ? 'PASS' : 'FAIL', `HTTP ${highlight.status()}`)
+        }
         // Read the seeded fixture through the real session-scoped Host path.
         const opened = await context.request.get(origin + '/design-studio-native/document?sessionId=' +
           encodeURIComponent(sessionId) + '&file=g0-art.svg')

@@ -50,3 +50,10 @@ returned with the preview. If the PDF changed, the Host refuses the
 annotation and asks the user to refresh the image. Manual percentage
 fields remain available for keyboard entry and environments without the
 preview renderer.
+
+The annotation form also supports an area highlight. Dragging on the PNG
+sets the rectangle and binds it to the preview revision. Keyboard users
+can enter the four measurements independently. The writer maps the
+displayed rectangle into page coordinates and includes a native Highlight
+annotation with QuadPoints. Its optional comment is PDF annotation text.
+The source page content remains selectable.

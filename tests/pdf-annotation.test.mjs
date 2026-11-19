@@ -58,3 +58,21 @@ w.write(sys.argv[2])`
   const inspect = 'import json,sys; from pypdf import PdfReader; print(json.dumps(list(PdfReader(sys.argv[1]).pages[1]["/Annots"][0].get_object()["/Rect"])))'
   assert.deepEqual(JSON.parse(execFileSync(python,['-I','-c',inspect,output],{encoding:'utf8'})),[160,55,178,73])
 })
+
+test('highlight writes a PDF text-markup quad and preserves the page text', { skip:!available }, async context => {
+  const root = await mkdtemp(path.join(tmpdir(),'dsh-test-highlight-'))
+  context.after(()=>rm(root,{recursive:true,force:true}))
+  const bytes = pdfFixture()
+  const annotate = createPdfAnnotator(python)
+  const highlight = {kind:'highlight',page:2,x:0.125,y:0.25,width:0.25,height:0.25,text:''}
+  await assert.rejects(annotate({...highlight,width:1},()=>assert.fail('Unexpected read')),{code:'invalid-pdf-note'})
+  const output = path.join(root,'result.pdf')
+  await writeFile(output,await annotate(highlight,()=>bytes))
+  const inspect = `import json,sys
+from pypdf import PdfReader
+p=PdfReader(sys.argv[1]).pages[1]
+a=p["/Annots"][0].get_object()
+print(json.dumps([a["/Subtype"],list(a["/Rect"]),list(a["/QuadPoints"]),p.extract_text()]))`
+  const actual = JSON.parse(execFileSync(python,['-I','-c',inspect,output],{encoding:'utf8'}))
+  assert.deepEqual(actual,['/Highlight',[40,90,120,135],[40,135,120,135,40,90,120,90],'Second text'])
+})

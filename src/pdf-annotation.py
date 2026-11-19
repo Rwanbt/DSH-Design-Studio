@@ -5,12 +5,13 @@ import sys
 
 try:
     from pypdf import PdfReader, PdfWriter
-    from pypdf.annotations import Text
+    from pypdf.annotations import Highlight, Text
+    from pypdf.generic import ArrayObject, FloatObject, NameObject, TextStringObject
 except ImportError:
     sys.exit(10)
 
 
-def annotation_rectangle(page, x, y):
+def annotation_geometry(page, note):
     box = page.cropbox
     left, bottom, right, top = map(float, box)
     width, height = right - left, top - bottom
@@ -18,22 +19,37 @@ def annotation_rectangle(page, x, y):
         raise ValueError("invalid page box")
     rotation = page.rotation % 360
     display_width, display_height = (height, width) if rotation in (90, 270) else (width, height)
-    size = min(18, display_width, display_height)
-    x0 = min(display_width - size, x * display_width) / display_width
-    y0 = min(display_height - size, y * display_height) / display_height
-    x1, y1 = x0 + size / display_width, y0 + size / display_height
+    if note["kind"] == "highlight":
+        x0, y0 = note["x"], note["y"]
+        x1 = min(1, x0 + note["width"])
+        y1 = min(1, y0 + note["height"])
+    else:
+        size = min(18, display_width, display_height)
+        x0 = min(display_width - size, note["x"] * display_width) / display_width
+        y0 = min(display_height - size, note["y"] * display_height) / display_height
+        x1, y1 = x0 + size / display_width, y0 + size / display_height
     directions = {
         0: lambda u, v: (u, 1 - v),
         90: lambda u, v: (v, u),
         180: lambda u, v: (1 - u, v),
         270: lambda u, v: (1 - v, 1 - u),
     }
-    first = directions[rotation](x0, y0)
-    second = directions[rotation](x1, y1)
-    low_x, high_x = sorted((first[0], second[0]))
-    low_y, high_y = sorted((first[1], second[1]))
-    return (left + low_x * width, bottom + low_y * height,
-            left + high_x * width, bottom + high_y * height)
+    corners = [(left + u * width, bottom + v * height)
+               for u, v in (directions[rotation](u, v)
+                            for u, v in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)))]
+    xs, ys = zip(*corners)
+    return (min(xs), min(ys), max(xs), max(ys)), corners
+
+
+def create_annotation(page, note):
+    rect, corners = annotation_geometry(page, note)
+    if note["kind"] == "note":
+        return Text(rect=rect, text=note["text"])
+    quad = ArrayObject([FloatObject(value) for point in corners for value in point])
+    mark = Highlight(rect=rect, quad_points=quad, highlight_color="ffe052", printing=True)
+    if note["text"]:
+        mark[NameObject("/Contents")] = TextStringObject(note["text"])
+    return mark
 
 
 def main():
@@ -48,9 +64,9 @@ def main():
     index = note["page"] - 1
     if not 0 <= index < len(reader.pages):
         return 12
-    rect = annotation_rectangle(reader.pages[index], note["x"], note["y"])
+    annotation = create_annotation(reader.pages[index], note)
     writer = PdfWriter(clone_from=reader)
-    writer.add_annotation(index, Text(rect=rect, text=note["text"]))
+    writer.add_annotation(index, annotation)
     writer.write("output.pdf")
     return 0
 
