@@ -912,7 +912,7 @@ window.__ModuleLoader__.load({
       // Rendering thousands of React buttons at once overflows Firefox's
       // reconciliation stack. Keep source nodes complete; page only the
       // navigation controls. Search still addresses every layer.
-      const [layerVisibleLimit,setLayerVisibleLimit] = React.useState(250)
+      const [layerPageState,setLayerPageState] = React.useState({scope:null,limit:250})
       const [previewMode,setPreviewMode] = React.useState(false)
       const [inspectAdvanced,setInspectAdvanced] = React.useState(false)
       const [creating,setCreating] = React.useState(false)
@@ -2907,9 +2907,11 @@ window.__ModuleLoader__.load({
       const alignmentHint=alignNotice || (gestureBlockedReasons.length
         ? gestureBlockedReasons.join(' ')
         : 'Six alignements, deux distributions, une seule écriture · Undo exact.')
+      const layerPageScope=scopeKey+':'+(doc?.file||'')
       const filteredSvgLayerNodes=nodes.filter(n=>!layerSearch||
         (n.tag+' #'+n.id).toLowerCase().includes(layerSearch.toLowerCase()))
-      const renderedSvgLayerNodes=filteredSvgLayerNodes.slice(0,layerVisibleLimit)
+      const renderedSvgLayerNodes=filteredSvgLayerNodes.slice(0,
+        layerPageState.scope===layerPageScope?layerPageState.limit:250)
       const selected=nodes.find(n=>n.id===active)
       const menuLayer=layerMenu?nodes.find(node=>node.id===layerMenu.id):null
       const menuBlocked=!!(busy||reloadRequired||!doc||doc.format!=='svg'||source!==doc?.source)
@@ -4292,7 +4294,7 @@ window.__ModuleLoader__.load({
                 title:'Non implémenté dans cette version'},'Composants')),
             h('input',{className:'dsh-studio-layer-search',value:layerSearch,
               'aria-label':'Filter layers',placeholder:'Rechercher des calques',
-              onChange:e=>{setLayerSearch(e.target.value);setLayerVisibleLimit(250)}}),
+              onChange:e=>{setLayerSearch(e.target.value);setLayerPageState({scope:layerPageScope,limit:250})}}),
             h('div',{className:'dsh-studio-group'},'Pages'),
             h('div',{className:'dsh-studio-item',style:{margin:'0 7px'}},h('span',{className:'dsh-studio-mini'},'▦'),h('span',{className:'dsh-studio-label'},doc?.file||'Nouveau document')),
             h('div',{className:'dsh-studio-group',style:{marginTop:9}},'Calques',h('span',{style:{float:'right',letterSpacing:0}},nodes.length)),
@@ -4389,7 +4391,9 @@ window.__ModuleLoader__.load({
                 'aria-label':'Afficher plus de calques',
                 'data-layer-pagination':'',
                 title:'Afficher 250 calques supplémentaires ; filtrez pour rechercher dans tous les calques.',
-                onClick:()=>setLayerVisibleLimit(value=>Math.min(filteredSvgLayerNodes.length,value+250))},
+                onClick:()=>setLayerPageState(previous=>({scope:layerPageScope,
+                  limit:Math.min(filteredSvgLayerNodes.length,
+                    (previous.scope===layerPageScope?previous.limit:250)+250)}))},
                 'Afficher '+renderedSvgLayerNodes.length+' / '+filteredSvgLayerNodes.length+' calques · Voir plus'),
             layerDrag&&h('div',{className:'dsh-studio-drop-status',role:'status','data-layer-drop-status':'',
               'data-invalid':layerDrag.plan&&!layerDrag.plan.ok&&!layerDrag.plan.same?'true':'false'},
