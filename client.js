@@ -2841,13 +2841,31 @@ window.__ModuleLoader__.load({
         const direction={ArrowLeft:['x',-1],ArrowRight:['x',1],ArrowUp:['y',-1],ArrowDown:['y',1]}[event.key]
         if(!direction)return
         const item=geometry.handles.find(handle=>handle.id===active)
-        if(!item || !item.move)return
-        event.preventDefault()
+        if(!item?.move || doc.format!=='svg' || layerMenu || tabCloseConfirm || canvasTool!=='select')return
+        if(refuseTextDraft())return
         const [axis,sign]=direction
-        const property=item.move[axis]
         const amount=sign*(event.shiftKey?10:1)
+        if(item.move.kind==='translate') {
+          // Group positions have no x/y attributes. Express a keyboard nudge
+          // in screen/artboard coordinates, then map it through the *parent*
+          // transform inverse before composing the native SVG matrix.
+          const inverse=item.move.inverse
+          if(!Array.isArray(inverse)||inverse.length!==6)return
+          const dx=axis==='x'?amount:0,dy=axis==='y'?amount:0
+          const localX=inverse[0]*dx+inverse[2]*dy
+          const localY=inverse[1]*dx+inverse[3]*dy
+          if(!Number.isFinite(localX)||!Number.isFinite(localY))return
+          event.preventDefault()
+          void save({kind:'svg-transform',id:item.id,operation:{
+            type:'translate',dx:Math.round(localX*1000)/1000,dy:Math.round(localY*1000)/1000}})
+          return
+        }
+        const property=item.move[axis]
         const previous=item.move[axis==='x'?'initialX':'initialY']
-        void save({kind:'svg-attribute',id:item.id,attribute:property,value:String(Math.round((previous+amount)*1000)/1000)})
+        if(typeof property!=='string'||!Number.isFinite(previous))return
+        event.preventDefault()
+        void save({kind:'svg-attribute',id:item.id,attribute:property,
+          value:String(Math.round((previous+amount)*1000)/1000)})
       }
       function onEditorKeyUp(event) {
         if(event.key===' ' || event.code==='Space') setSpaceHeld(false)
