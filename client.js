@@ -825,6 +825,52 @@ window.__ModuleLoader__.load({
                 expectedProposedHash:selection.proposedHash})},'Appliquer la proposition'))))
     }
 
+    const presentationPrintCss = `
+@page { size: 320mm 180mm; margin: 0 }
+@media print {
+  html, body { margin: 0 !important; padding: 0 !important }
+  #dsh-deck { display: block !important; margin: 0 !important; padding: 0 !important }
+  #dsh-deck > section {
+    display: block !important;
+    box-sizing: border-box !important;
+    width: 320mm !important;
+    height: 180mm !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    break-after: page !important;
+  }
+  #dsh-deck > section:last-child { break-after: auto !important }
+}`
+
+    function PresentationPrint({source, linkedCss, disabled}) {
+      const [open,setOpen]=React.useState(false)
+      const [ready,setReady]=React.useState(false)
+      const [error,setError]=React.useState('')
+      const frame=React.useRef(null)
+      function print() {
+        try {
+          const target=frame.current?.contentWindow
+          if(typeof target?.print!=='function') throw new Error('Print unavailable')
+          target.print()
+        } catch(_) {
+          setError('Impression indisponible dans cet environnement.')
+        }
+      }
+      return h('div',null,
+        h('button',{type:'button',style:button,disabled,'aria-expanded':open,onClick:()=>{
+          setReady(false);setError('');setOpen(value=>!value)
+        }},open?'Fermer l’export PDF':'Export PDF'),
+        open&&h('div',null,
+          h('iframe',{ref:frame,title:'Document imprimable de la présentation',
+            sandbox:'allow-same-origin allow-modals',referrerPolicy:'no-referrer',
+            style:{position:'fixed',left:-10000,top:0,width:'320mm',height:'180mm',border:0,pointerEvents:'none'},
+            tabIndex:-1,'aria-hidden':'true',onLoad:()=>setReady(true),
+            srcDoc:safePreview(source,'html','',linkedCss).replace('</head>','<style>'+presentationPrintCss+'</style></head>')}),
+          h('p',null,'Choisissez « Enregistrer au format PDF » dans la boîte d’impression. Les diapositives sont imprimées en 16:9.'),
+          h('button',{type:'button',style:button,disabled:disabled||!ready,onClick:print},'Imprimer la présentation'),
+          error&&h('p',{role:'alert'},error)))
+    }
+
     function PresentationControls({slides, active, select, save, disabled}) {
       const [title,setTitle]=React.useState('')
       const index=slides.findIndex(slide=>slide.id===active)
@@ -5004,6 +5050,8 @@ doc?.format==='css'?
                       style:{width:'100%',display:'grid',gap:8,alignContent:'start',
                         alignSelf:'flex-start',maxHeight:'100%',overflow:'auto'}},
                       slides&&h(PresentationControls,{key:doc.file,slides,active:activeSlide,select:selectSlide,save,
+                        disabled:busy||reloadRequired||source!==doc.source}),
+                      slides&&h(PresentationPrint,{key:doc.identity,source:doc.source,linkedCss:htmlPreviewCss,
                         disabled:busy||reloadRequired||source!==doc.source}),
                       h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
                         style:{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}},

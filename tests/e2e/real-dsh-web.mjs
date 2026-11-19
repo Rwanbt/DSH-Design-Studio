@@ -298,6 +298,21 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     await waitReady('g0-slides.html', deck)
     record('sidebar presentation creates an HTML deck, adds a slide and undoes exactly',
       'PASS', 'real sidebar, on-disk title and byte-exact Undo')
+    await studio.getByRole('button', { name: 'Export PDF', exact: true }).click()
+    const printFrame = studio.locator('iframe[title="Document imprimable de la présentation"]')
+    const printable = await (await printFrame.elementHandle()).contentFrame()
+    await printable.getByText('Untitled slide', { exact: true }).waitFor({ state: 'attached' })
+    await printable.evaluate(() => {
+      window.print = () => { document.body.dataset.dshPrintInvoked = 'true' }
+    })
+    await studio.getByRole('button', { name: 'Imprimer la présentation', exact: true }).click()
+    if (await printable.locator('body').getAttribute('data-dsh-print-invoked') !== 'true') {
+      throw new Error('The print command did not reach the isolated presentation frame')
+    }
+    await expectDisk(deck, 'g0-slides.html')
+    await studio.getByRole('button', { name: 'Fermer l’export PDF', exact: true }).click()
+    record('sidebar prepares and dispatches PDF printing in real DSH Web',
+      'PASS', 'print dispatch observed through frame instrumentation, source bytes untouched')
     await setFileMenu(true)
     await studio.getByLabel('Workspace file', { exact: true }).fill('g0-art.svg')
     await studio.getByRole('button', { name: 'Open', exact: true }).click()

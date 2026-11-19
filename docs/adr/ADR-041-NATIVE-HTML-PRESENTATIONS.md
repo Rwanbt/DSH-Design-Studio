@@ -17,3 +17,13 @@ The preview uses the existing inert HTML iframe and displays the selected
 section. While a source draft is dirty, the preview shows the draft without
 the saved slide filter and slide actions cannot write. Text edits and
 proposals use the normal HTML command path.
+
+## Print to PDF
+
+Export PDF opens an inert, separate print frame for the saved deck. It reuses
+the HTML preview isolation and local CSS projection, allows the print modal
+and gives each slide a fixed 320 × 180 mm print box. The user selects PDF in
+the browser or desktop print dialog. The active slide filter is excluded so
+all slides print in document order. Content beyond the fixed slide box is
+clipped. Browser print settings and unavailable fonts can affect fidelity.
+The exported PDF is independent of the editable HTML source.

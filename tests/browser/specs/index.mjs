@@ -1,4 +1,4 @@
-import { presentationSpec } from './presentation.mjs'
+import { presentationSpec, presentationPrintSpec } from './presentation.mjs'
 import { proposalReviewSpec } from './proposal-review.mjs'
 /**
  * Browser gate spec registry.
@@ -189,4 +189,5 @@ export const specs = [
   largeDocumentSpec,
   proposalReviewSpec,
   presentationSpec,
+  presentationPrintSpec,
 ]
