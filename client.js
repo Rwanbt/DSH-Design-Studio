@@ -3562,8 +3562,14 @@ window.__ModuleLoader__.load({
         if(!doc || source!==doc.source) {setError('Save or discard source changes before dragging');return}
         const rect=event.currentTarget.parentElement.getBoundingClientRect()
         if(rect.width<=0 || rect.height<=0) return
-        select(handle.id);setError('')
-        dragRef.current={id:handle.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:rect.width,height:rect.height,handle,mode,corner:mode==='resize'?(event.currentTarget?.dataset?.corner||'se'):null}
+        const currentIds=selectionIds()
+        const groupIds=mode==='move'&&currentIds.length>1&&currentIds.includes(handle.id)
+          ?currentIds:null
+        if(!groupIds)select(handle.id)
+        setError('')
+        dragRef.current={id:handle.id,ids:groupIds,pointerId:event.pointerId,
+          startX:event.clientX,startY:event.clientY,width:rect.width,height:rect.height,
+          handle,mode,corner:mode==='resize'?(event.currentTarget?.dataset?.corner||'se'):null}
         setDragDelta(null)
         try {event.currentTarget.setPointerCapture(event.pointerId)} catch (_) {}
         event.preventDefault()
@@ -3574,7 +3580,8 @@ window.__ModuleLoader__.load({
         const dx=(event.clientX-drag.startX)*artboard.width/drag.width
         const dy=(event.clientY-drag.startY)*artboard.height/drag.height
         const snapped=snapDrag(drag,dx,dy,!!event.shiftKey,!!event.altKey)
-        setDragDelta({id:drag.id,...snapped,mode:drag.mode,corner:drag.corner,lockAspect:!!event.shiftKey})
+        setDragDelta({id:drag.id,ids:drag.ids,...snapped,mode:drag.mode,
+          corner:drag.corner,lockAspect:!!event.shiftKey})
       }
       function finishDrag(event,cancel=false) {
         const drag=dragRef.current
@@ -3587,6 +3594,13 @@ window.__ModuleLoader__.load({
         const {dx,dy}=snapDrag(drag,unsnappedX,unsnappedY,!!event.shiftKey,!!event.altKey)
         const pixelMovement=Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)
         if(pixelMovement<3) return
+        if(drag.mode==='move'&&drag.ids?.length>1) {
+          // A single Host transaction moves all selected shapes from the same
+          // source revision. The backend rejects overlapping ancestor/child
+          // selections and computes each parent's inverse matrix.
+          void save({kind:'svg-multi-nudge',ids:drag.ids,dx,dy})
+          return
+        }
         const number=value=>String(Math.round(value*1000)/1000)
         const item=drag.handle
         let edits
@@ -4737,7 +4751,9 @@ doc?.format==='css'?
                         background:'rgba(201,167,124,0.15)',
                         pointerEvents:'none',boxSizing:'border-box',zIndex:20}}),
                     handles.flatMap(handle=>{
-                      const delta=dragDelta?.id===handle.id?dragDelta:{dx:0,dy:0,mode:'move'}
+                      const delta=dragDelta?.id===handle.id||
+                        dragDelta?.ids?.includes(handle.id)
+                        ?dragDelta:{dx:0,dy:0,mode:'move'}
                       let left=handle.x+(delta.mode==='move'?delta.dx:0)
                       let top=handle.y+(delta.mode==='move'?delta.dy:0)
                       let width=handle.width,height=handle.height

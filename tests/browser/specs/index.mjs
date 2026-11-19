@@ -39,6 +39,7 @@ import { customScaleSpec } from './custom-scale.mjs'
 import { groupKeyboardNudgeSpec } from './group-keyboard.mjs'
 import { transformedKeyboardNudgeSpec } from './transformed-keyboard.mjs'
 import { multiNudgeSpec } from './multi-nudge.mjs'
+import { multiDragSpec } from './multi-drag.mjs'
 import { selectAllArtboardSpec } from './select-all.mjs'
 import { marqueeSelectionSpec, marqueeModifierSpec, canvasModifierClickSpec } from './marquee.mjs'
 import { gradientStopEditSpec, gradientInheritedReadOnlySpec, gradientNotReferencedSpec, gradientAddStopSpec, gradientRemoveStopSpec, gradientLastStopRefusalSpec, gradientOffsetInspectorSpec, gradientCreateSpec, gradientGeometrySpec, gradientStopMoveSpec, gradientSharedWarningSpec } from './gradient.mjs'
@@ -123,6 +124,7 @@ export const specs = [
   groupKeyboardNudgeSpec,
   transformedKeyboardNudgeSpec,
   multiNudgeSpec,
+  multiDragSpec,
   selectAllArtboardSpec,
   marqueeSelectionSpec,
   marqueeModifierSpec,
