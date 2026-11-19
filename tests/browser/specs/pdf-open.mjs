@@ -20,7 +20,7 @@ export const pdfCopySpec = {
     const { pdfFixture } = await import('../../fixtures/pdf-fixture.mjs')
     const { execFileSync, spawnSync } = await import('node:child_process')
     const file = 'source.pdf'
-    const original = pdfFixture().toString('utf8')
+    const original = pdfFixture([['First text','continues on the next line'],'Second text']).toString('utf8')
     await harness.write(file, original)
     const scan=process.env.DSH_E2E_OCR_FIXTURE
     if (scan) {
@@ -78,7 +78,8 @@ export const pdfCopySpec = {
       await page.getByRole('textbox',{name:'HTML element text'}).fill('Edited PDF text')
       await page.getByRole('button',{name:'Apply HTML element text'}).click()
       await frame.getByText('Edited PDF text',{exact:true}).waitFor()
-      assert.match(await harness.read('source.pdf-text.html'),/id="pdf-page-2-line-1">Edited PDF text/)
+      assert.match(await harness.read('source.pdf-text.html'),/id="pdf-page-2-paragraph-1">Edited PDF text/)
+      assert.match(await harness.read('source.pdf-text.html'),/id="pdf-page-1-paragraph-1">First text continues on the next line<\/p>/)
       assert.equal(await harness.read(file),original)
       if (scan) {
         await page.locator('.dsh-studio-top details.dsh-studio-menu summary').click()

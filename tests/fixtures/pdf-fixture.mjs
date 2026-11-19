@@ -6,7 +6,9 @@ export function pdfFixture(labels = ['First text', 'Second text']) {
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 320 180] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     ...labels.map(text => {
-      const content = 'BT /F1 18 Tf 20 130 Td (' + text + ') Tj ET\n'
+      const lines = Array.isArray(text) ? text : [text]
+      const content = 'BT /F1 18 Tf 20 130 Td 20 TL '+
+        lines.map((line,index)=>(index?'T* ':'')+'('+line+') Tj').join(' ')+' ET\n'
       return '<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream'
     }),
   ]

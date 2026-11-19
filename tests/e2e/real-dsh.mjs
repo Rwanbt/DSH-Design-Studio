@@ -345,7 +345,7 @@ async function main() {
           const imported = await readFile(path.join(workspace,importedPdf.file),'utf8')
           const repeat = await context.request.post(importUrl,{data:{sessionId,file:'g0-source.pdf'}})
           record('import editable PDF text through the real Host',
-            /id="pdf-page-2-line-1">Second text/.test(imported) && repeat.status()===409 &&
+            /id="pdf-page-2-paragraph-1">Second text/.test(imported) && repeat.status()===409 &&
             (await readFile(pdfFile)).equals(pdf) ? 'PASS' : 'FAIL',
             `HTTP ${pdfText.status()}, repeat ${repeat.status()}`)
         } else {
