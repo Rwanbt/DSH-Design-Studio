@@ -2870,7 +2870,17 @@ window.__ModuleLoader__.load({
           setDragDelta(null);setPathDrag(null)
           return
         }
-        if(event.key==='Escape'){setCanvasTool('select');return}
+        if(event.key==='Escape'){
+          // First Escape exits the active drawing tool; in selection mode it
+          // clears the selection, as in desktop vector editors. No file write.
+          event.preventDefault()
+          if(canvasTool!=='select'){setCanvasTool('select');return}
+          if(active||extraSelection.length){
+            setActive('');setExtraSelection([])
+            setAlignNotice('');setNotice('Sélection effacée.')
+          }
+          return
+        }
         const command=event.ctrlKey || event.metaKey
         if(!command && !event.altKey && (event.key===' ' || event.code==='Space')) {
           event.preventDefault()
