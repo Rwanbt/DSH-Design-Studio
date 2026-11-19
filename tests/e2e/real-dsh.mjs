@@ -288,6 +288,9 @@ async function main() {
         record('plugin route /health on the real Host',
           health.status() === 200 && healthBody?.ok === true ? 'PASS' : 'FAIL',
           `HTTP ${health.status()} ${JSON.stringify(healthBody)}`)
+        record('the real DSH registry contains the native agent proposal tool',
+          healthBody?.agentProposal === true ? 'PASS' : 'FAIL',
+          `agentProposal=${healthBody?.agentProposal}`)
 
         const files = await context.request.get(origin +
           '/design-studio-native/files?sessionId=' + encodeURIComponent(sessionId))

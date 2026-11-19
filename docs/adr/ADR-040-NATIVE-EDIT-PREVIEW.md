@@ -40,3 +40,19 @@ revision-checked write. A changed proposal is rejected even when the file
 revision has not changed. A proposal hash is a content precondition. The
 reviewing client is responsible for obtaining human approval and must never
 delegate its apply operation to an agent.
+
+## DSH agent proposal tool
+
+When the DSH tool registry is available, the Host registers
+`design_studio_propose`. The workspace comes from the runtime calling agent
+and its working directory service. Arguments name a relative file and one
+typed edit. Callers cannot supply a workspace, session identifier, raw patch
+or replacement source. The tool reads through the native file store and
+returns a bounded, versioned proposal with patch spans, revision tokens,
+proposed content hash and the DSH call ID. It never writes to disk.
+
+The tool and the editor use the same native planner and preview function.
+The legacy file routes remain available when the optional tool service
+is absent. The proposal's call ID is useful for display and correlation.
+Authentic provenance and approval still require a review UI linked to the
+DSH conversation and explicit application through the guarded editor.

@@ -1,5 +1,4 @@
-import { applyNativePatches } from './native-patch.mjs'
-import { createNativeFileStore, MAX_NATIVE_FILE_BYTES } from './native-file-store.mjs'
+import { createNativeFileStore } from './native-file-store.mjs'
 import { listEditableSvgNodes, svgAttributePatch } from './svg-attributes.mjs'
 import { inspectSvgArtboard, planSvgArtboard } from './svg-artboard.mjs'
 import { svgGeometry } from './svg-geometry.mjs'
@@ -10,24 +9,26 @@ import { planSvgGradientCreation } from './svg-gradient-create.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgRenamePatch } from './svg-rename.mjs'
 import { svgShapeInsertPatch } from './svg-shapes.mjs'
-import { listSvgTextNodes, svgTextPatch } from './svg-text.mjs'
+import { listSvgTextNodes } from './svg-text.mjs'
 import { svgElementPatch } from './svg-elements.mjs'
 import { listWorkspaceDocuments } from './workspace-files.mjs'
-import { listHtmlVisualElements, htmlVisualStylePatch, htmlVisualTextPatch, htmlVisualAttributePatch } from './html-visual.mjs'
+import { listHtmlVisualElements, htmlVisualStylePatch, htmlVisualAttributePatch } from './html-visual.mjs'
 import { svgGroupingPatch } from './svg-groups.mjs'
 import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
 import { svgVisibilityPatch, svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
 import { svgTransformPatch } from './svg-transform.mjs'
 import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
-import { listCssVisualRules, listCssVisualRuleDetails, cssVisualRulePatch, cssMediaDeclarationPatch } from './css-visual.mjs'
+import { listCssVisualRules, listCssVisualRuleDetails, cssMediaDeclarationPatch } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
+
+import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
+import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
 const MAX_BODY = 9 * 1024 * 1024
-const PREVIEWABLE_EDITS = new Set(['svg-text','svg-attribute','html-text','css-rule'])
 
 /** Typed route failure: the HTTP status is derived from `code`, never invented. */
 function failure(code, message, cause) {
@@ -128,7 +129,11 @@ export function createRouteHandler(ctx) {
     try {
       const url = new URL(req.url || '/', 'http://dsh.local')
       const endpoint = url.pathname.slice(PREFIX.length).replace(/\/+$/, '')
-      if (req.method === 'GET' && endpoint === '/health') return reply(res,200,{ok:true,editor:'native-prototype',version:1})
+      if (req.method === 'GET' && endpoint === '/health') {
+        const tools = ctx.get?.('tools')
+        return reply(res,200,{ok:true,editor:'native-prototype',version:1,
+          agentProposal:Boolean(tools?.get(AGENT_PROPOSAL_TOOL))})
+      }
       // The registry projection the sidebar panel needs: ids and titles only,
       // so no filesystem path ever reaches the client through this route.
       if (req.method === 'GET' && endpoint === '/workspaces') {
@@ -285,7 +290,7 @@ export function createRouteHandler(ctx) {
         const preview = endpoint === '/preview'
         const params=await bodyJson(req)
         const reviewed = Object.hasOwn(params,'expectedProposedHash')
-        if ((preview || reviewed) && !PREVIEWABLE_EDITS.has(params.kind)) {
+        if ((preview || reviewed) && !REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           return reply(res,400,{ok:false,error:'unsupported-operation'})
         }
         if (reviewed && (preview || typeof params.expectedProposedHash !== 'string' ||
@@ -302,9 +307,8 @@ export function createRouteHandler(ctx) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
         }
         let patches; let createdId=null
-        if (params.kind === 'css-rule') {
-          if(doc.format!=='css')return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[cssVisualRulePatch(doc.source,{selector:params.selector,property:params.property,value:params.value})]
+        if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
+          patches=planReviewableEdit(doc,params)
         } else if (params.kind === 'css-media') {
           // Conditional editing is addressed by the rule's exact offset and the
           // condition the user was shown, so two identical selectors can never be
@@ -405,12 +409,6 @@ export function createRouteHandler(ctx) {
           // sits alone on its line; no other stop and no other byte moves.
           patches=[svgGradientStopRemovePatch(doc.source,{gradientId:params.gradientId,
             index:params.index}).patch]
-        } else if (params.kind === 'svg-text') {
-          if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[svgTextPatch(doc.source,{id:params.id,value:params.value})]
-        } else if (params.kind === 'svg-attribute') {
-          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[svgAttributePatch(doc.source,{id:params.id,attribute:params.attribute,value:params.value})]
         } else if (params.kind === 'svg-artboard') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           // ONE plan = one transactional write. The explicit content mode puts
@@ -460,11 +458,6 @@ export function createRouteHandler(ctx) {
         } else if (params.kind === 'svg-transform') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgTransformPatch(doc.source,{id:params.id,operation:params.operation}).patch]
-        } else if (params.kind === 'html-text') {
-          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[htmlVisualTextPatch(doc.source,{
-            id:params.id,key:params.key,path:params.path,text:params.value,
-          })]
         } else if (params.kind === 'html-attribute') {
           if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[htmlVisualAttributePatch(doc.source,{
@@ -477,16 +470,9 @@ export function createRouteHandler(ctx) {
           patches=params.patches
         } else return reply(res,400,{ok:false,error:'unsupported-operation'})
         if (preview || reviewed) {
-          const result=applyNativePatches({source:doc.source,format:doc.format,baseHash:doc.hash,patches})
-          if (!result.ok) throw failure(result.code,result.message)
-          if (Buffer.byteLength(result.source) > MAX_NATIVE_FILE_BYTES) {
-            throw failure('too-large','Edited file exceeds 8 MiB')
-          }
-          if (preview) {
-            return reply(res,200,{ok:true,patches,baseHash:doc.hash,baseIdentity:doc.identity,
-              proposedHash:result.hash,changed:result.changed})
-          }
-          if (result.hash !== params.expectedProposedHash) {
+          const proposal=previewNativeEdit(doc,patches)
+          if (preview) return reply(res,200,{ok:true,...proposal})
+          if (proposal.proposedHash !== params.expectedProposedHash) {
             return reply(res,409,{ok:false,error:'proposal-changed',
               message:'The edit no longer matches the preview; review it again before applying'})
           }
@@ -507,4 +493,5 @@ export function createRouteHandler(ctx) {
 
 export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({kind:'prefix',path:PREFIX,handler:createRouteHandler(ctx)}), 'dsh-design-studio native edit routes')
+  ctx.inject?.(['tools'], registerAgentProposal)
 }
