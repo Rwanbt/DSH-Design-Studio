@@ -16,7 +16,6 @@ import { svgGroupingPatch } from './svg-groups.mjs'
 import { planSvgAppearanceTransfer } from './svg-appearance.mjs'
 import { svgLockPatch } from './svg-visibility.mjs'
 import { scanSvgDocument } from './svg-document.mjs'
-import { svgTransformPatch } from './svg-transform.mjs'
 import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
 import { listCssVisualRules, listCssVisualRuleDetails } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
@@ -558,9 +557,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=planSvgMultiNudge(doc.source,{
             ids:params.ids,dx:params.dx,dy:params.dy})
-        } else if (params.kind === 'svg-transform') {
-          if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          patches=[svgTransformPatch(doc.source,{id:params.id,operation:params.operation}).patch]
         } else if (params.kind === 'replace-source' && typeof params.source==='string') {
           patches=[{start:0,end:doc.source.length,before:doc.source,after:params.source}]
         } else if (params.kind === 'patches' && Array.isArray(params.patches)) {

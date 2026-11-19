@@ -130,3 +130,26 @@ export const svgOrderProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const svgTransformProposalReviewSpec = {
+  name: 'proposals: review and undo an SVG translation',
+  async run({ page, harness, assert }) {
+    const file='translation.svg'
+    const original='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'+
+      '<rect id="target" width="30" height="30"/></svg>'
+    await harness.write(file,original)
+    const proposed=await harness.propose({file,kind:'svg-transform',id:'target',operation:{type:'translate',dx:12,dy:5}})
+    assert.equal(proposed.ok,true)
+    await openWorkspaceFile(page,file,{expect:'svg'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*svg-transform/}).click()
+    assert.equal(await harness.read(file),original)
+    await page.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const frame=page.frameLocator('iframe[title="Isolated SVG preview"]')
+    await frame.locator('#target[transform="matrix(1,0,0,1,12,5)"]').waitFor()
+    assert.match(await harness.read(file),/matrix\(1,0,0,1,12,5\)/)
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await frame.locator('#target:not([transform])').waitFor()
+    assert.equal(await harness.read(file),original)
+  },
+}

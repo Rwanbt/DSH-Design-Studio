@@ -4,6 +4,7 @@ import { cssMediaDeclarationPatch, cssVisualRulePatch } from './css-visual.mjs'
 import { appendHtmlSlide, duplicateHtmlSlide, removeHtmlSlide, reorderHtmlSlide } from './html-presentation.mjs'
 import { htmlVisualAttributePatch, htmlVisualStylePatch, htmlVisualTextPatch } from './html-visual.mjs'
 import { svgAttributePatch } from './svg-attributes.mjs'
+import { svgTransformPatch } from './svg-transform.mjs'
 import { svgOrderPatch } from './svg-order.mjs'
 import { svgVisibilityPatch } from './svg-visibility.mjs'
 import { svgTextPatch } from './svg-text.mjs'
@@ -15,7 +16,7 @@ const slidePlanners = Object.freeze({
   'slide-remove': removeHtmlSlide,
 })
 export const REVIEWABLE_EDIT_KINDS = Object.freeze([
-  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
+  'svg-text', 'svg-attribute', 'svg-order', 'svg-visibility', 'svg-transform', 'html-text', 'html-style', 'html-attribute', 'css-rule', 'css-media', ...Object.keys(slidePlanners),
 ])
 
 function fail(code, message) {
@@ -30,6 +31,7 @@ export function planReviewableEdit(document, edit) {
     return [svgAttributePatch(source, { id, attribute: edit.attribute, value })]
   }
   if (format === 'svg') {
+    if (kind === 'svg-transform') return [svgTransformPatch(source,{id,operation:edit.operation}).patch]
     if (kind === 'svg-order') return [svgOrderPatch(source,{id,direction:edit.direction}).patch]
     if (kind === 'svg-visibility') return [svgVisibilityPatch(source,{id,property:edit.property,value:value??null})]
   }
