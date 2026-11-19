@@ -218,3 +218,27 @@ export const svgTextInsertionProposalReviewSpec = {
     assert.equal(await harness.read(file),original)
   },
 }
+
+export const svgGradientProposalReviewSpec = {
+  name: 'proposals: create and apply a native SVG gradient',
+  async run({ page, harness, assert }) {
+    const file='gradient.svg'
+    const original='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'+
+      '<rect id="target" width="90" height="90" fill="#222222"/></svg>'
+    await harness.write(file,original)
+    const proposal=await harness.propose({file,kind:'svg-gradient-create',id:'target',type:'radial',
+      fromColor:'#e84834',toColor:'#143a65'})
+    assert.equal(proposal.ok,true)
+    await openWorkspaceFile(page,file,{expect:'svg'})
+    await page.getByText('Propositions IA',{exact:true}).click()
+    await page.getByRole('button',{name:/Proposition 1.*svg-gradient-create/}).click()
+    await page.getByRole('button',{name:'Appliquer la proposition'}).click()
+    const frame=page.frameLocator('iframe[title="Isolated SVG preview"]')
+    await frame.locator('#target[fill="url(#dsh_gradient_1)"]').waitFor()
+    assert.deepEqual(await frame.locator('radialGradient stop').evaluateAll(stops=>
+      stops.map(stop=>stop.getAttribute('stop-color'))),['#e84834','#143a65'])
+    await page.getByRole('button',{name:'Undo saved edit'}).click()
+    await frame.locator('#target[fill="#222222"]').waitFor()
+    assert.equal(await harness.read(file),original)
+  },
+}

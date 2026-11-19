@@ -8,6 +8,7 @@
 import { scanSvgDocument, svgLockedAncestor } from './svg-document.mjs'
 
 const TARGET_TAGS = new Set(['rect','circle','ellipse','path','polygon','polyline','text'])
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const ID = /^[A-Za-z_][\w.:-]*$/
 function fail(code, message) {
   const error = new Error(message)
@@ -15,10 +16,13 @@ function fail(code, message) {
   throw error
 }
 
-export function planSvgGradientCreation(source, { id, type = 'linear' } = {}) {
+export function planSvgGradientCreation(source, { id, type = 'linear', fromColor, toColor } = {}) {
   if (typeof source !== 'string') fail('invalid-source','SVG source is required')
   if (typeof id !== 'string' || !ID.test(id)) fail('invalid-target','Select a named SVG shape')
   if (type !== 'linear' && type !== 'radial') fail('invalid-target','Expected a linear or radial gradient')
+  if ([fromColor,toColor].some(color=>color!==undefined && (typeof color!=='string'||!HEX_COLOR.test(color)))) {
+    fail('invalid-value','Gradient colours must use three or six hexadecimal digits')
+  }
   let scan
   try { scan = scanSvgDocument(source) }
   catch (error) { fail(error?.code === 'ambiguous-svg' ? 'ambiguous-svg' : 'structure-unavailable',
@@ -39,7 +43,7 @@ export function planSvgGradientCreation(source, { id, type = 'linear' } = {}) {
   // Preserve the designer's selected solid colour as the first stop. Unknown
   // or non-solid paints remain untouched until the explicit action; only safe
   // native hex values become editable gradient stops.
-  const baseColour=/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(currentFill?.value||'')
+  const baseColour=HEX_COLOR.test(currentFill?.value||'')
     ?currentFill.value:'#000000'
   const definitions = root.children.filter(node => node.tag === 'defs')
   if (definitions.length > 1 || definitions.some(node => node.selfClosing)) {
@@ -58,8 +62,8 @@ export function planSvgGradientCreation(source, { id, type = 'linear' } = {}) {
   const geometry = type === 'linear' ? ' x1="0" y1="0" x2="1" y2="0"'
     : ' cx="50%" cy="50%" r="50%"'
   const gradient = (indent) => indent + '<' + tag + ' id="' + gradientId + '"' + geometry + '>' + eol +
-    indent + '  <stop offset="0" stop-color="' + baseColour + '"/>' + eol +
-    indent + '  <stop offset="1" stop-color="#ffffff"/>' + eol +
+    indent + '  <stop offset="0" stop-color="' + (fromColor??baseColour) + '"/>' + eol +
+    indent + '  <stop offset="1" stop-color="' + (toColor??'#ffffff') + '"/>' + eol +
     indent + '</' + tag + '>'
   let where
   let definitionText

@@ -446,6 +446,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         } else if (params.kind==='svg-add-shape' && doc.format==='svg') {
           const created=planShapeAddition(doc.source,params)
           patches=[created.patch];createdId=created.id
+        } else if (params.kind==='svg-gradient-create' && doc.format==='svg') {
+          const created=planSvgGradientCreation(doc.source,params)
+          patches=created.patches;createdId=created.selectedId
         } else if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
         } else if (params.kind === 'svg-layer') {
@@ -494,11 +497,6 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         } else if (params.kind === 'svg-appearance-transfer') {
           if(doc.format!=='svg')return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=planSvgAppearanceTransfer(doc.source,{sourceId:params.sourceId,targetId:params.targetId})
-        } else if (params.kind === 'svg-gradient-create') {
-          if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
-          const created=planSvgGradientCreation(doc.source,{id:params.id,type:params.type})
-          patches=created.patches
-          createdId=created.selectedId
         } else if (params.kind === 'svg-gradient-geometry') {
           if(doc.format!=='svg') return reply(res,400,{ok:false,error:'unsupported-format'})
           patches=[svgGradientGeometryPatch(doc.source,{gradientId:params.gradientId,
