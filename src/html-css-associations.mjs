@@ -62,7 +62,7 @@ function sheetAmbiguities(details) {
     found.push({selector,reason,...extra})
   }
   for(const rule of details){
-    if(rule.scope!=='top-level'){
+    if(rule.scope!=='top-level'&&!rule.mediaEditable){
       add(rule.selector,'inside-at-rule',{atRule:rule.atRule||'unknown'})
       continue
     }
@@ -125,7 +125,7 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
     }
     const details=listCssVisualRuleDetails(sheet.source)
     const parsedRules=details.map(rule=>({
-      rule,parsed:rule.scope==='top-level'?parseCssSelectorList(rule.selector):null,
+      rule,parsed:rule.scope==='top-level'||rule.mediaEditable?parseCssSelectorList(rule.selector):null,
     }))
     // Account for the newline that joins successive linked sheets as well.
     const separator=previewParts.length?1:0
@@ -146,7 +146,7 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
       const element=elements[elementIndex]
       if(!element.editable)continue
       for(const {rule,parsed} of parsedRules){
-        if(rule.scope!=='top-level'||!parsed?.ok)continue
+        if(!parsed?.ok)continue
         const matched=parsed.members.filter(member=>memberMatchesElement(member,element))
         if(!matched.length)continue
         const candidate={
@@ -158,9 +158,11 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
           // A duplicated selector cannot be presented as one possible rule:
           // the target declaration block is ambiguous, so it is refused.
           certainty:rule.reasonCode==='duplicate-selector'?'ambiguous':'possible',
-          editable:rule.editable,reason:rule.reason,reasonCode:rule.reasonCode,
+          editable:rule.editable||rule.mediaEditable,reason:rule.mediaEditable?null:rule.reason,
+          reasonCode:rule.mediaEditable?null:rule.reasonCode,
           declarations:rule.declarations.map(({property,value})=>({property,value})),
         }
+        if(rule.mediaEditable) candidate.media={start:rule.start,condition:rule.mediaCondition}
         if(matched.length>1)
           candidate.matchedSelectors=matched.map(member=>member.selector)
         const unresolved=parsed.members.filter(member=>
@@ -174,7 +176,7 @@ export async function collectHtmlCssCandidates(store,htmlDocument) {
   for(const association of styleMatches){
     const duplicates=new Set()
     for(const match of association.matches){
-      const key=match.selector
+      const key=JSON.stringify([match.selector,match.media?.condition??null])
       if(duplicates.has(key))match.duplicateAcrossFiles=true
       duplicates.add(key)
     }

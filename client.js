@@ -3705,6 +3705,21 @@ window.__ModuleLoader__.load({
            source!==doc.source || !match?.file || !match?.selector)return
         const back={file:doc.file,id:htmlActive}
         const ok=await load(false,match.file,'',data=>{
+          if(match.media) {
+            const current=data.document.identity===match.cssIdentity&&data.cssMedia?.find(rule=>
+              rule.start===match.media.start&&rule.condition===match.media.condition&&rule.selector===match.selector)
+            if(!current) {
+              setCssActive('');setCssMediaStart(null)
+              setError('La règle CSS liée a changé ; réouvrez le HTML pour actualiser les correspondances.')
+              return
+            }
+            const first=current.declarations?.find(entry=>htmlProps.includes(entry.property))
+            setCssActive('');setCssValue('')
+            setCssMediaStart(current.start)
+            setCssMediaProperty(first?.property||'color')
+            setCssMediaValue(first?.value||'')
+            return
+          }
           const current=data.cssRules?.find(rule=>rule.selector===match.selector)
           if(!current) {
             setCssActive('');setCssValue('')
@@ -5539,9 +5554,13 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
               selectedMedia?
               h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginTop:12}},
                 h('strong',{style:{color:ACCENT}},'@media '+selectedMedia.condition),
+                returnHtmlRef&&h('button',{type:'button',style:button,
+                  'aria-label':'Return to linked HTML page',
+                  disabled:busy||reloadRequired||source!==doc.source,
+                  onClick:()=>void returnToHtml()},'← Retour à la page HTML'),
                 h('code',{style:{fontSize:11,color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},selectedMedia.selector),
                 h('small',{style:{color:'var(--dsw-alias-label-secondary, #a9a6a1)'}},
-                  'Règle conditionnelle adressée par sa position exacte. L’aperçu HTML ne l’applique pas : aucune valeur calculée ni cascade n’est affichée.'),
+                  'La règle est éditée à sa position dans la feuille CSS. L’aperçu HTML applique les déclarations prises en charge à la largeur choisie.'),
                 !selectedMedia.conditionalEditable?h('small',{style:{color:'var(--dsw-alias-state-error-primary, #e7b2a8)'}},
                   'Lecture seule : '+conditionalReason(selectedMedia.reason)):
                   h('div',{style:{display:'grid',gap:8}},
@@ -5607,12 +5626,12 @@ h('button',{type:'button',style:button,'aria-label':'Zoom out canvas',
                   selectedHtmlRules.length?
                     selectedHtmlRules.map((match,index)=>
                       h('button',{type:'button',key:match.file+match.selector+index,
-                        'aria-label':'Open linked CSS '+match.selector+' in '+match.file,
+                        'aria-label':'Open linked CSS '+match.selector+' in '+match.file+(match.media?' · @media '+match.media.condition:''),
                         title:'Ouvrir le fichier CSS natif et inspecter '+match.selector,
                         disabled:busy||reloadRequired||source!==doc.source,
                         style:{...button,textAlign:'left',display:'grid',gap:3},
                         onClick:()=>void openLinkedCssRule(match)},
-                        h('span',{style:{color:ACCENT}},match.selector+' · '+match.file),
+                        h('span',{style:{color:ACCENT}},match.selector+' · '+match.file+(match.media?' · @media '+match.media.condition:'')),
                         h('small',{style:{color:'var(--dsw-alias-label-secondary, #bdbbb7)'}},
                           'Spécificité indicative '+match.specificity+
                           (match.editable?'':' · règle en lecture seule')+

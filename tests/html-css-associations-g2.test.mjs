@@ -63,13 +63,15 @@ test('combinators, at-rules and unsupported selectors are refused, not guessed',
   const store=storeFor({'pages/styles/site.css':css})
   const html=htmlWith('styles/site.css','<main id="app"><h1 id="title">Hi</h1></main>')
   const result=await collectHtmlCssCandidates(store,{file:'pages/index.html',source:html})
-  assert.equal(result.styleMatches.find(item=>item.id==='title').matches.length,0)
+  const matches=result.styleMatches.find(item=>item.id==='title').matches
+  assert.equal(matches.length,1)
+  assert.equal(matches[0].media.condition,'(min-width: 600px)')
+  assert.equal(matches[0].editable,true)
   const refusals=result.stylesheets[0].ambiguousSelectors
   assert.ok(Array.isArray(refusals))
   const bySelector=new Map(refusals.map(entry=>[entry.selector,entry]))
   assert.equal(bySelector.get('main > #title').reason,'combinator-not-evaluated')
-  assert.deepEqual(bySelector.get('#title'),
-    {selector:'#title',reason:'inside-at-rule',atRule:'media'})
+  assert.equal(bySelector.has('#title'),false)
   assert.equal(bySelector.get('#title:hover').reason,'unsupported-selector')
   assert.ok(refusals.every(entry=>typeof entry.reason==='string'))
 })
