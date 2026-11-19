@@ -13,8 +13,8 @@ const hasTools = ['pdfinfo','pdfseparate','pdfunite','pdftotext'].every(tool =>
 
 test('PDF page processing rejects invalid page requests and non-PDF input', async () => {
   const copy = createPdfPageCopier()
-  await assert.rejects(copy(pdfFixture(),[0]), { code: 'invalid-pdf-pages' })
-  await assert.rejects(copy(Buffer.from('not a PDF'),[1]), { code: 'invalid-pdf' })
+  await assert.rejects(copy([{file:'source.pdf',pages:[0]}],()=>pdfFixture()), { code: 'invalid-pdf-pages' })
+  await assert.rejects(copy([{file:'source.pdf',pages:[1]}],()=>Buffer.from('not a PDF')), { code: 'invalid-pdf' })
 })
 
 test('PDF page copy preserves original bytes and selectable text in requested order', { skip: !hasTools }, async context => {
@@ -30,9 +30,29 @@ test('PDF page copy preserves original bytes and selectable text in requested or
   await assert.rejects(store.readPdf('../source.pdf'),{ code:'invalid-path' })
   const copy = createPdfPageCopier()
   const output = path.join(root,'result.pdf')
-  await writeFile(output,await copy(snapshot.source,[2,1,2]))
+  await writeFile(output,await copy([{file:'source.pdf',pages:[2,1,2]}],()=>snapshot.source))
   const text = execFileSync('pdftotext',[output,'-'],{encoding:'utf8'})
   assert.deepEqual(text.match(/(?:First|Second) text/g),['Second text','First text','Second text'])
   assert.deepEqual(await readFile(original),source)
-  await assert.rejects(copy(snapshot.source,[3]),{ code:'invalid-pdf-pages' })
+  await assert.rejects(copy([{file:'source.pdf',pages:[3]}],()=>snapshot.source),{ code:'invalid-pdf-pages' })
+})
+
+test('ordered selections can interleave sources and reuse one source snapshot', { skip: !hasTools }, async context => {
+  const folder = await mkdtemp(path.join(tmpdir(),'dsh-test-pdf-'))
+  context.after(() => rm(folder,{recursive:true,force:true}))
+  const sources = new Map([['a.pdf',pdfFixture()],['b.pdf',pdfFixture(['Third text','Fourth text'])]])
+  const reads = []
+  const result = await createPdfPageCopier()([
+    {file:'a.pdf',pages:[2]},
+    {file:'b.pdf',pages:[1]},
+    {file:'a.pdf',pages:[1,2]},
+  ],file=>{
+    reads.push(file)
+    return sources.get(file)
+  })
+  const output = path.join(folder,'result.pdf')
+  await writeFile(output,result)
+  assert.deepEqual(reads,['a.pdf','b.pdf'])
+  const text = execFileSync('pdftotext',[output,'-'],{encoding:'utf8'})
+  assert.deepEqual(text.match(/(?:First|Second|Third) text/g),['Second text','Third text','First text','Second text'])
 })

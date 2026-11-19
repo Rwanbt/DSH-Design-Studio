@@ -32,44 +32,81 @@ async function run(binary, args, cwd, signal) {
   }
 }
 
+
+function groupSelections(selections) {
+  if (!Array.isArray(selections) || selections.length === 0 || selections.length > 8) {
+    fail('invalid-pdf-pages','Choose one to eight PDF selections')
+  }
+  const groups = new Map()
+  const order = []
+  for (const selection of selections) {
+    if (!selection || typeof selection.file !== 'string' || !selection.file) {
+      fail('invalid-pdf-pages','Choose a PDF for each selection')
+    }
+    validatePages(selection.pages)
+    if (order.length + selection.pages.length > maxPages) {
+      fail('invalid-pdf-pages','Choose at most 24 pages across all selections')
+    }
+    if (!groups.has(selection.file)) {
+      groups.set(selection.file,{ index:groups.size, pages:new Set() })
+    }
+    const group = groups.get(selection.file)
+    for (const page of selection.pages) {
+      group.pages.add(page)
+      order.push(`source-${group.index}-page-${page}.pdf`)
+    }
+  }
+  return { groups, order }
+}
+
+async function extractPages(folder, signal, group, bytes, recordSize) {
+  if (!bytes.subarray(0,5).equals(Buffer.from('%PDF-'))) fail('invalid-pdf','The source is not a PDF')
+  const prefix = 'source-' + group.index
+  const input = prefix + '.pdf'
+  await writeFile(path.join(folder,input),bytes,{mode:0o600})
+  const info = await run('pdfinfo',[input],folder,signal)
+  const count = Number(/^Pages:\s+(\d+)/m.exec(info)?.[1])
+  if (/^Encrypted:\s+yes/m.test(info)) fail('pdf-protected','Protected PDFs cannot be copied')
+  if (!Number.isSafeInteger(count) || [...group.pages].some(page => page > count)) {
+    fail('invalid-pdf-pages','A selected page does not exist in the source PDF')
+  }
+  for (const page of group.pages) {
+    await run('pdfseparate',['-f',String(page),'-l',String(page),input,prefix+'-page-%d.pdf'],folder,signal)
+    const name = prefix + '-page-' + page + '.pdf'
+    recordSize(name,(await stat(path.join(folder,name))).size)
+  }
+}
+
 export function createPdfPageCopier() {
   let busy = false
-  return async (bytes, pages) => {
-    validatePages(pages)
-    if (!bytes.subarray(0,5).equals(Buffer.from('%PDF-'))) fail('invalid-pdf','The source is not a PDF')
+  return async (selections, readSource) => {
+    const { groups, order } = groupSelections(selections)
     if (busy) fail('file-busy','Another PDF copy is being processed')
     busy = true
     let folder
     try {
       folder = await mkdtemp(path.join(tmpdir(),'dsh-pdf-copy-'))
-      const input = 'input.pdf'
-      const output = 'output.pdf'
       const signal = AbortSignal.timeout(15_000)
-      await writeFile(path.join(folder,input),bytes,{mode:0o600})
-      const info = await run('pdfinfo',[input],folder,signal)
-      const count = Number(/^Pages:\s+(\d+)/m.exec(info)?.[1])
-      if (/^Encrypted:\s+yes/m.test(info)) fail('pdf-protected','Protected PDFs cannot be copied')
-      if (!Number.isSafeInteger(count) || pages.some(page => page > count)) {
-        fail('invalid-pdf-pages','A selected page does not exist in the source PDF')
-      }
       const sizes = new Map()
       let extractedBytes = 0
-      for (const page of new Set(pages)) {
-        await run('pdfseparate',['-f',String(page),'-l',String(page),input,'page-%d.pdf'],folder,signal)
-        const size = (await stat(path.join(folder,`page-${page}.pdf`))).size
-        sizes.set(page,size)
+      const recordSize = (file,size) => {
+        sizes.set(file,size)
         extractedBytes += size
         if (extractedBytes > maxOutputBytes) fail('too-large','Extracted PDF pages exceed 16 MiB')
       }
-      if (pages.reduce((total,page)=>total+sizes.get(page),0) > maxOutputBytes) {
+      for (const [file,group] of groups) {
+        await extractPages(folder,signal,group,await readSource(file),recordSize)
+      }
+      if (order.reduce((total,file)=>total+sizes.get(file),0) > maxOutputBytes) {
         fail('too-large','The selected page copies exceed 16 MiB')
       }
-      if (pages.length === 1) {
-        await copyFile(path.join(folder,`page-${pages[0]}.pdf`),path.join(folder,output))
-      } else {
-        await run('pdfunite',[...pages.map(page=>`page-${page}.pdf`),output],folder,signal)
-      }
+      const output = 'output.pdf'
       const result = path.join(folder,output)
+      if (order.length === 1) {
+        await copyFile(path.join(folder,order[0]),result)
+      } else {
+        await run('pdfunite',[...order,output],folder,signal)
+      }
       if ((await stat(result)).size > maxOutputBytes) fail('too-large','The output PDF exceeds 16 MiB')
       return await readFile(result)
     } finally {

@@ -188,8 +188,8 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
       if (req.method === 'POST' && endpoint === '/pdf/copy') {
         const params = await bodyJson(req)
         const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
-        const pdf = await store.readPdf(params.file)
-        const bytes = await copyPdfPages(pdf.source,params.pages)
+        const selections = params.selections ?? [{file:params.file,pages:params.pages}]
+        const bytes = await copyPdfPages(selections,async file=>(await store.readPdf(file)).source)
         res.writeHead(200,{'content-type':'application/pdf','content-length':bytes.length,
           'content-disposition':'attachment; filename="pages.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'})
         return res.end(bytes)

@@ -908,12 +908,25 @@ window.__ModuleLoader__.load({
           h('button',{type:'submit',style:button,disabled:disabled||!title.trim()||slides.length>=32},'Ajouter une diapositive')))
     }
 
-    function PdfCopy({file, scopeBody, close}) {
-      const [selection,setSelection]=React.useState('')
+    function PdfCopy({file, files, scopeBody, close}) {
+      const [rows,setRows]=React.useState([{id:0,file,selection:''}])
+      const nextId=React.useRef(1)
       const [busy,setBusy]=React.useState(false)
       const [error,setError]=React.useState('')
-      const numbers=selection.trim().split(/\s*,\s*/)
-      const valid=numbers.length<=24&&numbers.every(number=>/^[1-9]\d{0,4}$/.test(number)&&Number(number)<=10000)
+      const selections=rows.map(row=>({file:row.file,pages:row.selection.trim().split(/\s*,\s*/)}))
+      const valid=selections.reduce((total,item)=>total+item.pages.length,0)<=24&&
+        selections.every(item=>item.pages.every(page=>/^[1-9]\d{0,4}$/.test(page)&&Number(page)<=10000))
+      function update(id,patch) {
+        setRows(previous=>previous.map(row=>row.id===id?{...row,...patch}:row))
+      }
+      function move(index,offset) {
+        setRows(previous=>{
+          const edited=previous.slice()
+          const [row]=edited.splice(index,1)
+          edited.splice(index+offset,0,row)
+          return edited
+        })
+      }
       async function exportCopy(event) {
         event.preventDefault()
         if(!valid||busy)return
@@ -921,10 +934,12 @@ window.__ModuleLoader__.load({
         try {
           const response=await fetch(new URL('/'+api+'/pdf/copy',document.baseURI),{
             method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
-            body:JSON.stringify({...scopeBody,file,pages:numbers.map(Number)}),
+            body:JSON.stringify({...scopeBody,selections:selections.map(item=>({...item,pages:item.pages.map(Number)}))}),
           })
           if(!response.ok) throw new Error((await response.json()).message || 'Copie PDF indisponible')
-          downloadBlob(await response.blob(),file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf')
+          const uniqueFiles=new Set(selections.map(item=>item.file))
+          const name=uniqueFiles.size===1?selections[0].file.split('/').at(-1).replace(/\.pdf$/i,'')+'-pages.pdf':'assemblage.pdf'
+          downloadBlob(await response.blob(),name)
           close()
         } catch(error) {
           setError(String(error.message))
@@ -935,10 +950,23 @@ window.__ModuleLoader__.load({
       return h('form',{onSubmit:exportCopy,'aria-label':'Assembler des pages PDF',
         style:{position:'absolute',top:98,right:12,width:'min(420px, calc(100% - 24px))',boxSizing:'border-box',
           display:'grid',gap:8,padding:12,background:'var(--panel)',border:'1px solid var(--line)',
-          borderRadius:8,zIndex:45}},
-        h('strong',null,file),
-        h('label',null,'Pages dans l’ordre souhaité',
-          h('input',{style:field,value:selection,placeholder:'3, 1, 2',maxLength:160,onChange:event=>setSelection(event.target.value)})),
+          borderRadius:8,zIndex:45,maxHeight:'calc(100% - 110px)',overflow:'auto'}},
+        rows.map((row,index)=>h('fieldset',{key:row.id,disabled:busy,style:{display:'grid',gap:6,minWidth:0}},
+          h('legend',null,'Sélection '+(index+1)),
+          h('label',null,'Fichier PDF',
+            h('select',{style:field,value:row.file,onChange:event=>update(row.id,{file:event.target.value})},
+              files.map(item=>h('option',{key:item.path,value:item.path},item.path)))),
+          h('label',null,'Pages dans l’ordre souhaité',
+            h('input',{style:field,value:row.selection,placeholder:'3, 1, 2',maxLength:160,
+              onChange:event=>update(row.id,{selection:event.target.value})})),
+          rows.length>1&&h('div',{style:{display:'flex',gap:4}},
+            h('button',{type:'button',style:button,disabled:index===0,onClick:()=>move(index,-1)},'Monter'),
+            h('button',{type:'button',style:button,disabled:index===rows.length-1,onClick:()=>move(index,1)},'Descendre'),
+            h('button',{type:'button',style:button,onClick:()=>setRows(previous=>previous.filter(item=>item.id!==row.id))},'Retirer')))),
+        h('button',{type:'button',style:button,disabled:busy||rows.length>=8,onClick:()=>{
+          const id=nextId.current++
+          setRows(previous=>[...previous,{id,file:files.find(item=>item.path!==previous.at(-1).file)?.path||file,selection:''}])
+        }},'Ajouter une sélection'),
         h('div',{style:{display:'flex',gap:8}},
           h('button',{type:'submit',style:button,disabled:!valid||busy},busy?'Assemblage…':'Télécharger la copie PDF'),
           h('button',{type:'button',style:button,onClick:close,disabled:busy},'Fermer')),
@@ -4533,7 +4561,7 @@ window.__ModuleLoader__.load({
             ['circle','path'].map(shape=>h('button',{key:shape,style:button,'aria-label':'Add '+shape,disabled:!doc||doc.format!=='svg'||busy||reloadRequired||source!==doc.source,onClick:()=>void save({kind:'svg-add-shape',shape})},'Ajouter '+shape)),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Start new pen path',disabled:busy||reloadRequired,onClick:()=>{setPenPathId('');setPenOutgoing(null)}},'Nouvelle Plume'),
             canvasTool==='pen'&&h('button',{style:button,'aria-label':'Close current pen path',disabled:busy||reloadRequired||!penPathId||(pathNodes.find(path=>path.id===penPathId)?.points?.filter(p=>p.role==='anchor').length||0)<3,onClick:()=>void closePenPath()},'Fermer le tracé')))),
-        canOpenPdf&&pdfCopyFile&&h(PdfCopy,{key:scopeKey+pdfCopyFile,file:pdfCopyFile,scopeBody,close:()=>setPdfCopyFile('')}),
+        canOpenPdf&&pdfCopyFile&&h(PdfCopy,{key:scopeKey+pdfCopyFile,file:pdfCopyFile,files:workspaceFiles.filter(item=>item.format==='pdf'),scopeBody,close:()=>setPdfCopyFile('')}),
                 showFiles&&doc&&h('div',{className:'dsh-studio-file-picker',style:{
           padding:'10px 14px',background:'#26282b',borderBottom:'1px solid #47484a',
           maxHeight:225,overflow:'auto',display:'flex',flexDirection:'column',gap:8

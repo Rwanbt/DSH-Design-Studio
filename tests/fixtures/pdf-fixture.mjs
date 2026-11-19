@@ -1,11 +1,11 @@
-export function pdfFixture() {
+export function pdfFixture(labels = ['First text', 'Second text']) {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 320 180] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 320 180] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    ...['First text','Second text'].map(text => {
+    ...labels.map(text => {
       const content = 'BT /F1 18 Tf 20 130 Td (' + text + ') Tj ET\n'
       return '<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream'
     }),

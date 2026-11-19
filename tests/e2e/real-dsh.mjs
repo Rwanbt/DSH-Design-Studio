@@ -305,11 +305,14 @@ async function main() {
         const pdfFile = path.join(workspace, 'g0-source.pdf')
         const pdf = pdfFixture()
         await writeFile(pdfFile, pdf)
+        const secondPdf = pdfFixture(['Third text','Fourth text'])
+        const secondPdfFile = path.join(workspace, 'g0-other.pdf')
+        await writeFile(secondPdfFile, secondPdf)
         const copied = await context.request.post(origin + '/design-studio-native/pdf/copy', {
-          data: { sessionId, file: 'g0-source.pdf', pages: [2,1,2] },
+          data: { sessionId, selections: [{file:'g0-source.pdf',pages:[2]},{file:'g0-other.pdf',pages:[1]}] },
         })
         const copyType = copied.headers()['content-type']
-        const sourcePreserved = (await readFile(pdfFile)).equals(pdf)
+        const sourcePreserved = (await readFile(pdfFile)).equals(pdf) && (await readFile(secondPdfFile)).equals(secondPdf)
         const copyBytes = await copied.body()
         const copyError = copied.status() === 400 && copyType?.startsWith('application/json')
           ? JSON.parse(copyBytes.toString()).error : null

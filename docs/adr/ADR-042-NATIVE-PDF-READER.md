@@ -20,3 +20,9 @@ processing limits are reported before any download.
 The current copy preserves tested page content and selectable text.
 Document outlines, forms, signatures and annotation fidelity need
 separate qualification.
+
+The assembly form accepts up to eight selections from PDFs in the same
+conversation workspace and up to 24 output pages total. The controls move
+whole selections up and down. Each selection preserves the entered page
+order, and a repeated source is read once. The legacy single-file request
+remains supported. Cross-workspace inputs are outside the PDF copy API.
