@@ -61,7 +61,11 @@ export function planSvgAppearanceTransfer(source,{sourceId,targetId}={}) {
   if(!explicit)fail('no-appearance','Source has no explicitly authored SVG appearance')
   if(insertions.length){
     const position=to.openEnd-(to.selfClosing?2:1)
-    patches.push({start:position,end:position,before:'',after:insertions.join('')})
+    // Reuse existing whitespace immediately before "/>" or ">" when present:
+    // do not create duplicate spaces, and do not delete any source bytes.
+    let added=insertions.join('')
+    if(/[ \t\r\n]/.test(source[position-1]||'')) added=added.replace(/^ /,'')
+    patches.push({start:position,end:position,before:'',after:added})
   }
   if(!patches.length)fail('unchanged','Destination already has these exact native style values')
   if(patches.length>16)fail('invalid-batch','Too many style patches')
