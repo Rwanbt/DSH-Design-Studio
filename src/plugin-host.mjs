@@ -20,7 +20,7 @@ import { planSvgMultiNudge } from './svg-multi-nudge.mjs'
 import { listCssVisualRules, listCssVisualRuleDetails } from './css-visual.mjs'
 import { collectHtmlCssCandidates } from './html-css-associations.mjs'
 
-import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
+import { planReviewableBatch, planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
 import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs'
 
 import { createProposalInbox } from './proposal-inbox.mjs'
@@ -423,7 +423,8 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
             baseIdentity:params.baseIdentity, expectedProposedHash:params.expectedProposedHash }
         }
         const reviewed = Object.hasOwn(params,'expectedProposedHash')
-        if ((preview || reviewed) && !REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
+        const batch = Boolean(approval) && params.kind==='batch'
+        if ((preview || reviewed) && !batch && !REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           return reply(res,400,{ok:false,error:'unsupported-operation'})
         }
         if (reviewed && (preview || typeof params.expectedProposedHash !== 'string' ||
@@ -440,7 +441,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           return reply(res,409,{ok:false,error:'stale-revision',message:'File content or identity changed; reopen before editing'})
         }
         let patches; let createdId=null
-        if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
+        if (batch) {
+          patches=planReviewableBatch(doc,params.edits)
+        } else if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
         } else if (params.kind === 'svg-layer') {
           if (doc.format !== 'svg') return reply(res,400,{ok:false,error:'unsupported-format'})

@@ -97,6 +97,14 @@ test('DSH proposal tool prepares a scoped native diff without saving', async con
   assert.deepEqual((await request('GET',endpoint+agent.id)).payload.proposals,[])
   assert.equal(await readFile(join(root,inputs.file),'utf8'),original)
 
+  const edits=[{kind:'html-text',id:'hero',value:'Batch'},{kind:'html-style',id:'hero',property:'color',value:'#123456'}]
+  const batch=await invoke({file:inputs.file,kind:'batch',edits})
+  assert.equal(batch.ok,true)
+  assert.equal(batch.proposal.patches.length,2)
+  assert.equal((await invoke({file:inputs.file,kind:'batch',edits:[edits[0],edits[0]]})).ok,false)
+  assert.equal((await invoke({file:inputs.file,kind:'batch',edits:[edits[0],{...edits[1],file:'other.html'}]})).error,'invalid-edit')
+  assert.equal(await readFile(join(root,inputs.file),'utf8'),original)
+
   const style = await invoke({file:inputs.file,kind:'html-style',id:'hero',property:'color',value:'#123456'})
   assert.equal(style.ok,true)
   assert.match(style.proposal.patches[0].after,/color: #123456/)

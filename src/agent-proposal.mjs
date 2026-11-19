@@ -1,5 +1,5 @@
 import { createNativeFileStore } from './native-file-store.mjs'
-import { planReviewableEdit, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
+import { planReviewableEdit, planReviewableBatch, previewNativeEdit, REVIEWABLE_EDIT_KINDS } from './reviewable-edit.mjs'
 
 const editFields = Object.freeze({
   'html-text': ['id', 'value'],
@@ -58,19 +58,43 @@ function validatedEdit(args) {
   return Object.fromEntries(fields.map(field => [field, args[field]]))
 }
 
+const maxBatchEdits=6
+const editProperties = Object.fromEntries(optional.map(field=>
+  [field,field==='operation'?transformSchema:{type:'string'}]))
+
+function validatedProposal(args) {
+  if(args?.kind!=='batch')return validatedEdit(args)
+  if(Object.keys(args).length!==3||typeof args.file!=='string'||!args.file.trim()||
+    !Array.isArray(args.edits)||args.edits.length<2||args.edits.length>maxBatchEdits)return null
+  const edits=[]
+  for(const operation of args.edits) {
+    if(!operation||typeof operation!=='object'||Array.isArray(operation)||Object.hasOwn(operation,'file'))return null
+    const edit=validatedEdit({...operation,file:args.file})
+    if(!edit)return null
+    delete edit.file
+    edits.push(edit)
+  }
+  return {file:args.file,kind:'batch',edits}
+}
+
 export const AGENT_PROPOSAL_TOOL = 'design_studio_propose'
 
 export function registerAgentProposal(ctx, inbox) {
   ctx.tools.register({
     name: AGENT_PROPOSAL_TOOL,
-    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. The tool never saves the file.',
+    description: 'Prepare a read-only Design Studio edit for human review. Use a relative file in the current session and a supported typed edit. Show the resulting proposal to the user. Use id, property and value for html-style or id, attribute and value for html-attribute. Use id and direction (front, back, forward or backward) for svg-order, and id, property (display or visibility), and value for svg-visibility. For svg-transform use id and an operation object with type and numeric components (translate dx/dy, scale sx/sy, rotate or skew angle, matrix six values). Use selector, condition, property and value for css-media, with the exact selector and a simple width condition. For slide-add supply id and title, for slide-reorder id and direction (earlier or later), for slide-duplicate id and newId, and for slide-remove id. Slide ids start with slide-. Use batch with an edits array of two to six typed edits for the same file. Every edit targets the original revision and source ranges must not overlap. The tool never saves the file.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       required,
       properties: {
-        ...Object.fromEntries([...required, ...optional].map(field => [field, field==='operation'?transformSchema:{ type: 'string' }])),
-        kind: { type: 'string', enum: REVIEWABLE_EDIT_KINDS },
+        file:{type:'string'},
+        ...editProperties,
+        kind:{type:'string',enum:[...REVIEWABLE_EDIT_KINDS,'batch']},
+        edits:{type:'array',minItems:2,maxItems:maxBatchEdits,items:{
+          type:'object',additionalProperties:false,required:['kind'],
+          properties:{...editProperties,kind:{type:'string',enum:REVIEWABLE_EDIT_KINDS}},
+        }},
       },
     },
     output: {
@@ -81,14 +105,15 @@ export function registerAgentProposal(ctx, inbox) {
       const { agent, signal, callId } = execution
       signal.throwIfAborted()
       if (!agent) return JSON.stringify({ ok: false, error: 'no-session' })
-      const edit = validatedEdit(args)
+      const edit = validatedProposal(args)
       if (!edit) return JSON.stringify({ ok: false, error: 'invalid-edit' })
       try {
         const root = await ctx.workingDirectory.ensure(agent, signal)
         signal.throwIfAborted()
         const document = await createNativeFileStore(root).read(edit.file)
         signal.throwIfAborted()
-        const preview = previewNativeEdit(document, planReviewableEdit(document, edit))
+        const patches=edit.kind==='batch'?planReviewableBatch(document,edit.edits):planReviewableEdit(document,edit)
+        const preview = previewNativeEdit(document,patches)
         const proposal = { version: 1, edit, ...preview }
         const output = JSON.stringify({ ok: true, proposal, callId })
         if (Buffer.byteLength(output) > maxProposalBytes) {

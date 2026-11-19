@@ -837,7 +837,7 @@ window.__ModuleLoader__.load({
           state.status&&h('div',{role:'status'},state.status),
           state.proposals.map((proposal,index)=>h('button',{key:proposal.id,type:'button',style:button,
             'aria-pressed':selection?.id===proposal.id,disabled:discarding,onClick:()=>{setSelection(proposal);setShowPreview(false)}},
-            'Proposition '+(index+1)+' · '+proposal.edit.kind)),
+            'Proposition '+(index+1)+' · '+(proposal.edit.kind==='batch'?proposal.edit.edits.length+' modifications':proposal.edit.kind))),
           selection&&h('section',{'aria-label':'Comparaison de la proposition'},
             h('p',null,active.file),
             h('small',null,'Appel DSH '+selection.callId),

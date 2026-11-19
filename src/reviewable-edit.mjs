@@ -53,6 +53,10 @@ export function planReviewableEdit(document, edit) {
   fail('unsupported-format', 'This edit is not supported for the document format')
 }
 
+export function planReviewableBatch(document,edits) {
+  return edits.flatMap(edit=>planReviewableEdit(document,edit))
+}
+
 export function previewNativeEdit(document, patches) {
   const { source, format, hash, identity } = document
   const result = applyNativePatches({ source, format, baseHash: hash, patches })

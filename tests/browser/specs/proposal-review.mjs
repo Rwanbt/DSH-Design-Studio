@@ -71,29 +71,33 @@ export const slideProposalReviewSpec = {
 }
 
 export const htmlStyleProposalReviewSpec = {
-  name: 'proposals: apply and undo an inline style with a visible preview',
+  name: 'proposals: apply and undo a style and text batch with a visible preview',
   async run({ page, harness, assert }) {
     const file = 'styled.html'
     const original = '<h1 id="hero" style="color: #222222">Title</h1>'
     await harness.write(file,original)
-    const result = await harness.propose({file,kind:'html-style',id:'hero',property:'color',value:'#123456'})
+    const result = await harness.propose({file,kind:'batch',edits:[
+      {kind:'html-style',id:'hero',property:'color',value:'#123456'},
+      {kind:'html-text',id:'hero',value:'Updated title'},
+    ]})
     assert.equal(result.ok,true)
     await openWorkspaceFile(page,file,{expect:'html'})
     await page.getByText('Propositions IA',{exact:true}).click()
-    await page.getByRole('button',{name:/Proposition 1.*html-style/}).click()
+    await page.getByRole('button',{name:/Proposition 1.*2 modifications/}).click()
     const review = page.getByRole('region',{name:'Comparaison de la proposition'})
     await review.getByText(/#123456/).waitFor()
     await review.getByRole('button',{name:'Afficher l’aperçu comparatif'}).click()
     const before=review.frameLocator('iframe[title="Aperçu avant"]').getByText('Title',{exact:true})
-    const after=review.frameLocator('iframe[title="Aperçu après"]').getByText('Title',{exact:true})
+    const after=review.frameLocator('iframe[title="Aperçu après"]').getByText('Updated title',{exact:true})
     assert.equal(await review.locator('iframe[title="Aperçu après"]').getAttribute('sandbox'),'')
     assert.equal(await before.evaluate(element=>getComputedStyle(element).color),'rgb(34, 34, 34)')
     assert.equal(await after.evaluate(element=>getComputedStyle(element).color),'rgb(18, 52, 86)')
     assert.equal(await harness.read(file),original)
     await review.getByRole('button',{name:'Appliquer la proposition'}).click()
-    const heading=page.frameLocator('iframe[title="Isolated design preview"]').getByText('Title',{exact:true})
+    const heading=page.frameLocator('iframe[title="Isolated design preview"]').locator('#hero')
     await heading.locator('xpath=self::*[@style="color: #123456"]').waitFor()
     assert.equal(await heading.evaluate(element=>getComputedStyle(element).color),'rgb(18, 52, 86)')
+    assert.equal(await heading.textContent(),'Updated title')
     await page.getByRole('button',{name:'Undo saved edit'}).click()
     await heading.locator('xpath=self::*[@style="color: #222222"]').waitFor()
     assert.equal(await harness.read(file),original)
