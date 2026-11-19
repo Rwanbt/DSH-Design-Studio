@@ -945,3 +945,20 @@ export function htmlVisualAttributePatch(source,request) {
     after:`${existing.name}="${value}"`,
   }
 }
+
+export function inspectHtmlFragmentAttributes(source) {
+  const { elements, malformed } = scanHtmlStructure(source)
+  if (malformed || !elements.length || elements.some(element =>
+    elementReadonlyReason(element) || !element.balanced || !element.parsedAttributes.ok)) {
+    targetFailure('unsupported-fragment', 'The fragment has ambiguous markup or inert content')
+  }
+  return elements.flatMap(element => element.parsedAttributes.attributes)
+}
+
+export function collectHtmlDocumentIds(source) {
+  const { elements, malformed } = scanHtmlStructure(source)
+  if (malformed || elements.some(element => !element.parsedAttributes.ok)) {
+    targetFailure('unsupported-source', 'The document identifiers cannot be mapped safely')
+  }
+  return new Set(elements.map(element => element.id).filter(Boolean))
+}

@@ -1,4 +1,4 @@
-import { listHtmlVisualElements, resolveHtmlVisualElement } from './html-visual.mjs'
+import { collectHtmlDocumentIds, inspectHtmlFragmentAttributes, listHtmlVisualElements, resolveHtmlVisualElement } from './html-visual.mjs'
 
 const deckId = 'dsh-deck'
 const slideId = /^slide-[a-z][a-z0-9-]{0,47}$/
@@ -81,4 +81,60 @@ export function reorderHtmlSlide(source, { id, direction }) {
     start:left.start, end:right.end, before:source.slice(left.start,right.end),
     after:source.slice(right.start,right.end)+source.slice(left.end,right.start)+source.slice(left.start,left.end),
   }
+}
+
+const idReferenceAttributes = new Set([
+  'for', 'form', 'headers', 'list', 'aria-activedescendant', 'aria-controls',
+  'aria-describedby', 'aria-details', 'aria-errormessage', 'aria-flowto',
+  'aria-labelledby', 'aria-owns',
+])
+const urlReferenceAttributes = new Set([
+  'style', 'fill', 'stroke', 'filter', 'mask', 'clip-path',
+  'marker-start', 'marker-mid', 'marker-end',
+])
+
+function remapSlideAttribute(attribute, ids) {
+  const { lowerName: name, value } = attribute
+  if (value === null) return value
+  if (name === 'id') return ids.get(value)
+  if ((name === 'href' || name === 'xlink:href') && value.startsWith('#')) {
+    return ids.has(value.slice(1)) ? '#' + ids.get(value.slice(1)) : value
+  }
+  if (idReferenceAttributes.has(name)) return value.replace(/[^\s]+/g, id => ids.get(id) ?? id)
+  if (urlReferenceAttributes.has(name)) {
+    return value.replace(/url\(\s*(['"]?)#([\w:.-]+)\1\s*\)/gi,
+      (expression, quote, id) => ids.has(id) ? `url(${quote}#${ids.get(id)}${quote})` : expression)
+  }
+  return value
+}
+
+export function duplicateHtmlSlide(source, { id, newId }) {
+  if (typeof newId !== 'string' || !slideId.test(newId)) fail('invalid-slide', 'Expected a valid new slide ID')
+  const { slides } = readHtmlPresentation(source)
+  if (slides.length >= maxSlides) fail('too-many-slides', 'The presentation already has 32 slides')
+  const slide = slides.find(entry => entry.id === id)
+  if (!slide) fail('invalid-slide', 'The source slide does not exist')
+  const fragment = source.slice(slide.start, slide.end)
+  const attributes = inspectHtmlFragmentAttributes(fragment)
+  const ids = new Map()
+  const occupied = collectHtmlDocumentIds(source)
+  for (const attribute of attributes.filter(attribute => attribute.lowerName === 'id')) {
+    const current = attribute.value
+    if (!current || !/^[A-Za-z][\w:.-]{0,79}$/.test(current) || ids.has(current)) {
+      fail('unsupported-fragment', 'The slide must have simple, unique identifiers')
+    }
+    const replacement = current === id ? newId : newId + '-' + ids.size
+    if (occupied.has(replacement)) fail('duplicate-id', 'A copied identifier is already used')
+    ids.set(current,replacement)
+  }
+  let copy = fragment
+  for (const attribute of attributes.slice().reverse()) {
+    const replacement = remapSlideAttribute(attribute,ids)
+    if (replacement !== attribute.value) {
+      copy = copy.slice(0,attribute.valueStart)+replacement+copy.slice(attribute.valueEnd)
+    }
+  }
+  const after = '\n' + copy
+  readHtmlPresentation(source.slice(0,slide.end)+after+source.slice(slide.end))
+  return { start:slide.end, end:slide.end, before:'', after }
 }

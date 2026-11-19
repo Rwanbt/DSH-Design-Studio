@@ -874,12 +874,15 @@ window.__ModuleLoader__.load({
     function PresentationControls({slides, active, select, save, disabled}) {
       const [title,setTitle]=React.useState('')
       const index=slides.findIndex(slide=>slide.id===active)
-      function addSlide(event) {
-        event.preventDefault()
+      function nextSlideId() {
         const used=new Set(slides.map(slide=>slide.id))
         let number=slides.length+1
         while(used.has('slide-page-'+number)) number+=1
-        const id='slide-page-'+number
+        return 'slide-page-'+number
+      }
+      function addSlide(event) {
+        event.preventDefault()
+        const id=nextSlideId()
         void save({kind:'slide-add',id,title:title.trim()},'record',()=>{
           setTitle('')
           select(id)
@@ -890,6 +893,11 @@ window.__ModuleLoader__.load({
           slides.map(({id},position)=>h('button',{key:id,type:'button',style:button,
             'aria-pressed':active===id,onClick:()=>select(id)},'Diapositive '+(position+1)))),
         h('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
+          h('button',{type:'button',style:button,disabled:disabled||index<0||slides.length>=32,
+            onClick:()=>{
+              const newId=nextSlideId()
+              void save({kind:'slide-duplicate',id:active,newId},'record',()=>select(newId))
+            }},'Dupliquer la diapositive'),
           h('button',{type:'button',style:button,disabled:disabled||index<=0,
             onClick:()=>void save({kind:'slide-reorder',id:active,direction:'earlier'})},'Déplacer à gauche'),
           h('button',{type:'button',style:button,disabled:disabled||index<0||index===slides.length-1,

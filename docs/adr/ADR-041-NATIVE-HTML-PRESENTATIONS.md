@@ -27,3 +27,13 @@ the browser or desktop print dialog. The active slide filter is excluded so
 all slides print in document order. Content beyond the fixed slide box is
 clipped. Browser print settings and unavailable fonts can affect fidelity.
 The exported PDF is independent of the editable HTML source.
+
+## Slide duplication
+
+A duplicate is inserted directly after its source slide in a single native
+patch. The source mapper resolves attribute spans, allocates new unique IDs
+and rewrites local fragment links, ARIA references and supported SVG
+`url(#id)` attributes inside the copy. References to targets outside the
+slide stay intact. Text and unrelated bytes are preserved. Ambiguous or
+inert markup inside a slide can be copied manually in the source editor.
+Stylesheets that select by ID may need a shared class to style both slides.

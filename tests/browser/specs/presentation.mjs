@@ -27,6 +27,13 @@ export const presentationSpec = {
     await page.getByRole('button', { name: 'Undo saved edit' }).click()
     await waitForEditorSource(page, initial)
     assert.equal(await harness.read('presentation.html'), initial)
+    await slides.getByRole('button', { name: 'Dupliquer la diapositive' }).click()
+    await slides.getByRole('button', { name: 'Diapositive 2' }).waitFor()
+    const duplicated = await harness.read('presentation.html')
+    assert.match(duplicated, /id="slide-page-2-1">Untitled slide/)
+    await page.getByRole('button', { name: 'Undo saved edit' }).click()
+    await waitForEditorSource(page, initial)
+    assert.equal(await harness.read('presentation.html'), initial)
   },
 }
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { appendHtmlSlide, createHtmlPresentation, readHtmlPresentation, reorderHtmlSlide } from '../src/html-presentation.mjs'
+import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, reorderHtmlSlide } from '../src/html-presentation.mjs'
 import { applyNativePatches, sourceHash } from '../src/native-patch.mjs'
 
 function apply(source, ...patches) {
@@ -32,4 +32,19 @@ test('presentation structures with unmapped siblings and duplicate IDs are refus
     { code: 'unsupported-presentation' })
   assert.throws(() => appendHtmlSlide(source, { id: 'slide-intro', title: 'Duplicate' }), { code: 'duplicate-id' })
   assert.throws(() => reorderHtmlSlide(source, { id: 'slide-intro', direction: 'earlier' }), { code: 'slide-at-boundary' })
+})
+
+test('duplication preserves markup and remaps internal references in a single reversible insertion', () => {
+  const source = '<main id="dsh-deck" data-dsh-deck="1">\n' +
+    '<section id="slide-one" aria-labelledby="label"><h1 id="label">Title</h1>' +
+    '<a href="#label" aria-describedby="label shared">Jump</a>' +
+    '<svg><defs><linearGradient id="paint"></linearGradient></defs>' +
+    '<rect fill="url(#paint)" width="20" height="20" /></svg></section>\n</main>'
+  const result = apply(source, duplicateHtmlSlide(source, { id: 'slide-one', newId: 'slide-two' }))
+  assert.deepEqual(readHtmlPresentation(result.source).slides.map(item => item.id), ['slide-one', 'slide-two'])
+  assert.match(result.source, /id="slide-two" aria-labelledby="slide-two-1"/)
+  assert.match(result.source, /href="#slide-two-1" aria-describedby="slide-two-1 shared"/)
+  assert.match(result.source, /fill="url\(#slide-two-2\)"/)
+  assert.equal(apply(result.source, ...result.inverse).source, source)
+  assert.throws(() => duplicateHtmlSlide(source, { id: 'slide-one', newId: 'slide-one' }), { code: 'duplicate-id' })
 })

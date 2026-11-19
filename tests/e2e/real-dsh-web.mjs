@@ -313,6 +313,16 @@ export async function checkSidebar({ page, workspaceId, otherWorkspaceId, worksp
     await studio.getByRole('button', { name: 'Fermer l’export PDF', exact: true }).click()
     record('sidebar prepares and dispatches PDF printing in real DSH Web',
       'PASS', 'print dispatch observed through frame instrumentation, source bytes untouched')
+    await slides.getByRole('button', { name: 'Dupliquer la diapositive', exact: true }).click()
+    await slides.getByRole('button', { name: 'Diapositive 2', exact: true }).waitFor()
+    if (!(await readFile(deckPath, 'utf8')).includes('id="slide-page-2-1"')) {
+      throw new Error('Slide copy did not write a distinct title identifier')
+    }
+    await studio.getByRole('button', { name: 'Undo saved edit', exact: true }).click()
+    await expectDisk(deck, 'g0-slides.html')
+    await waitReady('g0-slides.html', deck)
+    record('sidebar duplicates a native slide and undoes exactly',
+      'PASS', 'distinct copied identifiers and exact restoration of source')
     await setFileMenu(true)
     await studio.getByLabel('Workspace file', { exact: true }).fill('g0-art.svg')
     await studio.getByRole('button', { name: 'Open', exact: true }).click()

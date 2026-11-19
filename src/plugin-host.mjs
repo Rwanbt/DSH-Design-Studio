@@ -27,7 +27,7 @@ import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs
 
 import { createProposalInbox } from './proposal-inbox.mjs'
 
-import { appendHtmlSlide, createHtmlPresentation, readHtmlPresentation, reorderHtmlSlide } from './html-presentation.mjs'
+import { appendHtmlSlide, createHtmlPresentation, duplicateHtmlSlide, readHtmlPresentation, reorderHtmlSlide } from './html-presentation.mjs'
 
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
@@ -357,9 +357,9 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         let patches; let createdId=null
         if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
-        } else if (params.kind === 'slide-add' || params.kind === 'slide-reorder') {
+        } else if (['slide-add','slide-reorder','slide-duplicate'].includes(params.kind)) {
           if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
-          const plan = params.kind === 'slide-add' ? appendHtmlSlide : reorderHtmlSlide
+          const plan = { 'slide-add':appendHtmlSlide, 'slide-reorder':reorderHtmlSlide, 'slide-duplicate':duplicateHtmlSlide }[params.kind]
           patches=[plan(doc.source,params)]
         } else if (params.kind === 'css-media') {
           // Conditional editing is addressed by the rule's exact offset and the
