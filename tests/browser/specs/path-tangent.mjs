@@ -8,7 +8,7 @@ export const pathTangentSpec={
   name:'path: symmetrize a cubic junction through the inspector, preserve native source and Undo',
   async run({page,harness,assert}){
     await harness.write('curve.svg',SOURCE)
-    await openWorkspaceFile(page,'curve.svg',{expect:'svg'})
+    await openWorkspaceFile(page,'curve.svg',{expect:'svg',advanced:true})
     await page.getByRole('button',{name:'Select layer path #curve'}).click()
     const button=page.getByRole('button',{name:'Symétriser ancre 3'})
     await button.waitFor({state:'visible',timeout:10000})
