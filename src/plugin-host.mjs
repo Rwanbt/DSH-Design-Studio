@@ -33,6 +33,7 @@ import { createPdfPageCopier } from './pdf-page-copy.mjs'
 
 import { createPdfAnnotator } from './pdf-annotation.mjs'
 
+import { createPdfTextImporter } from './pdf-text-import.mjs'
 import { createPdfPagePreview } from './pdf-page-preview.mjs'
 
 import { createPptxExporter, createPptxImporter } from './presentation-pptx.mjs'
@@ -161,6 +162,7 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
   const annotatePdf = createPdfAnnotator()
   const exportPptx = createPptxExporter()
   const importPptx = createPptxImporter()
+  const importPdfText = createPdfTextImporter()
   const previewPdf = createPdfPagePreview()
   return async (req, res) => {
     try {
@@ -216,6 +218,13 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
           'content-length':bytes.length,'content-disposition':'attachment; filename="presentation.pptx"',
           'cache-control':'no-store','x-content-type-options':'nosniff'})
         return res.end(bytes)
+      }
+      if (req.method === 'POST' && endpoint === '/pdf/import-text') {
+        const params = await bodyJson(req)
+        const store = await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
+        const {source,emptyPages} = await importPdfText(async()=>(await store.readPdf(params.file)).source)
+        const created = await store.create(params.file.replace(/\.pdf$/i,'.pdf-text.html'),{source})
+        return reply(res,201,{ok:true,file:created.file,emptyPages})
       }
       if (req.method === 'GET' && endpoint === '/pdf/preview') {
         const store = await storeFor(ctx,{sessionId:url.searchParams.get('sessionId'),

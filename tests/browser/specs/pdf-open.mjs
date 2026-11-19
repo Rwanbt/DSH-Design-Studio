@@ -65,6 +65,17 @@ export const pdfCopySpec = {
     }
     assert.equal(await harness.read(file), original)
     assert.equal(await harness.read('other.pdf'), other)
+    if (hasEngine && spawnSync('pdftotext',['-v'],{stdio:'ignore'}).status===0) {
+      const sourceCard=page.getByRole('button',{name:'Open file source.pdf',exact:true}).locator('..')
+      await sourceCard.getByRole('button',{name:'Importer le texte',exact:true}).click()
+      const frame=page.frameLocator('iframe[title="Isolated design preview"]')
+      await frame.getByText('Second text',{exact:true}).click()
+      await page.getByRole('textbox',{name:'HTML element text'}).fill('Edited PDF text')
+      await page.getByRole('button',{name:'Apply HTML element text'}).click()
+      await frame.getByText('Edited PDF text',{exact:true}).waitFor()
+      assert.match(await harness.read('source.pdf-text.html'),/id="pdf-page-2-line-1">Edited PDF text/)
+      assert.equal(await harness.read(file),original)
+    }
   },
 }
 
