@@ -27,6 +27,8 @@ import { AGENT_PROPOSAL_TOOL, registerAgentProposal } from './agent-proposal.mjs
 
 import { createProposalInbox } from './proposal-inbox.mjs'
 
+import { appendHtmlSlide, createHtmlPresentation, readHtmlPresentation, reorderHtmlSlide } from './html-presentation.mjs'
+
 export const name = 'dsh-design-studio'
 export const inject = ['webServer','agents','workingDirectory','workspaceRegistry']
 const PREFIX = '/design-studio-native'
@@ -266,7 +268,16 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
               declarations:rule.declarations.map(({property,value})=>({property,value}))}))
           if(document.source.length>512*1024) warning='CSS visual mapping limited to documents under 512 KiB'
         }
-        return reply(res,200,{ok:true,document,nodes,textNodes,pathNodes,gradients,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,artboard,warning})
+        let presentation = null
+        if (['html','htm'].includes(document.format) && document.source.includes('data-dsh-deck')) {
+          try {
+            const { version, slides } = readHtmlPresentation(document.source)
+            presentation = { version, slides: slides.map(({ id }) => ({ id })) }
+          } catch (error) {
+            presentation = { error: error.code || 'invalid-presentation' }
+          }
+        }
+        return reply(res,200,{ok:true,presentation,document:presentation?{...document,presentation}:document,nodes,textNodes,pathNodes,gradients,htmlElements,cssRules,cssMedia,stylesheets,styleMatches,previewCss,previewCoverage,geometry,artboard,warning})
       }
       if (req.method === 'POST' && endpoint === '/create') {
         // Creating a document is exclusive: an existing path is refused (409),
@@ -275,11 +286,16 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         if (typeof params.file !== 'string' || !params.file) {
           return reply(res,400,{ok:false,error:'invalid-path',message:'A relative workspace path is required'})
         }
-        if (typeof params.source !== 'string') {
+        const presentation = params.kind === 'presentation'
+        if (presentation && !/\.html?$/i.test(params.file)) {
+          return reply(res,400,{ok:false,error:'unsupported-format'})
+        }
+        const source = presentation ? createHtmlPresentation() : params.source
+        if (typeof source !== 'string') {
           return reply(res,400,{ok:false,error:'invalid-source',message:'New file content must be a string'})
         }
         const store=await storeFor(ctx,{sessionId:params.sessionId,workspaceId:params.workspaceId})
-        const created=await store.create(params.file,{source:params.source})
+        const created=await store.create(params.file,{source})
         return reply(res,201,{ok:true,created})
       }
       if (req.method === 'POST' && endpoint === '/rename') {
@@ -341,6 +357,10 @@ export function createRouteHandler(ctx, inbox = createProposalInbox()) {
         let patches; let createdId=null
         if (REVIEWABLE_EDIT_KINDS.includes(params.kind)) {
           patches=planReviewableEdit(doc,params)
+        } else if (params.kind === 'slide-add' || params.kind === 'slide-reorder') {
+          if (!['html','htm'].includes(doc.format)) return reply(res,400,{ok:false,error:'unsupported-format'})
+          const plan = params.kind === 'slide-add' ? appendHtmlSlide : reorderHtmlSlide
+          patches=[plan(doc.source,params)]
         } else if (params.kind === 'css-media') {
           // Conditional editing is addressed by the rule's exact offset and the
           // condition the user was shown, so two identical selectors can never be

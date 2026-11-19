@@ -246,7 +246,7 @@ window.__ModuleLoader__.load({
       }
       return out
     }
-    function safePreview(source, format, selectedHtmlId='', linkedCss='') {
+    function safePreview(source, format, selectedHtmlId='', linkedCss='', slideId='') {
       const policy = "default-src 'none'; script-src 'none'; object-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
       const svgLayout = format === 'svg' ? '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>' : ''
       const marked = /^(?:[A-Za-z][\w:.-]{0,79})$/.test(selectedHtmlId)?
@@ -262,10 +262,12 @@ window.__ModuleLoader__.load({
       // relative URLs. The sandbox already neutralises both in real Chromium and
       // Firefox (measured), but relying on one layer for a security boundary is
       // not acceptable, and neither tag carries visual meaning for a preview.
+      const slideStyle = /^slide-[a-z][a-z0-9-]{0,47}$/.test(slideId)
+        ? '<style>#dsh-deck>section:not([id="'+slideId+'"]){display:none!important}</style>' : ''
       const neutral = stripNavigationTags(String(source))
       return '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="' + policy +
         '"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-        svgLayout + projected + marked + '</head><body style="margin:' +
+        svgLayout + projected + marked + slideStyle + '</head><body style="margin:' +
         (format==='svg'?'0':'12px') + '">' + neutral + '</body></html>'
     }
     /**
@@ -823,6 +825,35 @@ window.__ModuleLoader__.load({
                 expectedProposedHash:selection.proposedHash})},'Appliquer la proposition'))))
     }
 
+    function PresentationControls({slides, active, select, save, disabled}) {
+      const [title,setTitle]=React.useState('')
+      const index=slides.findIndex(slide=>slide.id===active)
+      function addSlide(event) {
+        event.preventDefault()
+        const used=new Set(slides.map(slide=>slide.id))
+        let number=slides.length+1
+        while(used.has('slide-page-'+number)) number+=1
+        const id='slide-page-'+number
+        void save({kind:'slide-add',id,title:title.trim()},'record',()=>{
+          setTitle('')
+          select(id)
+        })
+      }
+      return h('section',{'aria-label':'Diapositives',style:{display:'grid',gap:6}},
+        h('nav',{'aria-label':'Ordre des diapositives',style:{display:'flex',gap:4,flexWrap:'wrap'}},
+          slides.map(({id},position)=>h('button',{key:id,type:'button',style:button,
+            'aria-pressed':active===id,onClick:()=>select(id)},'Diapositive '+(position+1)))),
+        h('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
+          h('button',{type:'button',style:button,disabled:disabled||index<=0,
+            onClick:()=>void save({kind:'slide-reorder',id:active,direction:'earlier'})},'Déplacer à gauche'),
+          h('button',{type:'button',style:button,disabled:disabled||index<0||index===slides.length-1,
+            onClick:()=>void save({kind:'slide-reorder',id:active,direction:'later'})},'Déplacer à droite')),
+        h('form',{onSubmit:addSlide,style:{display:'flex',gap:4,flexWrap:'wrap'}},
+          h('input',{style:{...field,maxWidth:260},value:title,maxLength:256,'aria-label':'Titre de la nouvelle diapositive',
+            onChange:event=>setTitle(event.target.value)}),
+          h('button',{type:'submit',style:button,disabled:disabled||!title.trim()||slides.length>=32},'Ajouter une diapositive')))
+    }
+
     function Studio(props) {
       const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : ''
       const workspaceId = props && typeof props.workspaceId === 'string' ? props.workspaceId : ''
@@ -899,6 +930,7 @@ window.__ModuleLoader__.load({
       const [showFiles,setShowFiles] = React.useState(false)
       const [fileSearch,setFileSearch] = React.useState('')
       const [newName,setNewName] = React.useState('')
+      const [slideSelection,setSlideSelection] = React.useState(null)
       const [fileAction,setFileAction] = React.useState(null)
       const [layerMenu,setLayerMenu] = React.useState(null)
       const layerMenuRef = React.useRef(null)
@@ -1797,11 +1829,11 @@ window.__ModuleLoader__.load({
        * existing path, so a duplicate name is reported instead of overwriting a
        * file the user did not mean to touch.
        */
-      async function createDocument(format, template=null) {
+      async function createDocument(format, template=null, kind=null) {
         if(!scopeReady||creating||busy) return
         if(refuseTextDraft())return
         if(doc && source!==doc.source){setError('Unsaved source changes: save or discard them before creating another file');return}
-        const target=creationTarget(format,template)
+        const target=kind==='presentation'&&!newName.trim()?'presentation.html':creationTarget(format,template)
         // A written file nobody can open would be worse than a refusal, so the
         // tab budget is checked before the Host touches the disk.
         if(tabsRef.current.length>=MAX_TABS && !tabsRef.current.some(entry=>entry.file===target)) {
@@ -1811,7 +1843,7 @@ window.__ModuleLoader__.load({
         setCreating(true);setError('');setNotice('')
         try {
           await request('/create',{method:'POST',headers:{'content-type':'application/json'},
-            body:JSON.stringify({...scopeBody,file:target,source:template||NEW_TEMPLATES[format]})})
+            body:JSON.stringify({...scopeBody,file:target,kind,source:template||NEW_TEMPLATES[format]})})
           setNewName('')
           await loadWorkspaceFiles()
           await openInTab(target)
@@ -4266,6 +4298,13 @@ window.__ModuleLoader__.load({
             h('span',null,typeLabels[key]),typographyControl(key)))),
         h('div',{className:'dsh-studio-rowspace'}),
         h('label',{className:'dsh-studio-field-label'},typeLabels['text-anchor']),typographyControl('text-anchor'))
+      const slides=doc?.presentation?.slides
+      const chosenSlide=slideSelection?.file===doc?.file ? slideSelection?.id : null
+      const activeSlide=slides?.some(slide=>slide.id===chosenSlide)?chosenSlide:slides?.[0]?.id
+      const selectSlide=id=>setSlideSelection({file:doc.file,id})
+      const createPresentationButton=h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
+        onClick:()=>void createDocument('html',null,'presentation')},'+ Présentation')
+
       return h('section',{className:'dsh-studio-workbench','data-preview':previewMode?'true':'false',lang:'fr','aria-label':'DSH Design Studio workbench',onKeyDown:onEditorKeyDown,onKeyUp:onEditorKeyUp,onFocusCapture:event=>{
           const pending=layerMenuActionFocusRef.current
           if(pending&&event.target!==pending.trigger)layerMenuActionFocusRef.current=null
@@ -4328,7 +4367,7 @@ window.__ModuleLoader__.load({
           h('details',{className:'dsh-studio-menu'},h('summary',null,'Fichier'),h('div',{className:'dsh-studio-menu-body',style:{left:'auto',right:0}},
             h('input',{style:field,'aria-label':'Workspace file',value:pathInput,onChange:e=>setPathInput(e.target.value),placeholder:'relative/path/file.svg'}),
             h('button',{style:button,onClick:()=>openInTab(pathInput),disabled:busy||!scopeReady},busy?'Loading…':'Open'),
-            h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',title:'Créer '+creationTarget(format),onClick:()=>void createDocument(format)},'+ '+format.toUpperCase()))))),
+            h('button',{style:button,onClick:()=>void browseFiles(),disabled:busy||!scopeReady,'aria-label':'Browse workspace design files'},'Parcourir…'),doc&&h('div',{role:'group','aria-label':'New design file',style:{display:'flex',gap:6,flexWrap:'wrap'}},h('input',{style:field,value:newName,'aria-label':'New design file name',placeholder:'nom du fichier',onChange:e=>setNewName(e.target.value)}),['svg','html','css'].map(format=>h('button',{key:format,type:'button',style:button,disabled:busy||creating||!scopeReady,'aria-label':'Create '+format.toUpperCase()+' file',title:'Créer '+creationTarget(format),onClick:()=>void createDocument(format)},'+ '+format.toUpperCase())),createPresentationButton))),
            h('button',{type:'button',className:'dsh-studio-topbtn dsh-studio-muted',disabled:!doc,
              'aria-label':'Preview native document','aria-pressed':previewMode,
              onClick:()=>setPreviewMode(value=>!value)},glyph('previewBtn'),previewMode?'Retour à l’éditeur':'Aperçu'),
@@ -4698,7 +4737,8 @@ window.__ModuleLoader__.load({
             h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
               'aria-label':'Create HTML file',title:'Créer '+creationTarget('html'),onClick:()=>void createDocument('html')},'+ HTML'),
             h('button',{type:'button',style:button,disabled:busy||creating||!scopeReady,
-              'aria-label':'Create CSS file',title:'Créer '+creationTarget('css'),onClick:()=>void createDocument('css')},'+ CSS')),
+              'aria-label':'Create CSS file',title:'Créer '+creationTarget('css'),onClick:()=>void createDocument('css')},'+ CSS'),
+            createPresentationButton),
           // Show where a new file will land before the click: the Host writes
           // into the workspace root, and a silent write was the actual friction.
           h('small',{style:{opacity:0.72,overflowWrap:'anywhere',lineHeight:1.5}},
@@ -4963,6 +5003,8 @@ doc?.format==='css'?
                       // its own toolbar would stop being clickable).
                       style:{width:'100%',display:'grid',gap:8,alignContent:'start',
                         alignSelf:'flex-start',maxHeight:'100%',overflow:'auto'}},
+                      slides&&h(PresentationControls,{key:doc.file,slides,active:activeSlide,select:selectSlide,save,
+                        disabled:busy||reloadRequired||source!==doc.source}),
                       h('div',{role:'toolbar','aria-label':'HTML responsive viewport',
                         style:{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}},
                         [['auto','Auto'],['desktop','1280'],['tablet','768'],['mobile','390']].map(([mode,label])=>
@@ -4984,7 +5026,7 @@ doc?.format==='css'?
                           padding:8,boxSizing:'border-box'}},
                         h('iframe',{title:'Isolated design preview',sandbox:'allow-same-origin',
                           referrerPolicy:'no-referrer',onLoad:connectHtmlPreview,
-                          srcDoc:safePreview(source,doc?.format,htmlActive,htmlPreviewCss),
+                          srcDoc:safePreview(source,doc?.format,htmlActive,htmlPreviewCss,source===doc?.source?activeSlide:''),
                           style:{display:'block',
                             width:({auto:'100%',desktop:'1280px',tablet:'768px',mobile:'390px'})[htmlViewport],
                             maxWidth:'none',height:520,border:'none',background:'#fff',borderRadius:6}})
